@@ -17,7 +17,7 @@ godot --headless --path game --export-release "macOS" ../build/WaGang.app
 * The output path is relative to `game/`, so `../build/WaGang.app` ends up in `build/` at the repository root.
 * The preset (`game/export_presets.cfg`) builds a **universal** binary (Intel macOS 10.13+, Apple Silicon 11+),
   ad-hoc code-signed, bundle id `local.wg2025.wagang`. It packs `assets/*`, `assets_hd/*` (the HD graphics pack,
-  if you built it) and the scripts. Without the HD pack the app is about 860 MB, of which 730 MB is the `.pck`;
+  if present) and the scripts. Without the HD pack the app is about 860 MB, of which 730 MB is the `.pck`;
   with it, about 1.5 GB.
 * Smoke test without a window: `WG_START=0 WG_AUTO=1 WG_STOP=2 WG_NOVIDEO=1 build/WaGang.app/Contents/MacOS/* --headless`.
   It should print `== scenario 0: R_00` … `== scenario 2: R_01`.
@@ -44,13 +44,11 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*).
   between runs), imports the project, exports `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's
   built-in signer) and `WaGang-Windows-build-N.zip`, then creates the release with both files and install notes.
   A run takes 2–3 minutes; each release is about 1.2 GB (macOS 600 MB, Windows 580 MB).
-* **HD graphics:** the pack is not in git. If the repository has a release tagged `hd-pack` with an asset
-  `assets_hd.zip` (the contents of `game/assets_hd`), the workflow adds it to both builds. Each build then
-  roughly doubles in size. To publish the pack:
-  ```sh
-  (cd game/assets_hd && zip -qr ../../build/assets_hd.zip .)
-  gh release create hd-pack build/assets_hd.zip --title "HD graphics pack" --notes "Used by the release builds" --prerelease
-  ```
+* **HD graphics only:** the workflow downloads the HD graphics pack (`assets_hd.zip` from the release tagged
+  `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures under
+  `assets/gfx` stay out of the builds (palettes, index files and the terrain-patch index images stay). It then
+  plays the first scenarios headless from the exported `.pck` and fails if any picture is missing. After
+  rebuilding the pack, re-upload it (see [HD_GRAPHICS.md](HD_GRAPHICS.md)).
 
 ## Re-generating the game data
 
@@ -111,7 +109,7 @@ Notes:
 * **Step 9 is required.** Godot only ships the raw PNG/JSON/MP3/WAV/OGV files (which the game loads at run time
   with `Assets.*`) if they are marked `importer="keep"`.
 
-Optionally, build the HD graphics pack (`game/assets_hd/`) from the converted graphics:
+Then rebuild the HD graphics pack (`game/assets_hd/`) from the converted graphics and re-publish it:
 `tools/venv/bin/python -I tools/upscale_assets.py`. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
 
 After converting, run the game once (`./run_game.sh`) and an automated smoke test (see

@@ -31,7 +31,7 @@ All options are environment variables read at start-up, for example
 | `WG_LOADSLOT=n` | Skip the title and load save slot *n* |
 | `WG_STOP=n` | Quit when scenario *n* is reached |
 | `WG_NOVIDEO=1` | Skip cutscene videos |
-| `WG_HD=0` / `WG_HD=1` | Use the original art / the HD graphics pack, overriding the saved setting |
+| `WG_HD=0` | Show the original art instead of the HD graphics pack (for comparisons) |
 
 **Automatic play**
 

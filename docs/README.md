@@ -8,7 +8,7 @@
 | [BUILDING.md](BUILDING.md) | builders | exporting the macOS app; re-generating `game/assets` from the original game |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | developers | how the code works: emulated memory, script VM, stages, UI, source map |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | developers | debug options, automated play-through tests, reverse-engineering workflow |
-| [HD_GRAPHICS.md](HD_GRAPHICS.md) | players, builders | the optional 4× AI-upscaled graphics pack: switching it, building it, which model is used for what |
+| [HD_GRAPHICS.md](HD_GRAPHICS.md) | builders | the 4× AI-upscaled graphics pack: how the game uses it, building and publishing it, which model is used for what |
 
 ## Reverse-engineering specifications
 

@@ -18,8 +18,7 @@ resize it freely; when you let go, it snaps to the game's 4:3 shape so the pictu
 The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit). After an ending has
 been reached once, the title picture changes.
 
-If the HD graphics pack is installed, the title screen also shows **画面：高清** / **画面：原版**. Click it to switch
-between the 4× upscaled art and the original pixels. The choice is remembered. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
+The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 
 ## General controls
 
@@ -60,7 +59,7 @@ Hub towns have shops, side quests and optional characters. Some scenes contain *
 * **Puzzles** – e.g. ordering lines of a poem.
 * **A dice game** in a gambling house.
 
-<p align="center"><img src="images/minigame.png" width="480" alt="Story mini-game duel"></p>
+<p align="center"><img src="images/minigame.jpg" width="480" alt="Story mini-game duel"></p>
 
 Choices matter: many dialogue choices and battle outcomes change story flags and hidden scores. Those decide later
 branches and which of the endings you reach.
@@ -68,8 +67,8 @@ branches and which of the endings you reach.
 ## Battles
 
 <p align="center">
-  <img src="images/battle-move.png" width="400" alt="Movement range">
-  <img src="images/battle-info.png" width="400" alt="Unit information">
+  <img src="images/battle-move.jpg" width="400" alt="Attack range">
+  <img src="images/battle-info.jpg" width="400" alt="Unit information">
 </p>
 
 Each battle starts with its victory and defeat conditions (胜利条件 / 失败条件). Turns go: **your phase**, then
@@ -107,7 +106,7 @@ traps, and duels triggered when two particular units stand next to each other.
 
 ## Duels (单挑)
 
-<p align="center"><img src="images/duel.png" width="480" alt="Duel screen"></p>
+<p align="center"><img src="images/duel.jpg" width="480" alt="Duel screen"></p>
 
 When the story calls for it, two officers duel on a separate screen: an introduction, then the fight with speech
 bubbles. Duels are scripted and play by themselves. Text advances on a timer; click to finish a line early. The

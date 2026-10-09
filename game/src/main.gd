@@ -240,15 +240,7 @@ func _title_screen() -> void:
 	_show_version()
 	ui.set_black(false)
 	while true:
-		var items := ["开始新游戏", "读取进度", "结束游戏"]
-		if Assets.hd_pack:
-			items.insert(2, "画面：" + ("高清" if Assets.hd else "原版"))
-		var i := await ui.menu.choose(items, Vector2(250, 330), false, "", [], 140)
-		if i == 2 and Assets.hd_pack:
-			# toggle the HD graphics pack; the title picture reloads with the new setting
-			Assets.set_hd(not Assets.hd)
-			_title_bg.texture = Assets.tex("gfx/screens/%02d.png" % (12 + v if v >= 1 and v <= 3 else 0))
-			continue
+		var i := await ui.menu.choose(["开始新游戏", "读取进度", "结束游戏"], Vector2(250, 330), false, "", [], 140)
 		if i == 0:
 			_title_bg.visible = false
 			Game.new_game_state()

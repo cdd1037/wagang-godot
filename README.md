@@ -9,12 +9,12 @@
 游戏数据全部来自原作，只做了格式转换、内容未作改动：117 个剧情与战斗脚本、地图、人物和部队图像、头像、音乐、音效和过场动画。
 
 <p align="center">
-  <img src="docs/images/title.png" width="400" alt="标题画面">
-  <img src="docs/images/story.png" width="400" alt="剧情场景">
+  <img src="docs/images/title.jpg" width="400" alt="标题画面">
+  <img src="docs/images/story.jpg" width="400" alt="剧情场景">
 </p>
 <p align="center">
-  <img src="docs/images/battle-move.png" width="400" alt="战斗：移动范围">
-  <img src="docs/images/duel.png" width="400" alt="单挑">
+  <img src="docs/images/battle-move.jpg" width="400" alt="战斗：攻击范围">
+  <img src="docs/images/duel.jpg" width="400" alt="单挑">
 </p>
 
 ## 功能
@@ -24,8 +24,8 @@
 * **战棋战斗**：布阵与出场选择，带敌军阻挡（ZOC）的移动，攻击、反击与二次攻击，策略及其动画，道具，地形与天气，
   经验与转职，剧本战斗事件，以及原版敌军 AI。
 * **单挑**：根据反编译代码重现的单挑画面，包括开场、对话气泡、全部动作与招式动画、胜者获得经验。
-* **高清画面（可选）**：游戏用到的全部图像都经 AI 放大到 4 倍，并按画面类型分别选用最合适的模型，可在标题画面切换，
-  详见 [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。
+* **高清画面**：游戏用到的全部图像都经 AI 放大到 4 倍，并按画面类型分别选用最合适的模型，详见
+  [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。发布版本只包含高清画面。
 * **存档**：10 个存档位，剧情中和战斗中都能存读档。
 * **多结局**：与原作一样，由脚本记录的剧情标志和好感度决定。
 
@@ -46,8 +46,6 @@
 * **Windows**：解压后运行 `WaGang.exe`，`WaGang.pck` 要放在同一目录。如果 SmartScreen 提示“未知发布者”，
   请点击“更多信息”→“仍要运行”。
 
-自动发布的版本使用原版画面。高清画面包体积较大，没有放进仓库，自行生成方法见下文。
-
 ## 从源码运行
 
 **环境要求**：macOS 10.13 及以上（Intel）或 macOS 11 及以上（Apple 芯片），以及
@@ -56,14 +54,16 @@
 ```sh
 git clone https://github.com/seedds/wagang-godot.git
 cd wagang-godot
-./run_game.sh                 # 首次运行会先导入项目，然后启动游戏
+./run_game.sh                 # 首次运行会先下载高清画面包（约 720 MB）并导入项目，然后启动游戏
 ```
 
 如果直接使用 Godot，需要先执行一次导入：`godot --headless --path game --import`，然后运行 `godot --path game`。
 不导入的话，脚本的类名不会注册，游戏无法启动。
 
-高清画面包不在仓库中（约 740 MB）。可以用 `tools/upscale_assets.py` 生成一次，方法见
-[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。没有高清包时，游戏使用原版画面。
+高清画面包体积较大，不在 git 仓库中，而是放在名为
+[hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack) 的 release 里。`run_game.sh` 首次运行时会自动下载，
+也可以单独运行 `tools/get_hd_pack.sh`。高清包是用 `tools/upscale_assets.py` 生成的，方法见
+[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。
 
 自己打包 macOS 应用：
 
@@ -98,7 +98,7 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 |---|---|
 | [docs/PLAYING.md](docs/PLAYING.md) | 游戏说明：剧情、战斗、单挑、菜单、存档、常见问题 |
 | [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows 版本；自动发布流程 |
-| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 可选的 4 倍 AI 高清画面包：使用、生成和模型选择 |
+| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 4 倍 AI 高清画面包：原理、生成、发布和模型选择 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 重制版的实现原理：模拟内存、脚本虚拟机、场景、界面 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、逆向工作流程 |
 | [docs/README.md](docs/README.md) | 逆向分析规格文档索引（文件格式、脚本指令、规则、AI） |
@@ -107,7 +107,7 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 
 | 路径 | 内容 |
 |---|---|
-| `game/` | Godot 项目。`src/` 为 GDScript 源码，`assets/` 为转换后的游戏数据（运行时加载），`assets_hd/` 为高清画面包（生成后才有，不在 git 中） |
+| `game/` | Godot 项目。`src/` 为 GDScript 源码，`assets/` 为转换后的游戏数据（运行时加载），`assets_hd/` 为高清画面包（下载或生成，不在 git 中） |
 | `docs/` | 使用说明与逆向分析规格文档 |
 | `tools/` | Python 转换工具、分析辅助脚本、Ghidra 无界面反编译脚本、测试脚本、AI 放大工具 |
 | `.github/workflows/` | 自动构建并发布 macOS / Windows 版本的 GitHub Actions 工作流 |
@@ -119,7 +119,6 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 ## 现状与已知差异
 
 * 整个游戏从开场到各个结局都可以玩通。所有脚本都经过自动测试，但很多段落还没有经过人工完整试玩。
-* 原版单挑画面用带边缘平滑的 2 倍滤镜放大人物，本作使用最近邻放大；开启高清画面后则是平滑的。
 * 原版城镇工具栏改为剧情场景顶部的“菜单”和“出征”按钮。
 * 界面沿用原版风格，但不是逐像素一致。
 * Windows 版在 macOS 上导出，并用同一份数据包验证过可以运行，但还没有在 Windows 实机上测试。

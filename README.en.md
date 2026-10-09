@@ -11,12 +11,12 @@ were documented, then re-implemented. The game's own data is used unchanged in c
 battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
 
 <p align="center">
-  <img src="docs/images/title.png" width="400" alt="Title screen">
-  <img src="docs/images/story.png" width="400" alt="Story scene">
+  <img src="docs/images/title.jpg" width="400" alt="Title screen">
+  <img src="docs/images/story.jpg" width="400" alt="Story scene">
 </p>
 <p align="center">
-  <img src="docs/images/battle-move.png" width="400" alt="Battle: movement range">
-  <img src="docs/images/duel.png" width="400" alt="Duel (单挑)">
+  <img src="docs/images/battle-move.jpg" width="400" alt="Battle: attack range">
+  <img src="docs/images/duel.jpg" width="400" alt="Duel (单挑)">
 </p>
 
 ## Features
@@ -28,8 +28,8 @@ battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
   scripted battle events, and the original enemy AI.
 * **Duels** – the 单挑 screen, re-implemented from the decompiled routines (intro, speech bubbles, every action and
   blow animation, EXP for the winner).
-* **HD graphics (optional)** – every texture the game draws re-rendered at 4× with AI upscalers chosen per kind of
-  art; switchable on the title screen. See [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
+* **HD graphics** – every texture the game draws re-rendered at 4× with AI upscalers chosen per kind of art. The
+  released builds contain only the HD art. See [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
 * **Saves** – 10 slots, usable from story scenes and mid-battle.
 * **Multiple endings** – decided by the story flags and scores the scripts keep, exactly as in the original.
 
@@ -54,14 +54,16 @@ numbered build automatically; the build number is shown in the corner of the tit
 ```sh
 git clone https://github.com/seedds/wagang-godot.git
 cd wagang-godot
-./run_game.sh                 # first run imports the project, then starts the game
+./run_game.sh                 # first run downloads the HD graphics pack (~720 MB), imports the project, starts the game
 ```
 
 To use Godot directly, import once with `godot --headless --path game --import`, then run `godot --path game`.
 Without the import step the scripts' class names aren't registered and the game fails to start.
 
-The HD graphics pack is not in the repository (it is several hundred MB). Build it once with
-`tools/upscale_assets.py` ([docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)); without it the game uses the original art.
+The HD graphics pack is too big for the git repository; it is published as the release
+[hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack). `run_game.sh` downloads it on first run
+(or run `tools/get_hd_pack.sh`). It is built with `tools/upscale_assets.py`, see
+[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
 
 To build a standalone `.app`:
 
@@ -94,7 +96,7 @@ The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 |---|---|
 | [docs/PLAYING.md](docs/PLAYING.md) | Player guide: story scenes, battles, duels, menus, saving, troubleshooting |
 | [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the app |
-| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The optional 4× AI-upscaled graphics pack: using it, building it, model choice |
+| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The 4× AI-upscaled graphics pack: how it works, building and publishing it, model choice |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the reimplementation works: emulated memory, script VM, stages, UI |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, reverse-engineering workflow |
 | [docs/README.md](docs/README.md) | Index of the reverse-engineering specifications (formats, script ops, rules, AI) |
@@ -103,7 +105,7 @@ The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 
 | Path | Contents |
 |---|---|
-| `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime), `assets_hd/` = HD graphics pack (generated, not in git) |
+| `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime), `assets_hd/` = HD graphics pack (downloaded or generated, not in git) |
 | `docs/` | Guides and reverse-engineering specifications |
 | `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts |
 | `run_game.sh` | Runs the game from source |
@@ -115,8 +117,6 @@ Not in the repository (see `.gitignore`): the original game (`wg2025/`), build o
 
 * The whole game is playable from the opening to the endings. Each script has been exercised automatically; long
   stretches have not yet been checked by a human play-through.
-* Duel sprites are doubled with nearest-neighbour scaling instead of the original's edge-smoothing 2× filter (with
-  the HD pack they are smooth).
 * The original town toolbar is replaced by **菜单** / **出征** buttons in the top bar of story scenes.
 * UI layout follows the original style but is not pixel-identical.
 

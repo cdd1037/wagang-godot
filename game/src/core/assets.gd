@@ -3,14 +3,13 @@ extends Node
 ## files (PNG/JSON/MP3/WAV/OGV) marked importer="keep", and is loaded on demand.
 
 const ROOT := "res://assets/"
-## Optional HD pack (tools/upscale_assets.py): 4x AI-upscaled copies of gfx/**.png as .webp. Each is
-## shown at its original's logical size (ImageTexture size override), so no drawing code changes.
+## HD pack (tools/upscale_assets.py): 4x AI-upscaled copies of gfx/**.png as .webp. Each is shown at its
+## original's logical size (ImageTexture size override), so no drawing code changes. Release builds ship only
+## the HD pack; without it (a source checkout that has not fetched it) the original PNGs are used.
 const HD_ROOT := "res://assets_hd/"
 const HD_BUDGET := 1536 * 1024 * 1024    # bytes of HD textures the cache keeps alive (LRU)
-const SETTINGS := "user://settings.cfg"
 
-## Use the HD pack (a setting, saved; WG_HD=0/1 overrides it).
-var hd := true
+var hd := true                           # debug: WG_HD=0 shows the original art
 var hd_pack := false                     # the pack is installed
 
 var _tex_cache: Dictionary = {}          # rel → Texture2D, or WeakRef for HD textures
@@ -26,35 +25,18 @@ func path(rel: String) -> String:
 
 
 func exists(rel: String) -> bool:
-	return FileAccess.file_exists(ROOT + rel)
+	return FileAccess.file_exists(ROOT + rel) or (rel.ends_with(".png") and hd_active()
+			and FileAccess.file_exists(HD_ROOT + rel.get_basename() + ".webp"))
 
 
 func _ready() -> void:
 	hd_pack = DirAccess.dir_exists_absolute(HD_ROOT + "gfx")
-	var cf := ConfigFile.new()
-	if cf.load(SETTINGS) == OK:
-		hd = bool(cf.get_value("video", "hd", true))
-	var env := OS.get_environment("WG_HD")
-	if env != "":
-		hd = env != "0"
+	hd = OS.get_environment("WG_HD") != "0"
 	_apply_filter()
 
 
 func hd_active() -> bool:
 	return hd and hd_pack
-
-
-## Switch the HD pack on/off (saved). Textures loaded from now on use the new setting.
-func set_hd(on: bool) -> void:
-	hd = on
-	var cf := ConfigFile.new()
-	cf.load(SETTINGS)
-	cf.set_value("video", "hd", on)
-	cf.save(SETTINGS)
-	_tex_cache.clear()
-	_hd_lru.clear()
-	_hd_bytes = 0
-	_apply_filter()
 
 
 ## Pixel art is drawn with nearest-neighbour scaling; HD art is smooth, so filter it bilinearly.

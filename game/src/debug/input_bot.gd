@@ -101,6 +101,8 @@ func duel_test() -> void:
 	await d.open()
 	await d.appear_say(0, "来者何人！", 0)
 	await shot("duel_say")
+	await d.appear_say(1, "敌将报上名来！\n太爷手下不死无名之鬼！", 0)
+	await shot("duel_both")
 	await d.action(1, 3)
 	await d.exchange(0, 1, 0)
 	await shot("duel_exchange")

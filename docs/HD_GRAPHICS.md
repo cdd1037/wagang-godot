@@ -2,8 +2,8 @@
 
 The original art is 640×480 with a 256-colour palette. On a modern display the game is scaled 3–5×, so the
 pixels and the colour dithering show. The **HD graphics pack** replaces the textures the game draws with 4×
-AI-upscaled versions. It is optional, can be switched on and off on the title screen (**画面：高清 / 原版**), and
-changes nothing else: the same images, at the same logical size, at the same places.
+AI-upscaled versions and changes nothing else: the same images, at the same logical size, at the same places.
+Released builds contain only the HD art; there is no switch.
 
 ![Original vs HD pack: a story background and battle units, same frame](images/hd-compare.jpg)
 
@@ -13,14 +13,17 @@ changes nothing else: the same images, at the same logical size, at the same pla
 | Texture filtering | nearest-neighbour (sharp pixels) | bilinear (smooth) |
 | Files | `game/assets/gfx/**.png` | `game/assets_hd/gfx/**.webp` |
 
-## Using it
+## Where it lives
 
-* **Switching:** title screen → **画面：高清** (HD) or **画面：原版** (original). The choice is saved in
-  `user://settings.cfg`. The entry only appears when the pack is installed.
-* **Override for one run:** `WG_HD=0` or `WG_HD=1`.
-* The pack is not in the git repository because of its size (3,500 files, about 740 MB). Build it with the tool
-  below. An exported app includes it when it exists (`include_filter` in `game/export_presets.cfg`), which makes
-  the app about 1.5 GB instead of 860 MB.
+* The pack (3,500 files, about 740 MB) is too big for the git repository. It is published as `assets_hd.zip` in
+  the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack).
+* **Release builds** (`.github/workflows/release.yml`) download it, and leave the original pictures out
+  (`exclude_filter`), so a build ships only the HD art. The workflow then plays the first scenarios from the
+  exported data to make sure no picture is missing.
+* **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`).
+  Without it the game falls back to the original PNGs in `game/assets/`. `WG_HD=0` shows the original art for
+  comparisons.
+* **Local exports** include `game/assets_hd/` when it exists (`include_filter` in `game/export_presets.cfg`).
 
 ## How the game uses it
 
@@ -44,6 +47,13 @@ pixel units, and no drawing code changes. Images without an HD version fall back
 tools/venv/bin/pip install torch spandrel          # PyTorch with Apple GPU (MPS) support, model loader
 # download the models below into tools/upscale_models/
 tools/venv/bin/python -I tools/upscale_assets.py    # ~1 hour on an M4 Pro; skips files that already exist
+```
+
+After rebuilding, publish the new pack so the release builds use it:
+
+```sh
+(cd game/assets_hd && zip -0 -qr ../../build/assets_hd.zip .)
+gh release upload hd-pack build/assets_hd.zip --clobber
 ```
 
 Options: `--only SUBSTR` limits the run to paths containing *SUBSTR* (e.g. `--only maps/`), `--force` redoes
