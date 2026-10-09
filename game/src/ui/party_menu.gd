@@ -17,15 +17,7 @@ static func _pick_member(ui: GameUI, title: String) -> int:
 
 
 static func can_equip(p: Person, iid: int) -> bool:
-	var it := Game.item(iid)
-	var cat := String(it.get("category", ""))
-	if cat == "accessory":
-		return true
-	if cat in ["weapon", "armor"]:
-		var t := int(it.get("type", 0))
-		var eq: Array = Game.cls(p.cls).get("equip_raw", [])
-		return t < eq.size() and int(eq[t]) != 0
-	return false
+	return p.can_equip(iid)
 
 
 static func _item_label(iid: int, lvl: int) -> String:
@@ -66,6 +58,9 @@ static func equip_menu(ui: GameUI) -> void:
 			var cur: int = [p.weapon, p.armor, p.accessory][si]
 			var cur_lvl: int = [p.weapon_lvl, p.armor_lvl, 0][si]
 			var cur_exp: int = [p.weapon_exp, p.armor_exp, 0][si]
+			if k == 0 and cur >= 0 and not Game.is_stack_item(cur) and Game.bag_free_slot() < 0:
+				await ui.popup("道具已满，无法卸下。", 1.2)
+				continue
 			if k > 0:
 				var e: Dictionary = opts[k - 1]
 				Game.remove_bag_slot(int(e["slot"]))
@@ -86,12 +81,7 @@ static func equip_menu(ui: GameUI) -> void:
 					1: p.armor = -1
 					2: p.accessory = -1
 			if cur >= 0:
-				Game.add_item(cur, maxi(cur_lvl, 1))
-				# keep the experience of the returned item
-				for e2 in Game.bag_entries():
-					if int(e2["id"]) == cur and int(e2.get("slot", -1)) >= 0 and int(e2["exp"]) == 0:
-						Mem.w8(Game.BAG + 3 * int(e2["slot"]) + 2, cur_exp & 0xff)
-						break
+				Game.add_item(cur, maxi(cur_lvl, 1), cur_exp & 0xff)    # keeps its level and experience
 
 
 ## Use consumables outside battle (fruits, 仙人果, 印绶, 太保令 …).

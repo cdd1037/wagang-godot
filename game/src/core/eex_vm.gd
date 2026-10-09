@@ -22,11 +22,12 @@ var end_file_pending := false
 var abort := false
 var trace := false
 var last_section := -1
+var next_op := -1            # opcode after the one being executed (-1 at the end of a body)
 var _warned: Dictionary = {}
 
 
 func load_script(file: String) -> bool:
-	var d: Variant = Assets.json("scripts/%s.json" % file)
+	var d: Variant = Assets.json("scripts/%s.json" % file, false)
 	if d == null:
 		push_error("script not found: " + file)
 		return false
@@ -241,6 +242,7 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 					sec = int(t["section"])
 				pc = int(t["index"])
 				continue
+		next_op = int(body[pc + 1]["op"]) if pc + 1 < body.size() else -1
 		await _call(ins)
 		pc += 1
 

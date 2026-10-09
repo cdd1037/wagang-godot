@@ -143,8 +143,9 @@ func _t(n: int) -> void:
 	await get_tree().create_timer(n * TICK).timeout
 
 
-func _clicked() -> bool:
-	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_action_pressed("ui_accept")
+## A click or confirm press since Game.clicks was `n`.
+func _clicked(n: int) -> bool:
+	return Game.clicks != n
 
 
 ## 0x42c646: n × 100 ms, ended early by a click
@@ -152,9 +153,10 @@ func _skippable(n: int) -> void:
 	if Game.autoplay:
 		return
 	var end := Time.get_ticks_msec() + int(n * 100 / maxf(Engine.time_scale, 0.01))
+	var c := Game.clicks
 	while Time.get_ticks_msec() < end:
 		await get_tree().process_frame
-		if _clicked():
+		if _clicked(c):
 			break
 
 
@@ -309,6 +311,7 @@ func say2(side: int, text: String, mode_: int) -> void:
 		for i in pl.size():
 			bubbles[s].append("")
 		var skip := false
+		var c := Game.clicks
 		for li in pl.size():
 			var line: String = pl[li]
 			for ci in line.length():
@@ -320,7 +323,7 @@ func say2(side: int, text: String, mode_: int) -> void:
 				var end := Time.get_ticks_msec() + int(w * TICK * 1000 / maxf(Engine.time_scale, 0.01))
 				while Time.get_ticks_msec() < end:
 					await get_tree().process_frame
-					if _clicked():
+					if _clicked(c):
 						skip = true
 						break
 		_overlay.queue_redraw()

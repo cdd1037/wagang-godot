@@ -14,9 +14,11 @@ Outputs:
 Format spec: docs/eex.md.  Grammar recovered from the handler table @0x410a3e in wagan.wa
 (handlers call READP=0x4183f7(tag) for every parameter).
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, os, struct, json, glob
 
-ROOT = '/Users/f2pgod/Downloads/rea'
+ROOT = _REPO
 SRC = ROOT + '/wg2025'
 OUT_JSON = ROOT + '/game/assets/scripts'
 OUT_TXT = ROOT + '/extract/eex_txt'

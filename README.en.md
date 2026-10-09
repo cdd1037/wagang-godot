@@ -42,8 +42,9 @@ Ready-to-play builds for **macOS** (Apple Silicon and Intel) and **Windows** (64
 numbered build automatically; the build number is shown in the corner of the title screen. The builds contain the
 HD art only; each platform's zip is about 1.1 GB.
 
-* **macOS:** unzip and open the app. It is not notarized, so the first time right-click it → **Open** (or run
-  `xattr -dr com.apple.quarantine <app>`).
+* **macOS:** unzip and open the app. It is not notarized, so macOS blocks it the first time. On macOS 15 and later
+  open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**; on older versions
+  right-click the app → **Open**. Or run `xattr -dr com.apple.quarantine <app>`.
 * **Windows:** unzip and run `WaGang.exe`, keeping `WaGang.pck` next to it. If SmartScreen warns about an
   unknown publisher, choose **More info → Run anyway**.
 
@@ -74,8 +75,9 @@ godot --headless --path game --export-release "macOS" ../build/WaGang.app
 open build/WaGang.app
 ```
 
-The app is ad-hoc signed. If macOS refuses to open a copy that came from another machine, right-click it → **Open**,
-or run `xattr -dr com.apple.quarantine WaGang.app`.
+The app is ad-hoc signed. If macOS refuses to open a copy that came from another machine, allow it in **System
+Settings → Privacy & Security → Open Anyway** (macOS 15+; right-click → **Open** on older versions), or run
+`xattr -dr com.apple.quarantine WaGang.app`.
 
 ## Controls (summary)
 

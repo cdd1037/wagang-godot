@@ -6,8 +6,10 @@ usage (as module):
     e = Emu(); e.hooks[0x437a04] = callback(emu, args) -> retval   # stdcall/cdecl handled by caller pops
     e.call(func_va, [args...], ecx=..)  -> eax
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, struct
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 import capstone
 from capstone import x86

@@ -1,19 +1,21 @@
 """Shared helpers for the wagan graphics converters (used by conv_gfx.py and gfx_*.py modules).
 
 Conventions:
-  * Output root: /Users/f2pgod/Downloads/rea/game/assets/gfx/<category>/...
+  * Output root: <repo>/game/assets/gfx/<category>/...
   * PNGs are RGBA.  Palette index 0 is the colour key for sprites (alpha 0) unless stated otherwise.
   * Every category writes <category>/index.json (see docs/gfx.md for the schemas).
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import io, json, os, sys, zipfile
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image
 from ls12 import read_archive
 import gfxpal
 
-GAME = '/Users/f2pgod/Downloads/rea/wg2025/'
-OUT = '/Users/f2pgod/Downloads/rea/game/assets/gfx/'
+GAME = _REPO + '/wg2025/'
+OUT = _REPO + '/game/assets/gfx/'
 
 _arc = {}
 def archive(name):

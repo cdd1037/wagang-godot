@@ -1,6 +1,8 @@
 """find tables of consecutive dword pointers to GBK strings in .data of wagan.wa"""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, struct
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 p = PE()
 lo, hi = int(sys.argv[1], 16), int(sys.argv[2], 16)

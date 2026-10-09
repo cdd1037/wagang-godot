@@ -22,16 +22,17 @@ func _init() -> void:
 	add_child(cap)
 	_caption_root = cap
 
-	_title_root = Control.new()
-	_title_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_title_root)
-
 	fade_rect = ColorRect.new()
 	fade_rect.color = Color(0, 0, 0, 0)
 	fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(fade_rect)
+
+	# chapter titles are usually shown on a black screen, so they go above the fade
+	_title_root = Control.new()
+	_title_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_title_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_title_root)
 
 	_banner = UIStyle.label("", 22, Color(1, 0.95, 0.7))
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -107,15 +108,11 @@ func _wait_click() -> void:
 	if Game.autoplay:
 		await get_tree().process_frame
 		return
-	while true:
+	# a new press (counted by Game._input), so the click that closed the previous box is not reused
+	# and a tap shorter than a frame is not missed; holding Ctrl skips
+	var n := Game.clicks
+	while Game.clicks == n and not Input.is_key_pressed(KEY_CTRL):
 		await get_tree().process_frame
-		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
-				or Input.is_action_pressed("ui_accept") or Input.is_action_pressed("ui_cancel") or Input.is_key_pressed(KEY_CTRL):
-			# wait for release
-			while Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
-					or Input.is_action_pressed("ui_accept") or Input.is_action_pressed("ui_cancel"):
-				await get_tree().process_frame
-			return
 
 
 # ------------------------------------------------------------------ banners / captions
@@ -148,11 +145,24 @@ func caption(text: String, a1: int, wait_click: int, clear: int) -> void:
 			print("  [caption] ", text)
 		return
 	var l := UIStyle.label(text, 18)
+	l.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	l.size = Vector2(vsize().x * 0.66, 10)
 	_caption_root.add_child(l)
 	_caption_lines.append(l)
-	var y0 := vsize().y * 0.25
+	# stack the lines by their wrapped height; move the block up when it would run off the screen
+	var gap := 10.0
+	var lh := Assets.font().get_height(18) + 2
+	var heights: Array[float] = []
+	var total := 0.0
+	for c in _caption_lines:
+		var hh := maxf(c.get_line_count(), 1) * lh
+		heights.append(hh)
+		total += hh + gap
+	var y := minf(vsize().y * 0.25, maxf(vsize().y - 24 - total, 12.0))
 	for i in _caption_lines.size():
-		_caption_lines[i].position = Vector2(vsize().x * 0.18, y0 + i * 34)
+		_caption_lines[i].position = Vector2(vsize().x * 0.16, y)
+		_caption_lines[i].size = Vector2(vsize().x * 0.66, heights[i])
+		y += heights[i] + gap
 	l.modulate.a = 0
 	var tw := create_tween()
 	tw.tween_property(l, "modulate:a", 1.0, 0.5)

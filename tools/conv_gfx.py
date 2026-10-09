@@ -7,8 +7,10 @@ Categories produced by sub-modules (if present): units (gfx_units), portraits (g
 rpg_sprites/backgrounds/screens (gfx_story), effects (gfx_effects).
 See docs/gfx.md for formats and the JSON schemas.
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import argparse, importlib, json, os, sys, time
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image
 import gfxcommon as g

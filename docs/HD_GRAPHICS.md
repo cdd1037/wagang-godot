@@ -10,19 +10,20 @@ Released builds contain only the HD art; there is no switch.
 | | Original | HD |
 |---|---|---|
 | Story background (1:1 crop) | dithered 256-colour pixels | clean lines and gradients |
-| Texture filtering | nearest-neighbour (sharp pixels) | bilinear (smooth) |
+| Texture filtering | nearest-neighbour (sharp pixels) | bilinear (smooth); mipmapped in small windows |
 | Files | `game/assets/gfx/**.png` | `game/assets_hd/gfx/**.webp` |
 
 ## Where it lives
 
 * The pack (3,500 files, about 740 MB) is too big for the git repository. It is published as `assets_hd.zip` in
   the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack).
-* **Release builds** (`.github/workflows/release.yml`) download it, and leave the original pictures out
+* **Release builds** (`.github/workflows/release.yml`) download it (also checked against GitHub's SHA-256), and
+  leave the original pictures out
   (`exclude_filter`), so a build ships only the HD art. The workflow then plays the first scenarios from the
   exported data to make sure no picture is missing.
-* **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`).
-  Without it the game falls back to the original PNGs in `game/assets/`. `WG_HD=0` shows the original art for
-  comparisons.
+* **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`, which
+  checks the download against the SHA-256 GitHub publishes for the asset). Without it the game falls back to the
+  original PNGs in `game/assets/`. `WG_HD=0` shows the original art for comparisons.
 * **Local exports** include `game/assets_hd/` when it exists (`include_filter` in `game/export_presets.cfg`).
 
 ## How the game uses it
@@ -33,9 +34,13 @@ from its header). Every `get_size()`, region rectangle and draw call therefore k
 pixel units, and no drawing code changes. Images without an HD version fall back to the original.
 
 * **Filtering:** with HD active, the root viewport's default canvas texture filter becomes bilinear (the
-  original pixel art keeps nearest-neighbour). The duel screen sets its own filter the same way.
-* **Memory:** a 4× texture takes 16× the memory, so HD textures are cached with a budget (1.5 GB, LRU). Older
-  ones stay alive only while a node still uses them.
+  original pixel art keeps nearest-neighbour). In a window smaller than 2.5× the original size the 4× art is
+  shrunk enough to shimmer, so the filter then uses the textures' mipmaps (generated when an HD texture is
+  loaded). The duel screen sets its own filter.
+* **Size limit:** some GPUs accept textures of at most 8192 px. The one bigger image (battle map 13, 8448×6144)
+  is scaled down to fit when it is loaded; the size override keeps its drawn size.
+* **Memory:** a 4× texture takes 16× the memory (plus a third for mipmaps), so HD textures are cached with a
+  budget (1 GB, LRU). Older ones stay alive only while a node still uses them.
 * **Terrain patches** (bridges, gates and fires that change during a battle) are coloured at run time from an
   index image and the map's palette. The tool finds every (map, patch) pair a battle script can paste (79 of
   them), renders each with that map's palette and upscales it like the maps, as
@@ -52,9 +57,13 @@ tools/venv/bin/python -I tools/upscale_assets.py    # ~1 hour on an M4 Pro; skip
 After rebuilding, publish the new pack so the release builds use it:
 
 ```sh
-(cd game/assets_hd && zip -0 -qr ../../build/assets_hd.zip .)
+rm -f build/assets_hd.zip            # zip adds to an existing archive
+(cd game/assets_hd && zip -0 -qr ../../build/assets_hd.zip . -x '*.tmp' -x '*.DS_Store')
 gh release upload hd-pack build/assets_hd.zip --clobber
 ```
+
+`--clobber` deletes the old file before the new one is uploaded, so release builds that start during the upload
+fail; upload when no push is building.
 
 Options: `--only SUBSTR` limits the run to paths containing *SUBSTR* (e.g. `--only maps/`), `--force` redoes
 existing files, `--list` prints what would be done. `tools/upscale.py MODEL in.png out.png` upscales a single

@@ -1,8 +1,10 @@
 """linear-sweep disassemble .text and .text2, print instructions matching a regex. usage: findins.py REGEX [ctx]"""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, re, pickle, os
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
-CACHE = '/Users/f2pgod/Downloads/rea/extract/ins_cache.pkl'
+CACHE = _REPO + '/extract/ins_cache.pkl'
 def load():
     if os.path.exists(CACHE):
         return pickle.load(open(CACHE, 'rb'))

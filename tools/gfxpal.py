@@ -6,8 +6,10 @@ shifts every byte right by 4 and the setter shifts left by [0x4ba228]=4, so the 
 `v & 0xF0` per channel (4 bits/channel).  Only entries 10..245 are written (0x41e1f3 calls
 0x47e867(10, 236, pal+30)); 0..9 and 246..255 are the Windows static colours.
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from ls12 import read_archive
 
 WIN_STATIC = {0: (0, 0, 0), 1: (128, 0, 0), 2: (0, 128, 0), 3: (128, 128, 0), 4: (0, 0, 128), 5: (128, 0, 128),
@@ -36,7 +38,7 @@ def flat(pal):
     return bytes(c for rgb in pal for c in rgb)
 
 _cache = {}
-def load(name, idx, quantize=False, root='/Users/f2pgod/Downloads/rea/wg2025/'):
+def load(name, idx, quantize=False, root=_REPO + '/wg2025/'):
     if name not in _cache:
         _cache[name] = read_archive(root + name)
     return decode_palette(_cache[name][idx], quantize)

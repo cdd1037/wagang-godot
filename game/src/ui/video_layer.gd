@@ -5,6 +5,7 @@ extends Control
 signal done
 
 var _player: VideoStreamPlayer
+var _gen := 0
 
 
 func _init() -> void:
@@ -34,10 +35,21 @@ func play(name: String) -> void:
 	visible = true
 	_fit()
 	_player.play()
+	_gen += 1
+	_check_started(_gen)
 	await done
 	_player.stop()
 	visible = false
 	Audio.bgm_player.stream_paused = false
+
+
+## A video that cannot be decoded never plays and never finishes: give up on it after a few frames.
+func _check_started(gen: int) -> void:
+	for k in 15:
+		await get_tree().process_frame
+	if gen == _gen and visible and not _player.is_playing():
+		push_warning("video did not start")
+		done.emit()
 
 
 func _fit() -> void:

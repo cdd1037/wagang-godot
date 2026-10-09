@@ -1,7 +1,9 @@
 """rawview.py archive idx[,idx..] width out.png [palette_archive:idx | gray] [offset]
 Render raw 8bpp entries side by side (each as width x N)."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from ls12 import read_archive
 from PIL import Image
 arc, idxs, w, out = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]

@@ -10,7 +10,6 @@ const CELL := 48
 var map_id := -1
 var map_w := 0
 var map_h := 0
-var terrain: Array = []   # rows of terrain ids
 var map_sprite: Sprite2D
 var overlay: Node2D
 var units_layer: Node2D
@@ -61,7 +60,7 @@ func _init() -> void:
 	add_child(camera)
 
 
-func load_map(id: int) -> void:
+func load_map(id: int, fill_terrain := true) -> void:
 	map_id = id
 	var idx: Dictionary = Assets.json("gfx/maps/index.json")
 	var info: Dictionary = {}
@@ -74,7 +73,17 @@ func load_map(id: int) -> void:
 		return
 	map_w = int(info["width"])
 	map_h = int(info["height"])
-	terrain = info["terrain"]
+	# terrain lives in the engine's map buffer (scripts read it through [0x4aeb44]); a restored save
+	# already holds the buffer with the battle's terrain changes
+	if fill_terrain or Mem.r32(Mem.MAP_PTR) != Mem.MAP_BUF:
+		var rows: Array = info["terrain"]
+		for y in map_h:
+			var row: Array = rows[y]
+			for x in map_w:
+				Mem.w8(Mem.MAP_BUF + 0x640 + y * map_w + x, int(row[x]))
+		Mem.w32(Mem.MAP_PTR, Mem.MAP_BUF)
+	Mem.w8(Mem.MAP_WH, map_w)
+	Mem.w8(Mem.MAP_WH + 1, map_h)
 	map_sprite.texture = Assets.tex("gfx/maps/" + str(info["image"]))
 	camera.limit_left = 0
 	camera.limit_top = 0
@@ -87,7 +96,12 @@ func load_map(id: int) -> void:
 func terrain_at(c: Vector2i) -> int:
 	if c.x < 0 or c.y < 0 or c.x >= map_w or c.y >= map_h:
 		return -1
-	return int(terrain[c.y][c.x])
+	return Mem.r8(Mem.MAP_BUF + 0x640 + c.y * map_w + c.x)
+
+
+func set_terrain(c: Vector2i, t: int) -> void:
+	if in_bounds(c):
+		Mem.w8(Mem.MAP_BUF + 0x640 + c.y * map_w + c.x, t)
 
 
 func in_bounds(c: Vector2i) -> bool:
@@ -167,6 +181,7 @@ func add_patch(entry: int, c: Vector2i) -> Node:
 	if Assets.hd_active():
 		# no AI-upscaled patch for this palette: a smooth 4x resize blends in with the HD map
 		img.resize(img.get_width() * 4, img.get_height() * 4, Image.INTERPOLATE_LANCZOS)
+		img.generate_mipmaps()
 		var t := ImageTexture.create_from_image(img)
 		t.set_size_override(idx.get_size())
 		sp.texture = t

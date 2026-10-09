@@ -1,7 +1,9 @@
 """Copy BGM mp3s (CD track N -> bgm/NN.mp3) and convert SE wavs to 16-bit PCM."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import os, re, shutil, subprocess, sys
-SRC = '/Users/f2pgod/Downloads/rea/wg2025'
-DST = '/Users/f2pgod/Downloads/rea/game/assets/audio'
+SRC = _REPO + '/wg2025'
+DST = _REPO + '/game/assets/audio'
 os.makedirs(DST + '/bgm', exist_ok=True); os.makedirs(DST + '/se', exist_ok=True)
 for f in sorted(os.listdir(SRC + '/SoundTrk')):
     m = re.match(r'(\d+)-AudioTrack', f)

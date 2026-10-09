@@ -1,8 +1,10 @@
 """Dump wagan.wa's mapped sections into one flat little-endian image starting at 0x400000
 (zero-filled gaps, BSS zeroed), used by the Godot engine's emulated memory (src/core/mem.gd)."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import pefile, sys
-src = '/Users/f2pgod/Downloads/rea/wg2025/wagan.wa'
-dst = '/Users/f2pgod/Downloads/rea/game/assets/data/exe_image.bin'
+src = _REPO + '/wg2025/wagan.wa'
+dst = _REPO + '/game/assets/data/exe_image.bin'
 pe = pefile.PE(src)
 base = pe.OPTIONAL_HEADER.ImageBase
 end = max(s.VirtualAddress + max(s.Misc_VirtualSize, s.SizeOfRawData) for s in pe.sections)

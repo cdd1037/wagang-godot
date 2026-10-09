@@ -223,6 +223,96 @@ func effect_value(eid: int) -> int:
 	return 0
 
 
+# ------------------------------------------------------------------ equipping
+## Slot of an item (0x40c6ea): 0 weapon, 1 armour, 2 accessory, 3 consumable.
+static func slot_of(it: Dictionary) -> int:
+	var t := int(it.get("type", 0xff))
+	if t < 0xe: return 0
+	if t < 0x12: return 1
+	if t < 0x3f or t > 0x50: return 2
+	return 3
+
+
+## 0x407907: weapons and armour by the class's equip table, accessories by the family in the item's
+## +0x17 byte (0xff = anyone; the mod lets families 8, 9, 18 and 24 wear item 0x4c, 0x4da23b).
+func can_equip(iid: int) -> bool:
+	var it := _item(iid)
+	if it.is_empty():
+		return false
+	match slot_of(it):
+		0, 1:
+			var eq: Array = Game.cls(cls).get("equip_raw", [])
+			var t := int(it["type"])
+			return t < eq.size() and int(eq[t]) != 0
+		2:
+			var fam := int(it.get("growth", 0xff))
+			if fam == 0xff or fam == family():
+				return true
+			return iid == 0x4c and family() in [8, 9, 0x12, 0x18]
+	return false
+
+
+## Level an item gets when none is given (0x407dec / 0x4143c2), from a character level: normal items
+## (level mod 18) / 6 + 1 below 48, else 3; treasures level / 7 + 1, at most 10.
+static func auto_level_at(it: Dictionary, lv: int) -> int:
+	if bool(it.get("treasure", false)):
+		return mini(lv / 7 + 1, 10)
+	return (lv % 18) / 6 + 1 if lv < 48 else 3
+
+
+func auto_item_level(it: Dictionary) -> int:
+	return auto_level_at(it, level)
+
+
+func _set_slot(slot: int, iid: int, lvl: int, xp: int) -> void:
+	Mem.w8(base + 0x2e + 3 * slot, NONE if iid < 0 else iid)
+	Mem.w8(base + 0x2f + 3 * slot, lvl)
+	if slot < 2:
+		Mem.w8(base + 0x30 + 3 * slot, xp)
+
+
+## Equipment code of ops 0x3e / 0x48 for one slot (0x4429f9): 0 = the default for the class and level,
+## 1 = take it off, otherwise item code − 2 (weapon), code + 0x24 (armour) or code + 0x33 (accessory).
+## `lvl` 0 = automatic.
+func equip_code(slot: int, code: int, lvl: int) -> void:
+	if code == 0:
+		default_equip(slot)
+	elif code == 1:
+		_set_slot(slot, -1, NONE, NONE)
+	else:
+		equip_item(slot, code + [-2, 0x24, 0x33][slot], lvl)
+
+
+## 0x407fe7: the first weapon (armour) kind the class can use, tier by level (0-17, 18-35, 36+).
+func default_equip(slot: int) -> void:
+	if slot > 1:
+		return
+	var eq: Array = Game.cls(cls).get("equip_raw", [])
+	var tier := mini(level / 18, 2)
+	var lvl := (level % 18) / 6 + 1 if level < 48 else 3
+	var kinds := range(0, 14) if slot == 0 else range(14, 18)
+	for t in kinds:
+		if t < eq.size() and int(eq[t]) != 0:
+			var iid: int = tier + (t / 2) * 3 if slot == 0 else 0x26 + tier + ((t - 14) / 2) * 3
+			_set_slot(slot, iid, lvl, 0 if lvl < 3 else NONE)
+			return
+
+
+## 0x407dec: put item `iid` into `slot` if it is that kind of item and this person can use it.
+## The level is capped at the item's maximum (3, treasures 10); a maxed item has no experience to gain.
+func equip_item(slot: int, iid: int, lvl: int) -> void:
+	var it := _item(iid)
+	if it.is_empty() or slot_of(it) != slot or not can_equip(iid):
+		return
+	var maxl := 10 if bool(it.get("treasure", false)) else 3
+	if lvl == 0:
+		lvl = auto_item_level(it)
+	elif lvl != NONE:
+		lvl = mini(lvl, maxl)
+	var xp := 0 if lvl < maxl else NONE
+	_set_slot(slot, iid, NONE if slot == 2 else lvl, xp)
+
+
 # ------------------------------------------------------------------ derived stats
 func stat(s: int) -> int:
 	return mini(get_stat_word(s) + equip_bonus(s), 9999)

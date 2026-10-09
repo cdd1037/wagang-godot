@@ -133,8 +133,8 @@ func _boot() -> void:
 		add_child(t)
 	var ls := OS.get_environment("WG_LOADSLOT")
 	if ls != "":
-		var extra := Game.load_game(int(ls))
-		_pending_load = extra
+		var extra: Variant = Game.load_game(int(ls))
+		_pending_load = extra if extra is Dictionary else {}
 		print("== loaded slot %s at scenario %d" % [ls, Game.scenario])
 		_run_flow()
 		return
@@ -188,12 +188,14 @@ func _stop_flow() -> void:
 			stage.vm.active = false
 		stage.queue_free()
 		stage = null
+	SoundMap.stop_loop()
 
 
-## Flow-test autosave slot (WG_AUTOSLOT, default 9) so parallel runs don't share one.
+## Flow-test autosave slot (WG_AUTOSLOT, default 19) so parallel runs don't share one. Slots 0-9 are the
+## player's saves.
 func _autoslot() -> int:
 	var s := OS.get_environment("WG_AUTOSLOT")
-	return int(s) if s != "" else 9
+	return int(s) if s != "" else 19
 
 
 func _retry_autosave() -> void:
@@ -207,7 +209,8 @@ func _retry_autosave() -> void:
 		return
 	_stop_flow()
 	await get_tree().process_frame
-	_pending_load = Game.load_game(_autoslot())
+	var saved: Variant = Game.load_game(_autoslot())
+	_pending_load = saved if saved is Dictionary else {}
 	var tries := int(_retries.get(failed, 0)) + 1
 	_retries[failed] = tries
 	# a battle random play keeps losing (scripted objective): jump to its aftermath on the next try
@@ -362,14 +365,21 @@ func save_menu() -> void:
 		extra = stage.save_state()
 	if Game.save_game(i, extra):
 		await ui.popup("进度已保存。", 1.0)
+	else:
+		await ui.popup("进度保存失败。", 1.2)
 
 
 func load_menu() -> bool:
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "读取进度")
 	if i < 0 or Game.save_info(i).is_empty():
 		return false
+	if Game.read_save(i) == null:
+		await ui.popup("无法读取这个进度。", 1.2)
+		return false
 	_stop_flow()
-	var extra := Game.load_game(i)
+	var extra: Variant = Game.load_game(i)
+	if extra == null:
+		extra = {}
 	if _title_bg:
 		_title_bg.visible = false
 	_pending_load = extra

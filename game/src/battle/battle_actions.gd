@@ -100,9 +100,9 @@ func reachable(u: BUnit, parents: Dictionary = {}) -> Dictionary:
 
 
 func move_unit(u: BUnit, path: Array[Vector2i]) -> void:
+	BUnit.move_origin = u.pos
 	if path.is_empty():
 		return
-	u.move_start = u.pos
 	var n := u.node
 	if n == null:
 		u.pos = path[-1]
@@ -142,6 +142,9 @@ func attack(att: BUnit, def: BUnit) -> void:
 	var counter := _counter_depth > 0
 	if not counter:
 		_attack_start_actor = att
+		# combat object 0x4927f0 (0x4061fc): attacker and defender slot, read by the scripts' 攻防 tests
+		Mem.w8(0x4927f0, att.slot)
+		Mem.w8(0x4927f1, def.slot)
 	await view().ensure_visible(def.pos)
 	face(att, def.pos)
 	face(def, att.pos)
@@ -240,6 +243,8 @@ func _on_hit_effects(att: BUnit, def: BUnit) -> void:
 
 func _apply_damage(u: BUnit, dmg: int) -> void:
 	u.hp = maxi(u.hp - dmg, 0)
+	if u.hp == 0:
+		u.extra["dying"] = true     # keeps the sprite for the defeat animation
 	st.refresh_units()
 
 
@@ -266,6 +271,7 @@ func _anim_strike(att: BUnit, def: BUnit, hit: bool, dmg: int, crit: bool) -> vo
 
 func unit_defeated(u: BUnit) -> void:
 	u.hp = 0
+	u.extra["dying"] = true
 	if u.node and not Game.autoplay:
 		Audio.play_se(SE_DIE)
 		var n := u.node
@@ -288,6 +294,8 @@ func gain_exp(u: BUnit, e: int) -> void:
 	var total := p.exp + e
 	while total >= 100 and p.level < 70:
 		total -= 100
+		if Mem.r32(0x55e1c0) == 4:
+			p.bonus_counter = 5     # mod option: every level-up gets the +1 grade bonus
 		var g := p.level_up(1)
 		u.hp = mini(u.hp + g[5], u.max_hp())
 		u.mp = mini(u.mp + g[6], u.max_mp())
@@ -365,7 +373,8 @@ func strategy_mp(s: int) -> int:
 func strategy_cast_cells(u: BUnit, s: int) -> Array[Vector2i]:
 	var sd := Game.strategy(s)
 	var ally := int(sd.get("target", 0)) == 1
-	return Shapes.range_cells(int(sd.get("range", 0)), u.pos, view().map_w, view().map_h, ally)
+	# range 11: cast on the caster's own cell (weather 58-60, 飓风, the self buffs)
+	return Shapes.range_cells(int(sd.get("range", 0)), u.pos, view().map_w, view().map_h, ally or int(sd.get("range", 0)) == 11)
 
 
 func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
@@ -376,6 +385,12 @@ func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
 func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 	var side := int(Game.strategy(s).get("target", 0))
 	var out: Array[BUnit] = []
+	if s == 14:
+		# 飓风 (0x42423a): every opposing unit on the map where the strategy is usable
+		for t in st.units:
+			if t.active() and t.is_enemy_of(u) and usable_on(u, s, t):
+				out.append(t)
+		return out
 	for c in strategy_area(u, s, target):
 		var t := st.unit_at(c)
 		if t == null or not t.active():

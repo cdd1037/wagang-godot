@@ -237,7 +237,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 38 | 属性变更 | set_attr | 941 | 839 | 95 | 02 23 34 04 | (not yet analysed) |  | 412006 |
 | 55 | 战场移动 | unit_move | 0 | 1734 | 45 | 40 02 04 04 04 2b | (not yet analysed) |  | 41591c |
 | 13 | 测试选择 | test_choice | 1392 | 126 | 82 | 04 | Test last choice: Reader+0x2038 == arg. | T | 411fa5 |
-| 3D | 获得物品 | get_item | 856 | 605 | 93 | 17 49 26 02 | (not yet analysed) |  | 4143c2 |
+| 3D | 获得物品 | get_item | 856 | 605 | 93 | 17 49 26 02 | args: item (0xFFFF or > 0x67: nothing), level (0xFFFF→0), flag, person. Level 0 for a weapon/armour = automatic from the party level L (0x40c14f: mean of the 15 highest levels of persons 0..25 in the party): normal (L mod 18)/6+1 below 48 else 3, treasures L/7+1 ≤ 10; at or above the item's maximum (3, treasures 10) the item is fully grown (exp 0xFF). Outside a battle: message "得到了…" (0x42f699(2)) then into the bag (0x40d79c / 0x40da45 for consumables); in a battle 0x45991b(item, level, flag, person, 1). Unique items (+0x18) are recorded via 0x41a1b0(item+3, 1). | 1 | 4143c2 |
 | 40 | 测试阵营 | test_side | 0 | 1443 | 58 | 48 | (not yet analysed) |  | 4116ee |
 | 21 | 地图标记 | map_mark | 0 | 1346 | 22 | 04 04 10 26 26 | (not yet analysed) |  | 413efb |
 | 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | (not yet analysed) |  | 417315 |
@@ -250,7 +250,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 12 | 选择 | choice | 621 | 59 | 82 | 05 02 | Choice menu: arg0 = up to 3 options separated by "\n" (prefixed "1." "2." "3."), arg1 = (0xFFFF→0) cancel/default option. Result index+1 stored in Reader+0x2038. | 1 | 411db9 |
 | 15 | 战场对话 | unit_say | 0 | 657 | 58 | 02 02 05 | (not yet analysed) |  | 413911 |
 | 25 | 测试武将位置 | test_unit_at | 0 | 630 | 52 | 02 04 04 | (not yet analysed) |  | 411b50 |
-| 48 | 战场装备设定 | battle_equipment | 0 | 517 | 55 | 02 3b 49 3c 49 3d | (not yet analysed) |  | 412dd6 |
+| 48 | 战场装备设定 | battle_equipment | 0 | 517 | 55 | 02 3b 49 3c 49 3d | args: person, weapon code, weapon level, armour code, armour level, accessory code (0xFFFF→0). Stored in the person's ally/enemy deployment entry (slots 15..114) at +0x14/+0x18/+0x1c/+0x20/+0x21 and applied when the battle starts (0x44cc85 → 0x4429f9 per slot): code 0 = default equipment for the class and level (0x407fe7), 1 = take off, ≥ 2 = item code−2 (weapon) / code+0x24 (armour) / code+0x33 (accessory) if it is that kind of item and the class may use it (0x407dec); level 0 = automatic. | 1 | 412dd6 |
 | 74 | 设定扩展值 | set_4ce004 | 471 | 2 | 55 | 26 | Mod: u32 @0x4ce004 = arg. | 1 | 4d00c9 |
 | 1F | 镜头移动 | scroll_to | 0 | 472 | 31 | 04 04 | (not yet analysed) |  | 414257 |
 | 06 | 出场选择(战中) | battle_select_units | 462 | 0 | 53 | 2e 04 38 38 38 38 38 39 39 39 39 39 | (not yet analysed) |  | 415b45 |
@@ -294,7 +294,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 52 | 指令52 | op_52 | 15 | 18 | 16 | 02 03 | (not yet analysed) |  | 414d15 |
 | 51 | 指令51 | op_51 | 0 | 26 | 14 | — | (not yet analysed) |  | 41626a |
 | 62 | 单挑62 | duel_62 | 0 | 26 | 14 | 26 | (not yet analysed) |  | 4176bc |
-| 3E | 装备设定 | set_equipment | 22 | 1 | 12 | 02 3b 49 3c 49 3d | (not yet analysed) |  | 416319 |
+| 3E | 装备设定 | set_equipment | 22 | 1 | 12 | 02 3b 49 3c 49 3d | Same arguments and codes as 0x48, applied at once; code 0 leaves the slot. Outside a battle a weapon code of 1 takes off every slot with a code (the original tests the weapon code for all three, 0x416319); in a battle the person's unit must exist and codes > 0x67 are ignored (0x4429f9). | 1 | 416319 |
 | 1B | 指令1B | op_1b | 0 | 18 | 13 | 02 27 | (not yet analysed) |  | 413c56 |
 | 42 | 测试胜利 | test_victory | 0 | 15 | 15 | — | True if the battle object 0x4b3d08 already flags victory, or the boss person configured for the battle (Reader+0x3d04 bit0, id at +0x3d06) is among enemy slots 35..115 in state 3/4 (defeated/retreated), or no enemy remains (0x44c8e6(5,…)==0). Sets event slot 5. | T | 411d63 |
 | 22 | 天气 | set_weather | 12 | 0 | 3 | 1b | (not yet analysed) |  | 4121ed |
@@ -346,8 +346,8 @@ the addresses below to engine state. All findings are from the 117 scripts (coun
 | 0x4b2c50 | 467+42 | battle unit array, 115 records × 0x24 B (slots 0..14 player, 15..34 ally, 35..114 enemy) | loop `i<115`: `EV=*PT` (u32 at +0 = person id, 0xFFFF = empty), then `PT += 36`; per-unit data read with op 0x78 fields 28..41 indexed by person |
 | 0x4b313c | 198 | = 0x4b2c50 + 35·0x24: first enemy record | loop over the 80 enemy records |
 | 0x4b2c6e | 37 | = 0x4b2c50 + 0x1e: field +0x1e of unit 0 | stepped by 36 to scan field +0x1e (u8 status/turn counter) of every unit |
-| 0x4927f0 / 0x4927f1 | 580 / 349 | engine bytes: battle "attacker" / "defender" unit slot of the current combat (read by 0x43ac3b, 0x43db45 and many mod hooks) | read as byte ("byte读取") and compared with unit field 28 (unit +4) to detect who is attacking whom ("攻防") |
-| 0x4aeb44 | 200 | u32 pointer to the battle map buffer (header 1600 B, then width×height terrain bytes) | `EV = *PT + 1600 + y*W + x` → terrain byte of tile (x,y) |
+| 0x4927f0 / 0x4927f1 | 580 / 349 | combat object 0x4927f0: bytes +0 / +1 = attacker / defender unit slot, written when an attack starts (0x4064f1 → 0x4061fc) and kept until the next one | read as byte ("byte读取") and compared with unit field 28 (unit +4) to detect who is attacking whom ("攻防") |
+| 0x4aeb44 | 200 | u32 pointer to the battle map buffer (header 1600 B, then width×height terrain bytes; the port keeps it at 0x02000000 so it is saved with the game) | `EV = *PT + 1600 + y*W + x` → terrain byte of tile (x,y) |
 | 0x4b422c | 200 | u8 battle-map width in tiles (+0x4b422d = height) | used in the terrain-address computation above |
 | 0x44c2de | 200 | 5 NOP bytes inside .text reserved by the mod as a parameter cell; read by the mod hook at 0x44c2d3 (`mov bl,[0x44c2de]`) | scripts store the terrain byte there before op 0x58 (map effect / terrain change at a tile) |
 | 0x55ac04 … 0x55ac60 | 1–252 | mod globals in .data3 (see 6.5) | read/written as ints |

@@ -269,12 +269,15 @@ func op_dialog(ins: Dictionary) -> void:
 	await show_dialog(sarg(ins, 0))
 
 
-## op 0x16. The mod prefixes history-log entries with a category digit ("1…" event, "2…" skill).
+## op 0x16 (0x413a57): a message box, unless EV[4095] (u32 @0x55effc) is set: then the mod adds the text
+## to its chronicle (史录) with that category instead of showing it. EV[4095] is cleared either way.
 func op_info(ins: Dictionary) -> void:
 	var t := Game.substitute_names(sarg(ins, 0))
-	if t.length() > 1 and t[0] >= "0" and t[0] <= "9":
-		Game.history.append(t)
-		t = t.substr(1)
+	var cat := Mem.r32(0x55effc)
+	Mem.w32(0x55effc, 0)
+	if cat != 0:
+		Game.add_history(cat & 0xff, t)
+		return
 	await ui.dialog.talk(null, "", t, false)
 
 
@@ -329,13 +332,30 @@ func op_join(ins: Dictionary) -> void:
 	Game.join_party(arg(ins, 0) & 0xffff, arg(ins, 1) & 0xffff, arg(ins, 2) & 0xffff)
 
 
+## op 0x3d (0x4143c2): item (ids above 0x67 ignored), level (0 / 0xffff = by the party's level,
+## 0x40c14f), flag, person. A weapon or armour at its maximum level comes fully grown. Outside a battle
+## the original always says what was found (message style 2); in a battle only when the flag is set.
 func op_get_item(ins: Dictionary) -> void:
 	var iid := arg(ins, 0)
-	var lvl := maxi(arg(ins, 1), 1)
-	Game.add_item(iid, lvl)
+	if iid > 0x67:
+		return
 	var it := Game.item(iid)
-	if arg16(ins, 2) != 0:
+	var lvl := arg(ins, 1)
+	if lvl == 0xffff:
+		lvl = 0
+	var xp := 0
+	if Person.slot_of(it) < 2:
+		var maxl := 10 if bool(it.get("treasure", false)) else 3
+		if lvl == 0:
+			lvl = Person.auto_level_at(it, Game.party_avg_level())
+		if lvl >= maxl:
+			lvl = maxl
+			xp = 0xff
+	Game.add_item(iid, maxi(lvl, 1), xp)
+	if not in_battle() or arg16(ins, 2) != 0:
 		await ui.popup("得到了%s。" % str(it.get("name", "?")))
+	if int(it.get("unk_18", 0)) != 0:
+		SpecialFuncs.write_niuniu(iid + 3, 1)
 
 
 func op_lose_item(ins: Dictionary) -> bool:
@@ -350,24 +370,34 @@ func op_test_resource(ins: Dictionary) -> bool:
 	return Game.compare(Game.get_resource(arg(ins, 0)), arg(ins, 1), arg(ins, 2))
 
 
+## op 0x3e (0x416319): equipment codes as in Person.equip_code (0xffff → 0), 0 leaves the slot alone.
+## In a battle the person must be on the field and codes above 0x67 are ignored (0x4429f9); outside a
+## battle a weapon code of 1 takes off every slot that has a code (the original tests the weapon code
+## for all three).
 func op_set_equipment(ins: Dictionary) -> void:
-	var p := Game.person(arg16(ins, 0))
-	if p == null:
+	var pid := arg(ins, 0)
+	var p := Game.person(pid)
+	if p == null or pid > 0x3ff:
 		return
-	_equip(p, arg16(ins, 1), arg(ins, 2), arg16(ins, 3), arg(ins, 4), arg16(ins, 5))
+	var codes := [arg(ins, 1), arg(ins, 3), arg(ins, 5)]
+	var lvls := [arg(ins, 2), arg(ins, 4), 0xff]
+	for i in 3:
+		if codes[i] == 0xffff: codes[i] = 0
+		if lvls[i] == 0xffff: lvls[i] = 0
+	var battle := in_battle()
+	if battle and DataTransfer.unit_slot_of(pid) < 0:
+		return
+	for i in 3:
+		var c: int = codes[i]
+		if c == 0 or (battle and c > 0x67):
+			continue
+		p.equip_code(i, 1 if not battle and codes[0] == 1 else c, lvls[i] & 0xff)
+	on_field_written(0x2e, pid)
 
 
-func _equip(p: Person, w: int, wl: int, a: int, al: int, acc: int) -> void:
-	if w >= 0 and w < 0xff:
-		p.weapon = w
-		p.weapon_lvl = maxi(wl, 1)
-		p.weapon_exp = 0
-	if a >= 0 and a < 0xff:
-		p.armor = a
-		p.armor_lvl = maxi(al, 1)
-		p.armor_exp = 0
-	if acc >= 0 and acc < 0xff:
-		p.accessory = acc
+## Stages override: true in a battle (0x40b922).
+func in_battle() -> bool:
+	return false
 
 
 func op_special_func(ins: Dictionary) -> void:

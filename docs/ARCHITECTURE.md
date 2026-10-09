@@ -45,6 +45,9 @@ are ported from the decompiled executable.
   all initialised data tables. Writes go into a copy.
 * **0x01000000 …** – heap for the 0x48-byte person records; the pointer to them lives at 0x4d0048 like in the
   original.
+* **0x02000000 …** – the battle map buffer (0x640-byte header, then one terrain byte per cell). Its address is
+  stored at 0x4aeb44 like the original's, so scripts that read terrain through that pointer see the real map, and
+  terrain changes made during a battle are part of a save.
 * Anything else lands in sparse 4 KB pages created on first write.
 
 Important locations:
@@ -60,13 +63,16 @@ Important locations:
 | 0x48b350 | sortie list (u32 person ids, 0xffff-terminated) |
 | 0x4b0783 | the bag (item slots) |
 | 0x4b3c80 | duel object |
+| 0x4927f0 / 0x4927f1 | attacker / defender slot of the latest attack (the scripts' 攻防 tests) |
 
 `Person` (`core/person.gd`) and `BUnit` (`battle/bunit.gd`) are **views**: thin objects whose properties read and
 write the record in `Mem`. Every change a script makes by address is therefore visible to the engine, and the
 other way round.
 
 Saves (`Game.save_game`) store the memory ranges that hold game state (`Mem.SAVE_RANGES`), the person heap and
-the extra pages as base64, plus the party, history, scenario and the running stage's own state. Saves are JSON.
+the extra pages as base64, plus the party, chronicle, scenario and the running stage's own state. Saves are JSON
+with a version number, written through a temporary file; a small `.info.json` beside each holds what the slot
+list shows.
 
 ## Script interpreter (`core/eex_vm.gd`)
 
@@ -83,7 +89,10 @@ The execution model follows the original:
   A `goto` inside a block pops one level and continues at the target, possibly in another section.
 * Each instruction is dispatched to `host.op_<name>(ins)`. Handlers may `await` (dialogue, animations, delays).
   Test ops return a bool. Handlers that return nothing count as true when used as an `IF` condition, as in the
-  original.
+  original. `vm.next_op` tells a handler which instruction follows (a run of story `actor_move`s walks in
+  parallel and only the last one waits).
+* Scenario scripts are parsed when a file starts and not kept in the JSON cache (a whole play-through's worth would
+  take gigabytes).
 
 `docs/eex.md` lists all opcodes; `docs/engine_notes.md` notes the ops whose parser names are misleading (for
 example op 0x23 "play_music" actually plays a sound effect).
@@ -130,13 +139,21 @@ through EV variables.
 banners, captions, chapter titles, fades and the video layer. Panels use the original's blue dragon-pattern window
 texture (`UIStyle`). The out-of-battle menus are `StatusPanel` and `PartyMenu` (equipment and items).
 
+* "Click to continue" waits compare `Game.clicks`, a counter of presses kept by `Game._input`, instead of polling
+  whether a button is held: a short trackpad tap is never missed, and the click that closed one box does not also
+  close the next one.
+* Choice menus scroll when they have more rows than fit on the screen (arrow keys, wheel, Page Up/Down) and cut
+  over-long rows short. The dialogue box grows for long texts, and captions wrap.
+* Chapter titles are drawn above the fade layer, since scripts show them on a black screen.
+
 ## Main flow (`main.gd`)
 
 1. Boot: play the intro video, then the title screen. The title picture changes once an ending has been reached
    (recorded in `user://niuniu.bin`, like the original's `Niuniu.wa`).
 2. `_run_flow()`: for scenario *n* load `R_(n/2)` if *n* is even, else `S_(n/2)`; run it; then *n* + 1, unless a
    script jumped with `goto_scenario`.
-3. Game over, endings, title and loading all go through `_stop_flow()`, which abandons the running stage. The
+3. Game over, endings, title and loading all go through `_stop_flow()`, which abandons the running stage and
+   stops a looping sound effect. The
    scenario loop is tagged with a generation counter, so an orphaned loop can never continue.
 
 Also in `main.gd`: window handling (the initial size is the largest of 3×–1× that fits the screen; after the user

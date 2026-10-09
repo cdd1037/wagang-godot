@@ -45,7 +45,10 @@ static func set_attr(st: BattleStage, pid: int, attr: int, op: int, v: int) -> v
 			1: u.hp = mini(u.hp + v, u.max_hp())
 			2: u.hp = maxi(u.hp - v, 0)
 		if u.hp <= 0 and u.state == BUnit.STATE_ON_MAP:
-			st.actions.unit_defeated(u)
+			u.extra["dying"] = true
+		st.refresh_units()
+		if u.hp <= 0 and u.state == BUnit.STATE_ON_MAP:
+			await st.actions.unit_defeated(u)
 		return
 	var p := Game.person(pid)
 	if p == null:

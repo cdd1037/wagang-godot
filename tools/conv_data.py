@@ -1,8 +1,8 @@
 """Convert wg2025 game data tables to JSON for the Godot port.
 
 usage: tools/venv/bin/python -I tools/conv_data.py [GAME_DIR] [OUT_DIR]
-  GAME_DIR defaults to /Users/f2pgod/Downloads/rea/wg2025 (read-only input)
-  OUT_DIR  defaults to /Users/f2pgod/Downloads/rea/game/assets/data
+  GAME_DIR defaults to <repo>/wg2025 (read-only input)
+  OUT_DIR  defaults to <repo>/game/assets/data
 
 Sources (see docs/rules.md for field evidence / exe addresses):
   data.wa  (Ls12 archive, 10 entries)
@@ -17,14 +17,16 @@ Sources (see docs/rules.md for field evidence / exe addresses):
   person.wa 1024 bytes: per-person custom battle-sprite selector (0x406a75)
   wagan.wa  name tables in .data (class / family / terrain / effect names)
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import json, os, struct, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(HERE)
 from ls12 import read_archive  # noqa: E402
 
-GAME = sys.argv[1] if len(sys.argv) > 1 else '/Users/f2pgod/Downloads/rea/wg2025'
-OUT = sys.argv[2] if len(sys.argv) > 2 else '/Users/f2pgod/Downloads/rea/game/assets/data'
+GAME = sys.argv[1] if len(sys.argv) > 1 else _REPO + '/wg2025'
+OUT = sys.argv[2] if len(sys.argv) > 2 else _REPO + '/game/assets/data'
 
 
 def gbk(b):

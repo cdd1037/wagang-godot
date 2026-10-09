@@ -7,8 +7,10 @@ How to start the game and play it: story scenes, battles, duels, menus and savin
 
 * **Download (recommended):** the [Releases page](https://github.com/seedds/wagang-godot/releases) has a ready
   build for macOS and Windows for every update; take the newest *Build N*.
-  * **macOS** (11+ on Apple Silicon, 10.13+ on Intel): unzip and open the app. It is not notarized, so the first
-    time right-click it → **Open**, or run `xattr -dr com.apple.quarantine <app>`.
+  * **macOS** (11+ on Apple Silicon, 10.13+ on Intel): unzip and open the app. It is not notarized, so macOS
+    blocks it the first time. On macOS 15 and later open **System Settings → Privacy & Security**, scroll down
+    and click **Open Anyway**; on older versions right-click the app → **Open**. Or run
+    `xattr -dr com.apple.quarantine <app>`.
   * **Windows** (64-bit): unzip and run `WaGang.exe`; keep `WaGang.pck` in the same folder. If SmartScreen warns
     about an unknown publisher, choose **More info → Run anyway**.
 * **From source:** `./run_game.sh` in the repository root (needs Godot 4.7). The first run downloads the HD
@@ -30,7 +32,7 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 |---|---|
 | Left click / Enter | confirm, select, advance dialogue |
 | Right click / Esc | cancel or go back; opens the menu where there is one |
-| Arrow keys / mouse wheel | move through menus |
+| Arrow keys / mouse wheel / Page Up, Page Down | move through menus (long lists scroll) |
 | Hold **Space** or **Ctrl** | fast-forward animations and text (×4 game speed) |
 | Click / Enter / Esc during a video | skip the cutscene |
 
@@ -51,7 +53,8 @@ While a scene is waiting for you:
   * **道具** – use items outside battle (stat fruits, level-up and promotion items)
   * **存储进度 / 读取进度** – save or load
   * **回到标题** – back to the title screen
-  * **史录** – the chronicle of story events so far
+  * **史录** – the chronicle: story events, deeds and items, in one scrolling list; choose an entry to read it in
+    full
 * **出征** (top right, or first in the menu) appears once the next battle is ready. It marches out. If more members
   are available than the battle allows, a sortie screen (出场选择) lets you choose who goes; required members are
   pre-selected.
@@ -120,19 +123,22 @@ winner may gain experience when the duel closes.
 
 * **10 save slots**, from the story menu or the battle system menu, including mid-battle. Loading works from the
   title screen or in-game.
-* Saves are stored as `save_00.json` … `save_09.json` in the game's user folder:
+* Saves are stored as `save_00.json` … `save_09.json` (each with a small `save_NN.info.json` summary for the slot
+  list) in the game's user folder:
   * macOS: `~/Library/Application Support/Godot/app_userdata/兴唐传·瓦岗山异闻录/`
   * Windows: `%APPDATA%\Godot\app_userdata\兴唐传·瓦岗山异闻录\`
 
   The file `niuniu.bin` there records reached endings, as the original's `Niuniu.wa` did. Saves can be copied
-  between the macOS and Windows versions.
+  between the macOS and Windows versions. A save is written to a temporary file first, so a crash while saving
+  leaves the old save intact; a damaged save, or one from a newer version of the game, is refused instead of
+  loaded.
 * A defeat (game over) returns to the title screen, so save often.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| macOS: "App can't be opened" / unidentified developer | Right-click → **Open**, or `xattr -dr com.apple.quarantine <app>` |
+| macOS: "App can't be opened" / "Apple could not verify…" | macOS 15+: **System Settings → Privacy & Security → Open Anyway**; older: right-click → **Open**; or `xattr -dr com.apple.quarantine <app>` |
 | Windows: SmartScreen "Windows protected your PC" | **More info → Run anyway** (the build is not code-signed) |
 | Windows: the game starts with an error about a missing pack | Keep `WaGang.pck` next to `WaGang.exe` (unzip the whole folder) |
 | Window too small or large | Drag the window's edge or corner (it snaps to 4:3), or toggle full screen (⌘F) |

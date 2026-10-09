@@ -34,20 +34,27 @@ func _init() -> void:
 func _layout(top: bool) -> void:
 	var vs := get_viewport_rect().size
 	var h := 128.0
+	var text_x := 8.0 + 14
+	if face:
+		var fs0 := face.get_size()
+		text_x = 8 + 8 + fs0.x * minf(1.0, (h - 12) / fs0.y) + 12
+	# long texts get a taller box instead of running out of it
+	var ty_off := 32.0 if speaker != "" else 12.0
+	var tw := vs.x - 8 - text_x - 14
+	_label.size = Vector2(tw, 10)
+	var lh := Assets.font().get_height(UIStyle.FONT_SIZE) + 4
+	h = clampf(ty_off + _label.get_line_count() * lh + 10, h, vs.y - 16)
 	var y := 8.0 if top else vs.y - h - 8.0
 	_box = Rect2(8, y, vs.x - 16, h)
-	var text_x := _box.position.x + 14
 	if face:
 		var fs := face.get_size()
-		var scale := minf(1.0, (h - 12) / fs.y)
-		var fw := fs.x * scale
-		_face_rect = Rect2(_box.position.x + 8, _box.position.y + (h - fs.y * scale) / 2, fw, fs.y * scale)
-		text_x = _face_rect.end.x + 12
+		var scale := minf(1.0, (128.0 - 12) / fs.y)
+		_face_rect = Rect2(_box.position.x + 8, _box.position.y + (h - fs.y * scale) / 2, fs.x * scale, fs.y * scale)
 	_name_label.position = Vector2(text_x, _box.position.y + 8)
 	_name_label.size = Vector2(_box.end.x - text_x - 10, 20)
-	var ty := _box.position.y + (32.0 if speaker != "" else 12.0)
+	var ty := _box.position.y + ty_off
 	_label.position = Vector2(text_x, ty)
-	_label.size = Vector2(_box.end.x - text_x - 14, _box.end.y - ty - 8)
+	_label.size = Vector2(tw, _box.end.y - ty - 8)
 
 
 func _draw() -> void:

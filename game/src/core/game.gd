@@ -44,10 +44,19 @@ var gold: int:
 var chapter_title := ""
 var play_time := 0.0
 var loaded := false
+var clicks := 0                  # count of click / confirm presses; waits compare it to see a new press
 
 
 func _ready() -> void:
 	load_data()
+
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton:
+		if ev.pressed and ev.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			clicks += 1
+	elif ev.is_action_pressed("ui_accept") or ev.is_action_pressed("ui_cancel"):
+		clicks += 1
 
 
 func load_data() -> void:
@@ -108,7 +117,7 @@ func new_game_state() -> void:
 
 
 func _process(delta: float) -> void:
-	play_time += delta
+	play_time += delta / maxf(Engine.time_scale, 0.01)    # real time, also while fast-forwarding
 
 
 # ------------------------------------------------------------------ lookups
@@ -163,8 +172,20 @@ func text(index: int) -> String:
 	return "" if v == null else str(v)
 
 
+## Terrain name from the executable's GBK name table (pointers at 0x48bdb0), which scripts may overwrite
+## (S_12 renames 大河 to 海洋); the converted names are the fallback.
 func terrain_name(t: int) -> String:
-	return str(terrain_names[t]) if t >= 0 and t < terrain_names.size() else ""
+	if t < 0 or t >= terrain_names.size():
+		return ""
+	var p := Mem.r32(0x48bdb0 + 4 * t)
+	var b := PackedByteArray()
+	for k in 16:
+		var c := Mem.r8(p + k)
+		if c == 0:
+			break
+		b.append(c)
+	var s := b.get_string_from_multibyte_char("GBK") if not b.is_empty() else ""
+	return s if s != "" else str(terrain_names[t])
 
 
 ## Resolved portrait number for a person (GetFace 0x4075a7): the protagonist (pid 0) uses his own
@@ -226,14 +247,21 @@ func party_ids() -> Array[int]:
 
 
 ## Average level of party members among persons 0..25 (0x40c14f).
+## 0x40c14f: average level of the 15 highest-levelled party members among persons 0..25 (at least 1).
 func party_avg_level() -> int:
-	var tot := 0
-	var n := 0
+	var lv: Array[int] = []
 	for i in 26:
 		if is_member(i):
-			tot += person(i).level
-			n += 1
-	return tot / n if n > 0 else 1
+			lv.append(person(i).level)
+	if lv.is_empty():
+		return 1
+	lv.sort()
+	lv.reverse()
+	lv = lv.slice(0, 15)
+	var tot := 0
+	for v in lv:
+		tot += v
+	return maxi(tot / lv.size(), 1)
 
 
 ## EEX op 0x3b (0x40c28c): mode 0 = join, levelled to min(avg+arg, 70) with class tier by level
@@ -306,7 +334,7 @@ func bag_entries() -> Array:
 	return out
 
 
-func _bag_free_slot() -> int:
+func bag_free_slot() -> int:
 	for i in BAG_SLOTS:
 		var a := BAG + 3 * i
 		if Mem.r8(a) == 0xff or (Mem.r8(a) == 0 and Mem.r8(a + 1) == 0):
@@ -321,18 +349,18 @@ func init_bag() -> void:
 		Mem.w8(BAG + 3 * i + 2, 0)
 
 
-func add_item(id: int, lvl := 1) -> bool:
+func add_item(id: int, lvl := 1, xp := 0) -> bool:
 	if is_stack_item(id):
 		Mem.w8(STACKS + id - STACK_FIRST, mini(stack_count(id) + 1, 99))
 		return true
-	var i := _bag_free_slot()
+	var i := bag_free_slot()
 	if i < 0:
 		return false
 	var it := item(id)
 	var equip := String(it.get("category", "")) in ["weapon", "armor"]
 	Mem.w8(BAG + 3 * i, id)
 	Mem.w8(BAG + 3 * i + 1, lvl if equip else 0)
-	Mem.w8(BAG + 3 * i + 2, 0)
+	Mem.w8(BAG + 3 * i + 2, xp if equip else 0)
 	return true
 
 
@@ -398,16 +426,40 @@ func set_ivar(kind: int, i: int, v: int) -> void:
 
 
 # ------------------------------------------------------------------ save / load
+const SAVE_VERSION := 1
+
+
 func save_path(slot: int) -> String:
 	return "user://save_%02d.json" % slot
 
 
+## Small summary next to each save so the slot list does not have to parse whole saves.
+func _info_path(slot: int) -> String:
+	return "user://save_%02d.info.json" % slot
+
+
+## Write `text` to `path` through a temporary file, so a crash mid-write cannot destroy the old file.
+static func _write_atomic(path: String, text: String) -> bool:
+	var tmp := path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(text)
+	f.close()
+	if f.get_error() != OK:
+		return false
+	return DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(path)) == OK
+
+
 func save_game(slot: int, extra: Dictionary = {}) -> bool:
-	var d := {
-		"version": 1,
+	var info := {
+		"version": SAVE_VERSION,
 		"time": Time.get_datetime_string_from_system(),
 		"scenario": scenario,
 		"chapter_title": chapter_title,
+	}
+	var d := info.duplicate()
+	d.merge({
 		"play_time": play_time,
 		"party": party,
 		"inventory": inventory,
@@ -415,11 +467,10 @@ func save_game(slot: int, extra: Dictionary = {}) -> bool:
 		"history": history,
 		"mem": Mem.snapshot(),
 		"extra": extra,
-	}
-	var f := FileAccess.open(save_path(slot), FileAccess.WRITE)
-	if f == null:
+	})
+	if not _write_atomic(save_path(slot), JSON.stringify(d)):
 		return false
-	f.store_string(JSON.stringify(d))
+	_write_atomic(_info_path(slot), JSON.stringify(info))
 	return true
 
 
@@ -427,19 +478,37 @@ func save_info(slot: int) -> Dictionary:
 	var p := save_path(slot)
 	if not FileAccess.file_exists(p):
 		return {}
-	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p))
-	if d == null:
-		return {}
+	var d: Variant = null
+	if FileAccess.file_exists(_info_path(slot)) \
+			and FileAccess.get_modified_time(_info_path(slot)) >= FileAccess.get_modified_time(p):
+		d = JSON.parse_string(FileAccess.get_file_as_string(_info_path(slot)))
+	if not d is Dictionary:
+		d = read_save(slot)
+		if d == null:
+			return {}
 	return {"time": d.get("time", ""), "scenario": d.get("scenario", 0), "chapter_title": d.get("chapter_title", "")}
 
 
-func load_game(slot: int) -> Dictionary:
+## The parsed save in `slot`, or null if it is missing, damaged or from a newer version of the game.
+func read_save(slot: int) -> Variant:
 	var p := save_path(slot)
 	if not FileAccess.file_exists(p):
-		return {}
+		return null
 	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p))
+	if not d is Dictionary or int(d.get("version", 0)) > SAVE_VERSION:
+		return null
+	for k in ["mem", "party", "inventory", "ivars", "scenario"]:
+		if not d.has(k):
+			return null
+	return d
+
+
+## Load the save in `slot`; returns its stage state ("extra"), or null (and changes nothing) if the save
+## cannot be read.
+func load_game(slot: int) -> Variant:
+	var d: Variant = read_save(slot)
 	if d == null:
-		return {}
+		return null
 	chapter_title = str(d.get("chapter_title", ""))
 	play_time = float(d.get("play_time", 0))
 	party.clear()
@@ -447,10 +516,36 @@ func load_game(slot: int) -> Dictionary:
 		party.append(int(x))
 	inventory = d["inventory"]
 	ivars = d["ivars"]
-	history = d.get("history", [])
+	history.clear()
+	for h in d.get("history", []):
+		if h is Dictionary:
+			history.append(h)
+		else:
+			add_history(1, str(h))      # saves before the categories: "<number><text>"
 	Mem.restore(d["mem"])
 	scenario = int(d["scenario"])
 	return d.get("extra", {})
+
+
+# ------------------------------------------------------------------ chronicle (史录)
+## An entry of the mod's chronicle (op 0x16 with EV[4095] = category): the text starts with the entry
+## number. Category 0xff replaces the entry with that number (0x4d1679); otherwise a number that is
+## already there is not added again.
+func add_history(cat: int, text: String) -> void:
+	var n := 0
+	while n < text.length() and text[n] >= "0" and text[n] <= "9":
+		n += 1
+	var id := int(text.substr(0, n)) if n > 0 else -1
+	var e := {"id": id, "cat": cat, "text": text.substr(n)}
+	for i in history.size():
+		if id >= 0 and int(history[i]["id"]) == id:
+			if cat == 0xff:
+				e["cat"] = history[i]["cat"]
+				history[i] = e
+			return
+	if cat == 0xff:
+		e["cat"] = 1
+	history.append(e)
 
 
 # ------------------------------------------------------------------ names / text

@@ -42,21 +42,27 @@ modified, so no `rcedit` is needed). The `.pck` is the same on every platform, s
 
 `.github/workflows/release.yml` builds and publishes both platforms on every push to `main` that changes the game
 (pushes touching only `docs/`, Markdown files, `tools/` or `.gitignore` are skipped). It can also be started by
-hand from the repository's **Actions** tab (*Release builds → Run workflow*).
+hand from the repository's **Actions** tab (*Release builds → Run workflow*); runs from other branches do nothing.
 
 * **Build number:** the workflow's run number *N*, which increases with every run. The release is tagged
   `build-N` and titled *Build N*; the game's version is `1.0.N`. The version is written into
   `application/config/version`, shown in the title screen's corner, and into the macOS bundle version. The
   repository itself keeps no version, so local builds show none.
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
-  between runs), imports the project, exports `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's
-  built-in signer) and `WaGang-Windows-build-N.zip`, then creates the release with both files and install notes.
-  A run takes about 5 minutes; each release is about 2.2 GB (macOS 1.09 GB, Windows 1.07 GB, HD art only).
+  between runs; the downloads are checked against pinned SHA-256 sums), imports the project, exports
+  `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's built-in signer) and `WaGang-Windows-build-N.zip`,
+  then creates the release with both files and install notes. A run takes about 5 minutes; each release is about
+  2.2 GB (macOS 1.09 GB, Windows 1.07 GB, HD art only). The actions are pinned to commit SHAs.
+* **Latest, re-runs and clean-up:** a build becomes the repository's *Latest* release only if its commit is still
+  the newest on `main`, so re-running an old build does not replace a newer one. Re-running a build that was
+  already published replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N`
+  releases and their tags (`KEEP_BUILDS`).
 * **HD graphics only:** the workflow downloads the HD graphics pack (`assets_hd.zip` from the release tagged
   `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures under
   `assets/gfx` stay out of the builds (palettes, index files and the terrain-patch index images stay). It then
-  plays the first scenarios headless from the exported `.pck` and fails if any picture is missing. After
-  rebuilding the pack, re-upload it (see [HD_GRAPHICS.md](HD_GRAPHICS.md)).
+  plays the first scenarios headless from the exported `.pck` and fails if the game exits with an error, a
+  picture or data file is missing, or a script fails to compile. After rebuilding the pack, re-upload it (see
+  [HD_GRAPHICS.md](HD_GRAPHICS.md)).
 
 ## Re-generating the game data
 
@@ -75,9 +81,9 @@ Everything under `game/assets/` is produced from the original game by the conver
 * `ffmpeg` on the PATH for audio, and Homebrew's `ffmpeg-full` (it has libtheora) for video:
   `brew install ffmpeg ffmpeg-full`.
 
-> **Path note:** the converters currently use absolute paths of the form `/Users/f2pgod/Downloads/rea/…` (constants
-> such as `SRC`, `DST`, `ROOT`, `GAME`, `OUT` at the top of each script). If your checkout lives elsewhere, edit
-> those constants or create a symlink at that path.
+> **Paths:** the converters and shell helpers find the repository from their own location (`tools/..`) and
+> expect the original game at `wg2025/` in the repository root. `tools/ghidra/gdec.sh` takes `GHIDRA_INSTALL_DIR`
+> and `JAVA_HOME_21` from the environment (default: the Homebrew locations).
 
 ### Steps
 

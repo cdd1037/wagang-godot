@@ -172,7 +172,7 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 		elif not (df in CAVALRY_FAMILIES) and not (df in VEHICLE_FAMILIES) and att.has_effect(88):
 			dmg += dmg * att.effect_value(88) / 100
 		if att.has_effect(89):
-			var d := maxi(absi(att.pos.x - att.move_start.x), absi(att.pos.y - att.move_start.y))
+			var d := maxi(absi(att.pos.x - BUnit.move_origin.x), absi(att.pos.y - BUnit.move_origin.y))
 			for k in d:
 				dmg = dmg * 110 / 100
 		if mode == 0:
@@ -237,6 +237,8 @@ static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, weather
 static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, weather: int, leader_slot := 0) -> int:
 	if target.pid == 0x89:
 		return 0
+	if s == 21 and target.colour != 0 and target.pid < 0xd2:
+		return 0      # 暗杀: named officers that are not red units are immune
 	if not strat_terrain_ok(s, caster, target_terrain, weather):
 		return 0
 	if s in STRAT_HIT_ALWAYS:

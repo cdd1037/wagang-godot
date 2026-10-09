@@ -1,5 +1,6 @@
 # Builds the game for macOS and Windows on every push to main and publishes them as a GitHub release.
 # The build number is the workflow's run number, so it increases with every build: tag build-N, version 1.0.N.
+# Only the newest KEEP_BUILDS builds are kept (each is about 2.2 GB).
 name: Release builds
 
 on:
@@ -21,13 +22,21 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.7.2
+  # SHA-256 of the Godot downloads (as listed on the godot-builds release)
+  GODOT_SHA256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+  TEMPLATES_SHA256: f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011
+  KEEP_BUILDS: 5
 
 jobs:
   build:
+    # a manual run from another branch must not publish a build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
 
       - name: Build number
         run: |
@@ -36,7 +45,7 @@ jobs:
 
       - name: Cache Godot and export templates
         id: cache-godot
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
         with:
           path: |
             ~/godot
@@ -50,10 +59,12 @@ jobs:
           templates="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p ~/godot "$templates"
           curl -sSL --fail -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          echo "${GODOT_SHA256}  /tmp/godot.zip" | sha256sum -c -
           unzip -q /tmp/godot.zip -d /tmp/godot
           mv /tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
           # only the two templates we export with (the full bundle is 1.3 GB)
           curl -sSL --fail -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          echo "${TEMPLATES_SHA256}  /tmp/templates.tpz" | sha256sum -c -
           unzip -q -j /tmp/templates.tpz templates/version.txt templates/macos.zip \
             templates/windows_release_x86_64.exe -d "$templates"
           rm /tmp/templates.tpz /tmp/godot.zip
@@ -65,6 +76,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download hd-pack -p "assets_hd.zip" -D /tmp/hd
+          # GitHub's SHA-256 of the asset catches a truncated or replaced-while-downloading pack
+          want=$(gh release view hd-pack --json assets --jq '.assets[] | select(.name=="assets_hd.zip") | .digest')
+          echo "${want#sha256:}  /tmp/hd/assets_hd.zip" | sha256sum -c -
           unzip -q /tmp/hd/assets_hd.zip -d game/assets_hd
           rm -r /tmp/hd
           n=$(find game/assets_hd -name '*.webp' | wc -l)
@@ -78,14 +92,17 @@ jobs:
           exclude="$exclude,assets/gfx/effects/items32/*.png,assets/gfx/effects/ranges/*.png,assets/gfx/effects/weather/*.png"
           exclude="$exclude,assets/gfx/icons/*.png,assets/gfx/terrain/*.png,assets/gfx/ui/*.png"
           sed -i "s#^exclude_filter=\"\"#exclude_filter=\"$exclude\"#" game/export_presets.cfg
-          grep -c "^exclude_filter=\"assets/gfx" game/export_presets.cfg
+          test "$(grep -c "^exclude_filter=\"assets/gfx" game/export_presets.cfg)" -eq 2   # both presets
 
       - name: Stamp the version
         run: |
           # title screen (application/config/version) and the macOS bundle version
+          sed -i '/^config\/version=/d' game/project.godot
           sed -i "/^config\/name=/a config/version=\"${VERSION}\"" game/project.godot
           sed -i "s/^application\/short_version=.*/application\/short_version=\"${VERSION}\"/; s/^application\/version=.*/application\/version=\"${BUILD}\"/" game/export_presets.cfg
-          grep -n "config/version" game/project.godot
+          test "$(grep -c "^config/version=\"${VERSION}\"" game/project.godot)" -eq 1
+          grep -q "^application/short_version=\"${VERSION}\"" game/export_presets.cfg
+          grep -q "^application/version=\"${BUILD}\"" game/export_presets.cfg
 
       - name: Import the project
         run: ~/godot/godot --headless --path game --import
@@ -104,10 +121,13 @@ jobs:
         # the .pck is the same on every platform: play the first scenarios headless from the Windows build's pack
         # and make sure no picture is missing now that the originals are left out
         run: |
+          code=0
           WG_START=0 WG_AUTO=1 WG_GOD=1 WG_STOP=3 WG_NOVIDEO=1 timeout 900 \
-            ~/godot/godot --headless --main-pack build/windows/WaGang.pck 2>&1 | tee /tmp/smoke.log | grep "^== " || true
+            ~/godot/godot --headless --main-pack build/windows/WaGang.pck > /tmp/smoke.log 2>&1 || code=$?
+          grep "^== " /tmp/smoke.log || true
+          if [ "$code" -ne 0 ]; then echo "the game exited with code $code"; tail -40 /tmp/smoke.log; exit 1; fi
           grep -q "^== scenario 2" /tmp/smoke.log
-          if grep -E "missing image|SCRIPT ERROR" /tmp/smoke.log; then exit 1; fi
+          if grep -E "missing (image|json)|SCRIPT ERROR|Parse Error|Compile Error|Failed to load" /tmp/smoke.log; then exit 1; fi
 
       - name: Publish release
         env:
@@ -118,12 +138,33 @@ jobs:
           Automatic build ${BUILD} (version ${VERSION}) of commit ${GITHUB_SHA::7}: ${subject}
 
           **macOS** (macOS 11+ on Apple Silicon, 10.13+ on Intel): unzip \`WaGang-macOS-build-${BUILD}.zip\` and open the app.
-          It is not notarized: the first time, right-click the app → **Open**, or run
-          \`xattr -dr com.apple.quarantine <app>\` in Terminal.
+          It is not notarized, so macOS blocks it the first time. On macOS 15 and later open **System Settings →
+          Privacy & Security**, scroll down and click **Open Anyway** (on older versions: right-click the app → **Open**).
+          Or run \`xattr -dr com.apple.quarantine <app>\` in Terminal.
 
           **Windows** (64-bit): unzip \`WaGang-Windows-build-${BUILD}.zip\` and run \`WaGang.exe\` (keep \`WaGang.pck\`
           next to it). If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
           EOF
-          gh release create "build-${BUILD}" \
-            "build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip" \
-            --target "${GITHUB_SHA}" --title "Build ${BUILD}" --notes-file /tmp/notes.md --latest
+          files=("build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip")
+          # only the build of main's newest commit becomes "Latest" (not a re-run of an older one)
+          latest=false
+          if [ "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" refs/heads/main | cut -f1)" = "${GITHUB_SHA}" ]; then
+            latest=true
+          fi
+          if gh release view "build-${BUILD}" > /dev/null 2>&1; then
+            # a re-run of this build: replace its files
+            gh release upload "build-${BUILD}" "${files[@]}" --clobber
+          else
+            gh release create "build-${BUILD}" "${files[@]}" \
+              --target "${GITHUB_SHA}" --title "Build ${BUILD}" --notes-file /tmp/notes.md --latest="${latest}"
+          fi
+
+      - name: Remove old builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | { grep -E '^build-[0-9]+$' || true; } \
+            | sort -t- -k2 -n -r | tail -n +$((KEEP_BUILDS + 1)) | while read -r tag; do
+              echo "deleting $tag"
+              gh release delete "$tag" --cleanup-tag --yes
+            done

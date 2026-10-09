@@ -1,7 +1,9 @@
 """Mark every converted asset under game/assets as importer=keep so Godot ships the raw
 file and the game loads it at runtime (Image.load_from_file, AudioStreamMP3.load_from_file...)."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import os, sys
-ROOT = '/Users/f2pgod/Downloads/rea/game/assets'
+ROOT = _REPO + '/game/assets'
 EXTS = ('.png', '.json', '.mp3', '.wav', '.ogv', '.txt', '.bin')
 KEEP = '[remap]\n\nimporter="keep"\n'
 n = 0

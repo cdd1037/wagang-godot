@@ -6,13 +6,15 @@
 f is the *resolved* face index from GetFace (0x4075a7): pid 0 -> person.face, others person.face+7,
 with story-dependent overrides for persons 1/4/8/35 (see docs/gfx.md section 4).
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import os, sys, json
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from dllbmp import bitmaps, to_image
 import ls12, gfxpal
 from PIL import Image, ImageFile
 
-ROOT = '/Users/f2pgod/Downloads/rea/wg2025/'
+ROOT = _REPO + '/wg2025/'
 
 
 def _black_to_alpha(im):
@@ -59,4 +61,4 @@ def convert(out, quantize=False):
 
 
 if __name__ == '__main__':
-    print(convert(sys.argv[1] if len(sys.argv) > 1 else '/Users/f2pgod/Downloads/rea/game/assets/gfx'))
+    print(convert(sys.argv[1] if len(sys.argv) > 1 else _REPO + '/game/assets/gfx'))

@@ -27,7 +27,8 @@ const STATE_ON_MAP := 2
 
 var slot := 0
 var node: UnitSprite
-var move_start := Vector2i.ZERO
+static var gen := 0     # bumped whenever who stands where may have changed (BattleStage.unit_at's cache)
+static var move_origin := Vector2i.ZERO   # [0x4cfc00]: where the acting unit started its move (冲锋 effect 89)
 var grudge := 0
 var extra: Dictionary = {}
 
@@ -38,7 +39,9 @@ var pid: int:
 	get:
 		var v := Mem.r16(addr)
 		return -1 if v == 0xffff else (v & 0xfff)
-	set(v): Mem.w32(addr, 0xffffffff if v < 0 else v)
+	set(v):
+		Mem.w32(addr, 0xffffffff if v < 0 else v)
+		gen += 1
 var colour: int:
 	get: return Mem.r8(addr + 5)
 	set(v): Mem.w8(addr + 5, v)
@@ -47,12 +50,15 @@ var pos: Vector2i:
 	set(v):
 		Mem.w8(addr + 6, v.x)
 		Mem.w8(addr + 7, v.y)
+		gen += 1
 var order: int:
 	get: return Mem.r8(addr + 0xb)
 	set(v): Mem.w8(addr + 0xb, v)
 var state: int:
 	get: return Mem.r8(addr + 0xc)
-	set(v): Mem.w8(addr + 0xc, v)
+	set(v):
+		Mem.w8(addr + 0xc, v)
+		gen += 1
 var flags: int:
 	get: return Mem.r8(addr + 0xd)
 	set(v): Mem.w8(addr + 0xd, v)
@@ -64,7 +70,10 @@ var dir: int:
 	set(v): Mem.w8(addr + 0xf, v)
 var hp: int:
 	get: return Mem.r32(addr + 0x10)
-	set(v): Mem.w32(addr + 0x10, maxi(v, 0))
+	set(v):
+		if (v > 0) != (Mem.r32(addr + 0x10) > 0):
+			gen += 1
+		Mem.w32(addr + 0x10, maxi(v, 0))
 var mp: int:
 	get: return Mem.r32(addr + 0x14)
 	set(v): Mem.w32(addr + 0x14, maxi(v, 0))
@@ -104,6 +113,8 @@ func set_buff(i: int, v: int) -> void:
 
 func clear(s: int) -> void:
 	slot = s
+	extra = {}
+	gen += 1
 	Mem.fill(addr, Mem.UNIT_SIZE, 0)
 	Mem.w32(addr, 0xffffffff)   # +0 u32 person id, empty = 0xffffffff
 	Mem.w8(addr + 4, s)

@@ -119,6 +119,7 @@ func act(unit: BUnit) -> void:
 	if dest.x < 0 or not reach.has(dest):
 		dest = u.pos
 	# move
+	BUnit.move_origin = u.pos
 	if dest != u.pos:
 		await st.view.ensure_visible(u.pos)
 		var path := Grid.path_to(parents, u.pos, dest)

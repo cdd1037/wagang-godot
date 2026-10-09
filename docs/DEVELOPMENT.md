@@ -6,7 +6,7 @@ Debug options, the automated test harness, and the reverse-engineering workflow.
 ## Running from source
 
 ```sh
-./run_game.sh                               # windowed; first run downloads the HD pack and imports the project
+./run_game.sh                               # windowed; downloads the HD pack once, re-imports when a script changed
 godot --headless --path game ...            # headless, for tests (after one `--import`)
 godot -e --path game                        # open in the Godot editor
 ```
@@ -57,12 +57,12 @@ All options are environment variables read at start-up, for example
 
 | Variable | Effect |
 |---|---|
-| `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 9) after each scenario, retry from it after a game over |
+| `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 19; 0–9 are the player's saves) after each scenario, retry from it after a game over |
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
 | `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids and screenshot their animations |
-| `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=5` to check the restore |
+| `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=18` to check the restore |
 | `WG_ACCEPT_SPAM=1` | Press Enter every 0.6 s |
 | `WG_SHOTS=dir` | Save a screenshot to *dir* every `WG_SHOT_EVERY` seconds (default 3) |
 
@@ -75,12 +75,20 @@ The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
 
 | Script | Purpose |
 |---|---|
-| `tools/flowtest.sh [seconds] [stop]` | Long autoplay run with autosave and retry: continues from slot 9 if it exists, else (or with `FRESH=1`) starts a new game → `extract/flow.log` |
+| `tools/flowtest.sh [seconds] [stop]` | Long autoplay run with autosave and retry: continues from slot 19 (`WG_AUTOSLOT`) if it exists, else (or with `FRESH=1`) starts a new game → `extract/flow.log` |
 | `tools/flowtrace.sh [seconds] [stop]` | The same with section and text tracing → `extract/flow_trace.log` |
 | `tools/flowpar.sh START STOP SLOT [seconds] [PARTY]` | Jump-start a scenario range (for running ranges in parallel) → `extract/flow_par_START.log` |
 | `tools/flowres.sh SLOT STOP LOG [seconds]` | Resume such a run from its autosave slot |
 | `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
 | `tools/gtest.sh t_name` | Run `game/src/debug/t_name.gd` under the headless test runner |
+
+The autosave slot numbers are save files in the game's user folder: use **11 or higher**, since slots 0–9 are the
+player's own saves. Run several ranges in parallel with bash, for example
+`bash -c 'for r in "0 16 11" "16 32 12"; do set -- $r; tools/flowpar.sh $1 $2 $3 1500 & done; wait'`. The tests also
+write `niuniu.bin` (the endings record).
+
+Headless unit checks (`tools/gtest.sh NAME`): `t_parse` loads every script (catches parse errors anywhere),
+`t_equip` checks the equipment codes of ops 0x3e/0x48, `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 
@@ -124,8 +132,8 @@ The original executable is `wg2025/wagan.wa` (PE32, image base 0x400000). The mo
 `.text2` section around 0x4d0000 and hooks the original code with `jmp` patches.
 
 * **Ghidra (preferred):** `tools/ghidra/gdec.sh OUT.c 0x41973c 0x448524 …` decompiles functions headlessly. The
-  first run imports and analyses the executable into `extract/ghidra_proj` (slow, once). The script expects Ghidra
-  and JDK 21 from Homebrew at the paths set at its top.
+  first run imports and analyses the executable into `extract/ghidra_proj` (slow, once). The script uses Ghidra
+  and JDK 21 from Homebrew unless `GHIDRA_INSTALL_DIR` / `JAVA_HOME_21` point elsewhere.
 * **Quick disassembly:** `tools/venv/bin/python -I tools/disx.py 0x43640e 40` (capstone). `tools/cases.py`
   disassembles jump-table targets, and `tools/findins.py REGEX` searches instructions.
 * **Data:** `game/assets/data/exe_image.bin` is the mapped executable, so `offset = address − 0x400000` reads any

@@ -1,6 +1,8 @@
 """usage: cases.py TABLE_VA N [maxins] -- disassemble each target of a jump table (stops at jmp-out/ret)."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 p = PE()
 tab = int(sys.argv[1], 16); n = int(sys.argv[2]); mx = int(sys.argv[3]) if len(sys.argv) > 3 else 40

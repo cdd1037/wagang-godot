@@ -6,8 +6,10 @@
   GHAI.WA (+DeDe palettes)   -> <out>/screens/NN.png        (title, logos, game over, battle backdrops ...)
 See docs/gfx.md sections 5/6.
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image
 import gfxcommon as g

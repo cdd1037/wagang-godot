@@ -1,7 +1,9 @@
 """Recursive-descent listing of a code path in wagan.wa that follows jmp chains across .text/.text2.
 usage: rd_trace.py VA [maxins]   -- prints basic blocks in DFS order (fallthrough/jmp-target first)."""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, re
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 p = PE()
 start = int(sys.argv[1], 16); maxins = int(sys.argv[2]) if len(sys.argv) > 2 else 600

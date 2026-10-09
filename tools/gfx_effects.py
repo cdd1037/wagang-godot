@@ -9,8 +9,10 @@
   Qusi.wa misc UI pieces                   -> <out>/effects/qusi/NN.png
   Kao.wa battle/UI atlas                   -> <out>/effects/kao/<offset>_<w>x<h>.png
 """
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import struct, sys
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import numpy as np
 from PIL import Image
 import gfxcommon as g

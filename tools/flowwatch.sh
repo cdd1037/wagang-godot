@@ -1,6 +1,7 @@
 #!/bin/bash
 # Watch flow-test logs (args: log names in extract/): print skips/errors as they happen, and STALL when a log is silent > 300 s.
-cd /Users/f2pgod/Downloads/rea/extract
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT/extract" || exit 1
 FILES=("$@")
 [ ${#FILES[@]} -eq 0 ] && FILES=(flow_trace.log flow_par_32.log flow_par_62.log flow_par_80.log)
 for f in "${FILES[@]}"; do

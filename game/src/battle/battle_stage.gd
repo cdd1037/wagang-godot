@@ -37,6 +37,9 @@ var _restore: Dictionary = {}
 var _in_checkpoint := false
 var current_unit: BUnit
 var terrain_changes: Array = []
+var _occ: Dictionary = {}    # cell → unit, see unit_at
+var _occ_gen := -1
+var _resumed := false        # loaded from a save made during the player phase: its start already happened
 
 ## deployment ai_mode 0..6 → AI code (table 0x48e380)
 const AI_CODE := [3, 1, 2, 0, 0, 4, 4]
@@ -67,6 +70,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if hud and is_instance_valid(hud):
 		hud.queue_free()
+	if duel and is_instance_valid(duel):
+		duel.queue_free()     # it lives in the UI layer, which outlasts the stage
 
 
 # ------------------------------------------------------------------ main loop
@@ -119,17 +124,22 @@ func battle_loop() -> void:
 		# ---- player phase
 		phase = PH_PLAYER
 		await hud.phase_banner("第%d回合　我军" % turn)
-		_phase_start_effects(0, 35)
-		await checkpoint()
-		if _battle_finished(): break
-		await input.player_phase()
-		if _battle_finished(): break
-		# ---- friend phase (AI-controlled units among 0..34)
-		phase = PH_FRIEND
-		if _has_ai_units(0, 35):
-			await hud.phase_banner("友军")
+		if _resumed:
+			_resumed = false
+		else:
+			_phase_start_effects(0, 35)
 			await checkpoint()
 			if _battle_finished(): break
+		await input.player_phase()
+		if _battle_finished(): break
+		# ---- friend phase (AI-controlled units among 0..34); its events run even without such units (0x44e851)
+		phase = PH_FRIEND
+		var friends := _has_ai_units(0, 35)
+		if friends:
+			await hud.phase_banner("友军")
+		await checkpoint()
+		if _battle_finished(): break
+		if friends:
 			await ai.run_phase(0, 35)
 			if _battle_finished(): break
 		# ---- enemy phase
@@ -148,9 +158,9 @@ func battle_loop() -> void:
 				if u.node:
 					u.node.greyed = false
 		turn += 1
-		Mem.w8(0x4b3d09, turn)
+		Mem.w8(0x4b3d0a, turn)       # ctx+2 (0x44e851); ctx+1 is the battle-over flag
 		if OS.get_environment("WG_SAVETEST") != "" and turn == 2:
-			Game.save_game(5, save_state())
+			Game.save_game(18, save_state())     # not one of the player's slots 0-9
 			var alive := 0
 			for u in units:
 				if u.active(): alive += 1
@@ -321,17 +331,19 @@ func op_op_4b(ins: Dictionary) -> void:
 	deploy[k] = d
 
 
-## op 0x48: equipment for the deployment entry of a person.
+## op 0x48 (0x412dd6): equipment codes for the ally/enemy deployment entry of a person (slots 15+),
+## used when the battle starts (0x44cc85, see Person.equip_code). 0xffff → 0.
 func op_battle_equipment(ins: Dictionary) -> void:
 	var pid := arg(ins, 0)
-	for i in 115:
+	if pid > 0x3ff:
+		return
+	for i in range(15, 115):
 		var d: Dictionary = deploy[i]
 		if int(d.get("person", 0xffff)) == pid:
-			d["weapon"] = arg(ins, 1)
-			d["wlv"] = arg(ins, 2)
-			d["armor"] = arg(ins, 3)
-			d["alv"] = arg(ins, 4)
-			d["acc"] = arg(ins, 5)
+			var keys := ["weapon", "wlv", "armor", "alv", "acc"]
+			for k in 5:
+				var v := arg(ins, 1 + k)
+				d[keys[k]] = 0 if v == 0xffff else v & 0xff
 			deploy[i] = d
 			return
 
@@ -388,8 +400,6 @@ func trimmed_mean_level() -> int:
 func create_battlefield(id: int) -> void:
 	map_id = id
 	view.load_map(id)
-	Mem.w8(Mem.MAP_WH, view.map_w)
-	Mem.w8(Mem.MAP_WH + 1, view.map_h)
 	for u in units:
 		u.clear(u.slot)
 		if u.node:
@@ -429,11 +439,15 @@ func create_battlefield(id: int) -> void:
 			var lv := int(d.get("lv", 0))
 			var level := mini(base + lv, 70) if lv <= 50 else maxi(base - (lv - 50), 1)
 			_promote(p, int(d.get("promo", 2)), level)
-			_equip(p, int(d.get("weapon", 0xffff)), int(d.get("wlv", 1)), int(d.get("armor", 0xffff)), int(d.get("alv", 1)), int(d.get("acc", 0xffff)))
+			# 0x44cc85 → 0x4429f9 per slot; entries start with code 0 (default equipment) and level 1
+			p.equip_code(0, int(d.get("weapon", 0)), int(d.get("wlv", 1)))
+			p.equip_code(1, int(d.get("armor", 0)), int(d.get("alv", 1)))
+			p.equip_code(2, int(d.get("acc", 0)), 0xff)
 		_unit_init(u, pid, flags, int(d.get("x", 0)), int(d.get("y", 0)), int(d.get("dir", 2)), bool(d.get("hidden", false)))
-		if flags & 3 != 0:
-			u.mode = AI_CODE[clampi(int(d.get("ai", 1)), 0, 6)]
-			_set_ai_target(u, int(d.get("ai_person", 0xffff)), int(d.get("ai_x", 0)), int(d.get("ai_y", 0)))
+		# SetAI refuses party members: on the player side they are player-controlled (code 7, 0x45b700)
+		if flags & 3 != 0 and not (flags & 1 == 0 and Game.is_member(pid)):
+			Mem.w8(u.addr + 8, 0xff)
+			_set_ai(u, clampi(int(d.get("ai", 1)), 0, 6), int(d.get("ai_person", 0xffff)), int(d.get("ai_x", 0)), int(d.get("ai_y", 0)))
 		else:
 			u.mode = 7
 	field_ready = true
@@ -463,16 +477,41 @@ func _promote(p: Person, promo: int, level: int) -> void:
 		p.level_up(level - p.level)
 
 
-func _set_ai_target(u: BUnit, ai_person: int, ax: int, ay: int) -> void:
-	Mem.w8(u.addr + 8, 0xff)
-	if u.mode in [3, 5] and ai_person != 0xffff:
-		var s := DataTransfer.unit_slot_of(ai_person)
-		Mem.w8(u.addr + 8, s if s >= 0 else 0xff)
-		u.extra["ai_person"] = ai_person
-	elif u.mode in [4, 6]:
-		Mem.w8(u.addr + 9, ax)
-		Mem.w8(u.addr + 10, ay)
+## SetAI (0x459d8b): ai_mode 0..6 → AI code (table 0x48e380) and clears flag 0x80; modes 3 and 5 also
+## set the target person (unit[8] = its slot), 4 and 6 the target point (unit[8] = 0xff, [9], [10] = x, y).
+## Other modes change nothing; a target person without a unit (0x45a751) or a point off the map (0x45a6bf)
+## leaves the old target.
+func _set_ai(u: BUnit, ai_mode: int, ai_person: int, ax: int, ay: int) -> void:
+	if ai_mode < 0 or ai_mode > 6:
+		return
 	u.flags = u.flags & ~0x80
+	u.mode = AI_CODE[ai_mode]
+	match ai_mode:
+		3, 5:
+			var s := DataTransfer.unit_slot_of(ai_person) if ai_person != 0xffff else -1
+			if s >= 0:
+				Mem.w8(u.addr + 8, s)
+				u.extra["ai_person"] = ai_person
+		4, 6:
+			if ax < view.map_w and ay < view.map_h:
+				Mem.w8(u.addr + 8, 0xff)
+				Mem.w8(u.addr + 9, ax)
+				Mem.w8(u.addr + 10, ay)
+
+
+## A retreated unit re-entering (ops 0x55 / 0x6d → 0x4591a1): UnitInit leaves the AI code and target,
+## the flags and the colour alone.
+func _unit_reenter(u: BUnit, x: int, y: int, d: int) -> void:
+	var keep := {}
+	for off in [5, 8, 9, 10, 0xd, 0xe]:
+		keep[off] = Mem.r8(u.addr + off)
+	var extra := u.extra.duplicate()
+	_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), x, y, d, false)
+	for off in keep:
+		Mem.w8(u.addr + off, keep[off])
+	u.extra = extra
+	if u.slot < 35 and Game.is_member(u.pid):
+		u.mode = 7
 
 
 func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: bool) -> void:
@@ -519,8 +558,19 @@ func nearest_free(c: Vector2i, u: BUnit) -> Vector2i:
 	return c
 
 
+## The active unit on cell c (the lowest slot if several), other than `exclude`. Looked up in a cell → unit
+## table that is rebuilt only after a unit moved, appeared, left or fell (BUnit.gen), since the AI asks a lot.
 func unit_at(c: Vector2i, exclude: BUnit = null) -> BUnit:
-	for u in units:
+	if _occ_gen != BUnit.gen:
+		_occ.clear()
+		for u in units:
+			if u.active() and not _occ.has(u.pos):
+				_occ[u.pos] = u
+		_occ_gen = BUnit.gen
+	var hit: BUnit = _occ.get(c)
+	if hit == null or hit != exclude:
+		return hit
+	for u in units:      # `exclude` stands there; is anyone else on the same cell?
 		if u != exclude and u.active() and u.pos == c:
 			return u
 	return null
@@ -561,7 +611,8 @@ func side_match(u: BUnit, side: int) -> bool:
 # ------------------------------------------------------------------ sprites
 func refresh_units() -> void:
 	for u in units:
-		var show := u.exists() and u.state == BUnit.STATE_ON_MAP and u.hp > 0
+		# a unit defeated in combat keeps its sprite until it has been removed, so the defeat animation can play
+		var show: bool = u.exists() and u.state == BUnit.STATE_ON_MAP and (u.hp > 0 or u.extra.get("dying", false))
 		if show and u.node == null:
 			var n := UnitSprite.new()
 			view.units_layer.add_child(n)
@@ -583,11 +634,17 @@ func refresh_units() -> void:
 
 func _after_poke(addr: int) -> void:
 	if addr >= Mem.UNITS and addr < Mem.UNITS + 115 * Mem.UNIT_SIZE:
+		BUnit.gen += 1
 		refresh_units()
 
 
 func on_field_written(_field: int, _id: int) -> void:
+	BUnit.gen += 1
 	refresh_units()
+
+
+func in_battle() -> bool:
+	return true
 
 
 # ------------------------------------------------------------------ per-phase effects (§9)
@@ -693,9 +750,9 @@ func op_test_event5(_ins: Dictionary) -> bool:
 		var b := unit_by_pid(boss_pid)
 		if b == null or b.state >= 3 or (b.state == BUnit.STATE_ON_MAP and b.hp <= 0):
 			return true
-	for i in range(35, 115):
-		var u := units[i]
-		if u.exists() and (u.state == BUnit.STATE_ON_MAP or u.state == BUnit.STATE_HIDDEN):
+	# 0x44c8e6(5): enemy-coloured units on the map; hidden ones (伏兵 not yet out) do not count
+	for u in units:
+		if u.exists() and u.state == BUnit.STATE_ON_MAP and u.colour in [2, 3]:
 			return false
 	return true
 
@@ -784,7 +841,7 @@ func op_test_attr(ins: Dictionary) -> bool:
 
 
 func op_set_attr(ins: Dictionary) -> void:
-	BattleAttrs.set_attr(self, arg(ins, 0), arg(ins, 1), arg(ins, 2), arg(ins, 3))
+	await BattleAttrs.set_attr(self, arg(ins, 0), arg(ins, 1), arg(ins, 2), arg(ins, 3))
 	refresh_units()
 
 
@@ -845,7 +902,11 @@ func save_state() -> Dictionary:
 	return {"kind": "battle", "scene": vm.scene if vm else 0, "turn": turn, "phase": phase, "map": map_id,
 		"turn_limit": turn_limit, "boss": boss_pid, "leader": leader_pid, "climate": climate,
 		"weather_level": weather_level, "deploy": deploy, "field_ready": field_ready,
-		"victory_text": victory_text, "goal_text": goal_text, "bgm": Audio.current_track}
+		"victory_text": victory_text, "goal_text": goal_text, "bgm": Audio.current_track,
+		"terrain_changes": terrain_changes.map(func(e: Dictionary) -> Dictionary:
+			var c := e.duplicate()
+			c.erase("node")
+			return c)}
 
 
 func restore_state(d: Dictionary) -> void:
@@ -859,6 +920,7 @@ func _apply_restore() -> void:
 		return
 	vm.scene = int(d.get("scene", 0))
 	turn = int(d.get("turn", 1))
+	_resumed = vm.scene == 1 and int(d.get("phase", PH_PLAYER)) == PH_PLAYER and bool(d.get("field_ready", false))
 	turn_limit = int(d.get("turn_limit", 0))
 	boss_pid = int(d.get("boss", -1))
 	leader_pid = int(d.get("leader", -1))
@@ -871,7 +933,21 @@ func _apply_restore() -> void:
 		print("SAVETEST restoring battle turn %s scene %s" % [d.get("turn"), d.get("scene")])
 	if bool(d.get("field_ready", false)) and int(d.get("map", -1)) >= 0:
 		map_id = int(d["map"])
-		view.load_map(map_id)
+		view.load_map(map_id, false)
+		# the terrain bytes came back with the memory; redraw the changed tiles
+		terrain_changes = []
+		for e: Dictionary in d.get("terrain_changes", []):
+			var c := Vector2i(int(e["x"]), int(e["y"]))
+			var patch := int(e["patch"])
+			var node: Node = null
+			if patch >= 4:
+				if not bool(e.get("silent", false)):
+					node = view.add_patch(2 * patch - 8, c)
+			else:
+				view.add_mark(patch, c)
+			var e2 := e.duplicate()
+			e2["node"] = node
+			terrain_changes.append(e2)
 		field_ready = true
 		refresh_units()
 		var lead := units[0]
@@ -963,6 +1039,8 @@ func op_unit_op_4d(ins: Dictionary) -> void:
 			if nh <= 1:
 				nh = 0
 			u.hp = nh
+			if nh <= 0:
+				u.extra["dying"] = true
 			if not Game.autoplay:
 				hud.popup_number(str(hpd & 0xffff), u.pos)
 			if nh <= 0:
@@ -986,9 +1064,7 @@ func op_unit_op_4e(ins: Dictionary) -> void:
 	for u in tg:
 		if Game.is_member(u.pid) and u.slot < 35:
 			continue
-		if ai_mode != 0xffff:
-			u.mode = AI_CODE[clampi(ai_mode, 0, 6)]
-		_set_ai_target(u, arg(ins, 8), arg(ins, 9), arg(ins, 10))
+		_set_ai(u, ai_mode, arg(ins, 8), arg(ins, 9), arg(ins, 10))
 
 
 ## op 0x4f: unit p1 turns to `dir` or toward p2.
@@ -1065,10 +1141,13 @@ func op_actor_move(ins: Dictionary) -> void:
 
 func _script_move(u: BUnit, goal: Vector2i, d: int) -> void:
 	await view.ensure_visible(u.pos)
+	# an occupied goal: stop at the nearest free cell instead of on top of the other unit
+	if goal != u.pos and unit_at(goal, u) != null:
+		goal = nearest_free(goal, u)
 	# scripted moves ignore movement points; path by BFS over passable cells
 	var parents := {}
 	var cost := func(c: Vector2i) -> int: return mini(Rules.move_cost(u, view.terrain_at(c)), 1) if Rules.move_cost(u, view.terrain_at(c)) < 999 else 999
-	var blocked := func(c: Vector2i) -> bool: return unit_at(c, u) != null and c != goal
+	var blocked := func(c: Vector2i) -> bool: return unit_at(c, u) != null
 	Grid.reachable(u.pos, 200, view.map_w, view.map_h, cost, blocked, Callable(), parents)
 	var path := Grid.path_to(parents, u.pos, goal)
 	if path.is_empty() and goal != u.pos:
@@ -1099,6 +1178,7 @@ func remove_unit(u: BUnit, silent: bool) -> void:
 		await tw.finished
 	u.state = 3
 	u.status = 0
+	u.extra.erase("dying")
 	if Game.is_member(u.pid):
 		var pb := u.person.base
 		Mem.w8(pb + 0x29, mini(Mem.r8(pb + 0x29) + 1, 255))
@@ -1149,9 +1229,7 @@ func op_unit_move(ins: Dictionary) -> void:
 	if u == null or u.state != 3:
 		return
 	var d := arg(ins, 5)
-	_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), arg(ins, 3), arg(ins, 4), 2 if d == 0xffff else d, false)
-	if u.slot < 35 and Game.is_member(u.pid):
-		u.mode = 7
+	_unit_reenter(u, arg(ins, 3), arg(ins, 4), 2 if d == 0xffff else d)
 	await view.center_on(u.pos)
 	Audio.play_se("se42")
 	refresh_units()
@@ -1192,8 +1270,7 @@ func op_op_58(ins: Dictionary) -> void:
 		await view.center_on(c)
 	if alt == 0:
 		var old := view.terrain_at(c)
-		view.terrain[c.y][c.x] = terr
-		Mem.w8(Mem.r32(0x4aeb44) + 0x640 + c.y * view.map_w + c.x, terr)
+		view.set_terrain(c, terr)
 		var node: Node = null
 		if patch >= 4 and silent != 1:
 			node = view.add_patch(2 * patch - 8, c)
@@ -1201,7 +1278,7 @@ func op_op_58(ins: Dictionary) -> void:
 			view.add_mark(patch, c)
 		if patch in [0, 2]:
 			Audio.play_se("se19")
-		terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": patch, "node": node})
+		terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": patch, "silent": silent == 1, "node": node})
 	refresh_units()
 
 
@@ -1332,8 +1409,7 @@ func op_map_mark(ins: Dictionary) -> void:
 	for i in terrain_changes.size():
 		var e: Dictionary = terrain_changes[i]
 		if int(e["x"]) == c.x and int(e["y"]) == c.y and (mode == 0 or int(e["patch"]) == patch):
-			view.terrain[c.y][c.x] = int(e["old"])
-			Mem.w8(Mem.r32(0x4aeb44) + 0x640 + c.y * view.map_w + c.x, int(e["old"]))
+			view.set_terrain(c, int(e["old"]))
 			var n: Variant = e.get("node")
 			if n and is_instance_valid(n):
 				(n as Node).queue_free()
@@ -1432,9 +1508,7 @@ func op_op_6d(ins: Dictionary) -> bool:
 		return false
 	if reenter:
 		if u.state == 3:
-			_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), x, y, arg(ins, 6) if arg(ins, 6) != 0xffff else 2, false)
-			if u.slot < 35 and Game.is_member(u.pid):
-				u.mode = 7
+			_unit_reenter(u, x, y, arg(ins, 6) if arg(ins, 6) != 0xffff else 2)
 			refresh_units()
 	elif u.state == BUnit.STATE_ON_MAP:
 		await _script_move(u, Vector2i(x, y), arg(ins, 6))

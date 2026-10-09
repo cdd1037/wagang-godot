@@ -1,8 +1,9 @@
 #!/bin/bash
 # Convert WMV cutscenes to Ogg Theora/Vorbis for Godot. Numbered/END files have byte 0 zeroed (0x30 -> 0x00).
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FF=$(brew --prefix ffmpeg-full)/bin/ffmpeg
-SRC=/Users/f2pgod/Downloads/rea/wg2025
-DST=/Users/f2pgod/Downloads/rea/game/assets/video
+SRC=$ROOT/wg2025
+DST=$ROOT/game/assets/video
 for f in "$SRC"/*.wmv; do
   b=$(basename "$f" .wmv | tr 'A-Z' 'a-z')
   [ -f "$DST/$b.ogv" ] && continue

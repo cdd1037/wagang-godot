@@ -24,6 +24,8 @@ const EV := 0x55b000              # mod extended int vars u32[4096]
 const PT := 0x563000              # mod pointer table u32[2048]
 const BYTEVARS := 0x55a000        # mod byte vars (person.wa sprite overrides live here)
 const MAP_WH := 0x4b422c          # map width/height bytes
+const MAP_PTR := 0x4aeb44         # u32 pointer to the battle map buffer: 0x640-byte header, then w×h terrain
+const MAP_BUF := 0x02000000       # where this port keeps that buffer (paged memory, so it is saved)
 
 var img := PackedByteArray()
 var img_end := 0

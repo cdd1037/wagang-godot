@@ -1,11 +1,12 @@
 #!/bin/bash
 # Decompile wagan.wa functions with Ghidra headless. usage: gdec.sh OUTFILE ADDR [ADDR...]
 # First run imports + auto-analyses the exe into a project (slow, once).
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-GH=/opt/homebrew/Cellar/ghidra/12.1.4/libexec
-PROJ=/Users/f2pgod/Downloads/rea/extract/ghidra_proj
-EXE=/Users/f2pgod/Downloads/rea/wg2025/wagan.wa
-SP=/Users/f2pgod/Downloads/rea/tools/ghidra
+export JAVA_HOME=${JAVA_HOME_21:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home}
+GH=${GHIDRA_INSTALL_DIR:-/opt/homebrew/Cellar/ghidra/12.1.4/libexec}
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJ=$ROOT/extract/ghidra_proj
+EXE=$ROOT/wg2025/wagan.wa
+SP=$ROOT/tools/ghidra
 mkdir -p "$PROJ"
 OUT=$1; shift
 if [ ! -d "$PROJ/wg.rep" ]; then

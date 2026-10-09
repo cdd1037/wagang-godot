@@ -48,7 +48,7 @@ func _ready() -> void:
 	actor_layer.position = Vector2(0, -VIEW_Y)
 	clip.add_child(actor_layer)
 	portrait_layer = Node2D.new()
-	portrait_layer.z_index = 100
+	portrait_layer.z_index = 2000     # above the actors, whose z_index is their screen y
 	root2d.add_child(portrait_layer)
 	# the original's town toolbar sits outside the scene view; here: buttons in the top black bar,
 	# shown while the scene waits for the player (same as right click / Esc)
@@ -193,6 +193,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 
 func actor_at(p: Vector2) -> int:
+	if p.y < VIEW_Y or p.y >= VIEW_Y + 400:
+		return -1      # outside the scene view, where actors are clipped
 	var best := -1
 	var best_y := -INF
 	for pid in actors:
@@ -247,20 +249,23 @@ func _show_history() -> void:
 	if Game.history.is_empty():
 		await ui.popup("暂无史录。", 1.0)
 		return
+	# chronicle first (category 1), then deeds (3, 4) and items (2), each by entry number
+	var entries := Game.history.duplicate()
+	var rank := {1: 0, 3: 1, 4: 2, 2: 3}
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ra: int = rank.get(int(a["cat"]), 4)
+		var rb: int = rank.get(int(b["cat"]), 4)
+		return ra < rb or (ra == rb and int(a["id"]) < int(b["id"])))
 	var lines := []
-	for h in Game.history:
-		lines.append(str(h).substr(1).replace("\n", " "))
-	var page := 0
+	for h in entries:
+		lines.append(str(h["text"]).replace("\n", ""))
+	# one scrolling list; a chosen entry is shown in full
+	var k := 0
 	while true:
-		var chunk := lines.slice(page * 8, page * 8 + 8)
-		var opts: Array = chunk.duplicate()
-		if (page + 1) * 8 < lines.size():
-			opts.append("【下一页】")
-		var k := await ui.menu.choose(opts, Vector2(-1, -1), true, "史录", [], 360)
+		k = await ui.menu.choose(lines, Vector2(-1, -1), true, "史录", [], 400, k)
 		if k < 0:
 			return
-		if k == chunk.size():
-			page += 1
+		await ui.popup(str(entries[k]["text"]))
 
 
 # ------------------------------------------------------------------ dialog placement
@@ -334,20 +339,48 @@ func op_actor_select(ins: Dictionary) -> void:
 		actors.erase(pid)
 
 
+## op 0x32 (0x4132d4): when the next instruction is another move it returns at once, so a run of moves
+## walks in parallel; the last one yields until no actor is walking.
 func op_actor_move(ins: Dictionary) -> void:
 	var pid := arg(ins, 1) & 0xfff
-	if not actors.has(pid):
+	if actors.has(pid):
+		var a: RpgActor = actors[pid]
+		if vm and vm.next_op == 0x32:
+			a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.autoplay)
+			return
+		await a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.autoplay)
+	elif vm and vm.next_op == 0x32:
 		return
-	var a: RpgActor = actors[pid]
-	await a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.autoplay)
+	await _actors_idle()
 
 
+## op 0x1e: the RPG driver resumes only once no actor is walking (0x4182a4).
+func op_wait_frame(_ins: Dictionary) -> void:
+	await get_tree().process_frame
+	await _actors_idle()
+
+
+func _actors_idle() -> void:
+	while is_inside_tree() and not (vm and vm.abort):
+		var busy := false
+		for pid in actors:
+			var a: Variant = actors[pid]
+			if is_instance_valid(a) and (a as RpgActor).walking:
+				busy = true
+				break
+		if not busy:
+			return
+		await get_tree().process_frame
+
+
+## op 0x33 (0x428b87): set action and facing; 0xFFFF keeps the current one.
 func op_actor_face(ins: Dictionary) -> void:
 	var pid := arg(ins, 0) & 0xfff
 	if actors.has(pid):
 		var a: RpgActor = actors[pid]
-		a.dir = arg(ins, 2) & 3
-		a.set_action(arg(ins, 1))
+		if arg(ins, 2) != 0xffff:
+			a.dir = arg(ins, 2) & 3
+		a.set_action(a.action if arg(ins, 1) == 0xffff else arg(ins, 1))
 
 
 func op_actor_action(ins: Dictionary) -> void:

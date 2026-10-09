@@ -79,9 +79,13 @@ def bleed(rgb: np.ndarray, alpha: np.ndarray, rounds: int = 16) -> np.ndarray:
             break
         acc = np.zeros_like(rgb)
         cnt = np.zeros(known.shape, np.float32)
+        # neighbours through a 1-pixel border of unknown pixels (np.roll would wrap colours round the edges)
+        kp = np.pad(known, 1)
+        rp = np.pad(rgb, ((1, 1), (1, 1), (0, 0)))
+        h, w = known.shape
         for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)):
-            k = np.roll(known, (dy, dx), (0, 1))
-            acc += np.roll(rgb, (dy, dx), (0, 1)) * k[..., None]
+            k = kp[1 + dy:1 + dy + h, 1 + dx:1 + dx + w]
+            acc += rp[1 + dy:1 + dy + h, 1 + dx:1 + dx + w] * k[..., None]
             cnt += k
         new = (~known) & (cnt > 0)
         rgb[new] = acc[new] / cnt[new][:, None]

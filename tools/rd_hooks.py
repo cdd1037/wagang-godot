@@ -1,6 +1,8 @@
 """list E8/E9 rel32 branches from .text into .text2 (mod hooks) and non-zero code runs in .text2"""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, struct
-sys.path.append('/Users/f2pgod/Downloads/rea/tools')
+sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 p = PE()
 t = p.read(0x401000, 0x84e00)

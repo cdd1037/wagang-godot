@@ -7,7 +7,7 @@ const ROOT := "res://assets/"
 ## original's logical size (ImageTexture size override), so no drawing code changes. Release builds ship only
 ## the HD pack; without it (a source checkout that has not fetched it) the original PNGs are used.
 const HD_ROOT := "res://assets_hd/"
-const HD_BUDGET := 1536 * 1024 * 1024    # bytes of HD textures the cache keeps alive (LRU)
+const HD_BUDGET := 1024 * 1024 * 1024    # bytes of HD textures the cache keeps alive (LRU)
 
 var hd := true                           # debug: WG_HD=0 shows the original art
 var hd_pack := false                     # the pack is installed
@@ -33,16 +33,23 @@ func _ready() -> void:
 	hd_pack = DirAccess.dir_exists_absolute(HD_ROOT + "gfx")
 	hd = OS.get_environment("WG_HD") != "0"
 	_apply_filter()
+	get_tree().root.size_changed.connect(_apply_filter)
 
 
 func hd_active() -> bool:
 	return hd and hd_pack
 
 
-## Pixel art is drawn with nearest-neighbour scaling; HD art is smooth, so filter it bilinearly.
+## Pixel art is drawn with nearest-neighbour scaling; HD art is smooth, so filter it bilinearly. Shown
+## below about 2.5x the original size the 4x art is shrunk enough to shimmer, so then use its mipmaps.
 func _apply_filter() -> void:
-	get_tree().root.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR \
-			if hd_active() else Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	var r := get_tree().root
+	if not hd_active():
+		r.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	elif r.size.x >= 640 * 2.5:
+		r.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+	else:
+		r.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
 ## Load a PNG as a texture (cached). With the HD pack active, its 4x version is used when there is one.
@@ -84,6 +91,11 @@ func _hd_tex(rel: String) -> Texture2D:
 	var size := _png_size(ROOT + rel)
 	if size == Vector2i.ZERO:
 		size = img.get_size() / 4
+	# some GPUs take at most 8192 px (one map is 8448 wide); the size override keeps the drawn size
+	var k := 8192.0 / maxi(img.get_width(), img.get_height())
+	if k < 1.0:
+		img.resize(int(img.get_width() * k), int(img.get_height() * k), Image.INTERPOLATE_CUBIC)
+	img.generate_mipmaps()
 	var t := ImageTexture.create_from_image(img)
 	t.set_size_override(size)
 	return t
@@ -105,7 +117,7 @@ func _hd_touch(rel: String, t: Texture2D) -> void:
 		if _hd_lru[i][0] == rel:
 			_hd_lru.append(_hd_lru.pop_at(i))
 			return
-	var bytes := int(t.get_width()) * t.get_height() * 64    # 4x4 texels per logical pixel, 4 bytes each
+	var bytes := int(t.get_width()) * t.get_height() * 85    # 4x4 texels per logical pixel, 4 bytes each, +1/3 mipmaps
 	_hd_lru.append([rel, t, bytes])
 	_hd_bytes += bytes
 	while _hd_bytes > HD_BUDGET and _hd_lru.size() > 1:
@@ -124,7 +136,9 @@ func image(rel: String) -> Image:
 	return img
 
 
-func json(rel: String) -> Variant:
+## Parsed JSON, cached unless `keep` is false (scenario scripts: one is in use at a time and a whole
+## playthrough's worth would take gigabytes).
+func json(rel: String, keep := true) -> Variant:
 	if _json_cache.has(rel):
 		return _json_cache[rel]
 	var p := ROOT + rel
@@ -133,7 +147,8 @@ func json(rel: String) -> Variant:
 		v = JSON.parse_string(FileAccess.get_file_as_string(p))
 	else:
 		push_warning("missing json: " + rel)
-	_json_cache[rel] = v
+	if keep:
+		_json_cache[rel] = v
 	return v
 
 
@@ -152,7 +167,8 @@ func audio(rel: String) -> AudioStream:
 			s = AudioStreamWAV.load_from_buffer(bytes)
 		elif rel.ends_with(".ogg"):
 			s = AudioStreamOggVorbis.load_from_buffer(bytes)
-	_audio_cache[rel] = s
+	if not rel.ends_with(".mp3"):      # music is streamed one track at a time; sound effects are reused
+		_audio_cache[rel] = s
 	return s
 
 

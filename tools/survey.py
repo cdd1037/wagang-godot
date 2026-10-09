@@ -1,5 +1,7 @@
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, os, collections
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from ls12 import read_archive
 for p in sys.argv[1:]:
     d = open(p,'rb').read()

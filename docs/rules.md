@@ -574,8 +574,16 @@ Notation: `R` = script reader object @0x492f90; `ctx` = battle object 0x4b3d08 (
 | +0x0e | u16 / u8,u8 | AI target: person (modes 3,5) or point x,y (modes 4,6) | 0x46/0x47 |
 | +0x10 | u8 | auto-promotion mode (tag 0x45, default 2) | 0x46/0x47 |
 | +0x11 | u8 | level | 0x46/0x47 |
-| +0x14/+0x18/+0x1c | u32 | weapon / armor / accessory item id (0 = keep) | 0x48 (0 by 0x46/0x47) |
+| +0x14/+0x18/+0x1c | u32 | weapon / armor / accessory code: 0 = default for class and level (0x407fe7), 1 = none, ≥ 2 = item code−2 / code+0x24 / code+0x33 (eex.md op 0x48) | 0x48 (0 by 0x46/0x47) |
 | +0x20/+0x21 | u8 | weapon level / armor level (1 by 0x46/0x47) | 0x48 |
+
+**Equipment at battle start** (0x44cc85, generated ally/enemy units after reload and promotion): per slot
+0x4429f9(code, level). Default equipment (code 0, 0x407fe7): the first weapon kind k = 0..13 the class may use
+(class byte +9+k) gives weapon id `min(L/18, 2) + (k/2)*3`; armour kinds 14..17 give `0x26 + min(L/18, 2) +
+((k-14)/2)*3`; level `(L mod 18)/6 + 1` for L < 48 else 3, exp 0 below level 3 else 0xFF; accessories are not
+touched. An explicit item (0x407dec) must be of the slot's kind (0x40c6ea) and usable by the person (0x407907: class
+equip table for weapons/armour; accessories by the family in item byte +0x17, 0xFF = anyone); its level 0 means
+automatic (as above for normal items, treasures L/7+1 ≤ 10) and is capped at 3 (treasures 10).
 
 **op 0x44 battle_init** (0x412230): clear flags 0..255; 0x426c32(); u32 @0x55e9d4 = 0; for all 115 entries:
 person = 0xffff, flags = 0, mod byte @0x55a500[i] = 0; then entry[k].person = sortie_list[k] for the sortie list
@@ -663,7 +671,8 @@ Unit struct U (0x24 bytes):
 
 ### 10.3 AI modes and AI codes
 Slot `ai_mode` (0..6) → AI code unit[+0xe] via table 0x48e380 (SetAI 0x459d8b; refused for party members, who get
-code 7 = player control when on the player side, 0x45b700):
+code 7 = player control when on the player side, 0x45b700; modes ≥ 7 change nothing; a target person without a
+unit (0x45a751) or a point off the map (0x45a6bf) leaves the old target):
 | ai_mode | code | meaning (CCZ editor names) [names G] | target |
 |---|---|---|---|
 | 0 | 3 | 被动出击 passive: acts only if it can reach a cell from which an opposite unit is attackable | — |

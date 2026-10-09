@@ -1,6 +1,8 @@
 """jmpsto.py lo hi : find E8/E9 rel32 (and 0F 8x jcc rel32) branches whose target is in [lo,hi)"""
+import os as _os
+_REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
 import sys, struct
-sys.path.insert(0, '/Users/f2pgod/Downloads/rea/tools')
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from pe import PE
 p = PE()
 lo, hi = int(sys.argv[1], 16), int(sys.argv[2], 16)

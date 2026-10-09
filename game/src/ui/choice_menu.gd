@@ -1,7 +1,8 @@
 class_name ChoiceMenu
 extends Control
 ## Vertical selection menu. `var i = await menu.choose(["a","b"], pos, cancellable)`
-## Returns the chosen index, or -1 when cancelled.
+## Returns the chosen index, or -1 when cancelled. Lists taller than the screen scroll; lines wider than
+## the screen are cut short.
 
 signal chosen(index: int)
 
@@ -16,6 +17,8 @@ var title := ""
 var _rect := Rect2()
 var _active := false
 var _min_width := 0.0
+var _top := 0                # first visible row
+var _rows := 0               # rows that fit on the screen
 
 
 func _init() -> void:
@@ -24,13 +27,13 @@ func _init() -> void:
 	visible = false
 
 
-func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0) -> int:
+func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0, first := 0) -> int:
 	items = PackedStringArray(options)
 	enabled = enabled_mask if enabled_mask.size() == options.size() else []
 	cancellable = can_cancel
 	title = header
 	_min_width = min_width
-	sel = 0
+	sel = clampi(first, 0, maxi(items.size() - 1, 0))
 	while not _is_enabled(sel) and sel < items.size() - 1:
 		sel += 1
 	var f := Assets.font()
@@ -39,8 +42,13 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 		w = maxf(w, f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x)
 	if title != "":
 		w = maxf(w, f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x)
-	var h := items.size() * ROW_H + PAD * 2 + (ROW_H if title != "" else 0)
 	var vs := get_viewport_rect().size
+	w = minf(w, vs.x - PAD * 2 - 16 - 8)
+	var head := ROW_H if title != "" else 0
+	_rows = clampi(int((vs.y - 8 - PAD * 2 - head) / ROW_H), 1, maxi(items.size(), 1))
+	_top = 0
+	_scroll_to(sel)
+	var h := _rows * ROW_H + PAD * 2 + head
 	var pos := at
 	if pos.x < 0:
 		pos = (vs - Vector2(w + PAD * 2 + 16, h)) / 2
@@ -76,21 +84,49 @@ func _is_enabled(i: int) -> bool:
 	return enabled.is_empty() or (i < enabled.size() and enabled[i])
 
 
+## Screen rectangle of item i (only meaningful while it is one of the visible rows).
 func _row_rect(i: int) -> Rect2:
 	var y0 := _rect.position.y + PAD + (ROW_H if title != "" else 0)
-	return Rect2(_rect.position.x + 4, y0 + i * ROW_H, _rect.size.x - 8, ROW_H)
+	return Rect2(_rect.position.x + 4, y0 + (i - _top) * ROW_H, _rect.size.x - 8, ROW_H)
+
+
+func _visible(i: int) -> bool:
+	return i >= _top and i < _top + _rows
+
+
+func _scroll_to(i: int) -> void:
+	if i < _top:
+		_top = i
+	elif i >= _top + _rows:
+		_top = i - _rows + 1
+	_top = clampi(_top, 0, maxi(items.size() - _rows, 0))
 
 
 func _draw() -> void:
 	UIStyle.draw_panel(self, _rect)
 	if title != "":
 		UIStyle.draw_text(self, Vector2(_rect.position.x + PAD + 8, _rect.position.y + PAD + 17), title, UIStyle.NAME_COLOR)
-	for i in items.size():
+	var f := Assets.font()
+	var max_w := _rect.size.x - PAD * 2 - 16
+	for i in range(_top, mini(_top + _rows, items.size())):
 		var rr := _row_rect(i)
 		if i == sel:
 			draw_rect(rr, UIStyle.HILITE)
 		var col := UIStyle.TEXT_COLOR if _is_enabled(i) else Color(0.55, 0.55, 0.6)
-		UIStyle.draw_text(self, Vector2(rr.position.x + PAD + 4, rr.position.y + 17), items[i], col)
+		var t := items[i]
+		if f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x > max_w:
+			while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x > max_w:
+				t = t.left(-1)
+			t += "…"
+		UIStyle.draw_text(self, Vector2(rr.position.x + PAD + 4, rr.position.y + 17), t, col)
+	# more rows above / below
+	var ax := _rect.end.x - 14
+	if _top > 0:
+		var y := _row_rect(_top).position.y + 4
+		draw_colored_polygon(PackedVector2Array([Vector2(ax, y + 6), Vector2(ax + 8, y + 6), Vector2(ax + 4, y)]), UIStyle.NAME_COLOR)
+	if _top + _rows < items.size():
+		var y2 := _row_rect(_top + _rows - 1).end.y - 4
+		draw_colored_polygon(PackedVector2Array([Vector2(ax, y2 - 6), Vector2(ax + 8, y2 - 6), Vector2(ax + 4, y2)]), UIStyle.NAME_COLOR)
 
 
 func _move(d: int) -> void:
@@ -100,6 +136,7 @@ func _move(d: int) -> void:
 		sel = (sel + d + items.size()) % items.size()
 		if _is_enabled(sel):
 			break
+	_scroll_to(sel)
 	Audio.se(0)
 	queue_redraw()
 
@@ -109,13 +146,13 @@ func _gui_input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseMotion:
 		for i in items.size():
-			if _row_rect(i).has_point(ev.position) and sel != i and _is_enabled(i):
+			if _visible(i) and _row_rect(i).has_point(ev.position) and sel != i and _is_enabled(i):
 				sel = i
 				queue_redraw()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_LEFT:
 			for i in items.size():
-				if _row_rect(i).has_point(ev.position) and _is_enabled(i):
+				if _visible(i) and _row_rect(i).has_point(ev.position) and _is_enabled(i):
 					sel = i
 					_finish(i)
 					return
@@ -135,6 +172,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 		_move(-1)
 	elif ev.is_action_pressed("ui_down"):
 		_move(1)
+	elif ev.is_action_pressed("ui_page_up", true):
+		_page(-1)
+	elif ev.is_action_pressed("ui_page_down", true):
+		_page(1)
 	elif ev.is_action_pressed("ui_accept"):
 		if _is_enabled(sel):
 			_finish(sel)
@@ -143,6 +184,15 @@ func _unhandled_input(ev: InputEvent) -> void:
 	else:
 		return
 	get_viewport().set_input_as_handled()
+
+
+func _page(d: int) -> void:
+	if items.is_empty():
+		return
+	sel = clampi(sel + d * _rows, 0, items.size() - 1)
+	_scroll_to(sel)
+	Audio.se(0)
+	queue_redraw()
 
 
 func _finish(i: int) -> void:
