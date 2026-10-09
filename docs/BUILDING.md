@@ -43,7 +43,7 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*).
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
   between runs), imports the project, exports `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's
   built-in signer) and `WaGang-Windows-build-N.zip`, then creates the release with both files and install notes.
-  A run takes about 10 minutes; each release is about 1.3 GB.
+  A run takes 2–3 minutes; each release is about 1.2 GB (macOS 600 MB, Windows 580 MB).
 * **HD graphics:** the pack is not in git. If the repository has a release tagged `hd-pack` with an asset
   `assets_hd.zip` (the contents of `game/assets_hd`), the workflow adds it to both builds. Each build then
   roughly doubles in size. To publish the pack:
