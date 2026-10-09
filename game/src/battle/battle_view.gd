@@ -203,11 +203,11 @@ func _draw_cursor(n: Node2D) -> void:
 		n.draw_line(corner[0], corner[0] + corner[2] * l, col, 2)
 
 
-func _process(_d: float) -> void:
+func _process(delta: float) -> void:
 	if not _hl_move.is_empty() or not _hl_attack.is_empty():
 		overlay.queue_redraw()
 	get_node("Cursor").queue_redraw()
-	_edge_scroll()
+	_edge_scroll(delta)
 
 
 # ---------------------------------------------------------------- camera
@@ -251,7 +251,11 @@ func scroll_by(d: Vector2) -> void:
 	camera.position = clamp_cam(camera.position + d)
 
 
-func _edge_scroll() -> void:
+## Pixels per second the map scrolls while the mouse rests at a screen edge (frame-rate independent).
+const EDGE_SCROLL_SPEED := 720.0
+
+
+func _edge_scroll(delta: float) -> void:
 	if not input_enabled or not get_window().has_focus():
 		return
 	var vs := view_size()
@@ -265,7 +269,7 @@ func _edge_scroll() -> void:
 	if m.y < e: d.y = -1
 	elif m.y > vs.y - e: d.y = 1
 	if d != Vector2.ZERO:
-		scroll_by(d * 12)
+		scroll_by(d * EDGE_SCROLL_SPEED * delta)
 
 
 func move_cursor(c: Vector2i) -> void:
