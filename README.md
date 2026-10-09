@@ -1,65 +1,109 @@
-# 兴唐传·瓦岗山异闻录 — Godot reimplementation (macOS)
+# 兴唐传·瓦岗山异闻录 — Godot reimplementation
 
-A reverse-engineered reimplementation of the Windows game in `wg2025/` (a Sui–Tang story mod running on
-Koei's 1998 *三国志曹操传* engine) in **Godot 4.7**, playable on macOS.
+A reverse-engineered reimplementation of **兴唐传·瓦岗山异闻录** (*Xing Tang Zhuan: Wagang Mountain Chronicles*), a
+Sui–Tang story mod built on Koei's 1998 *三国志曹操传* (Cao Cao Zhuan) engine, rewritten in **Godot 4.7** so it runs
+natively on macOS.
 
-## Play
-* **App:** `build/WaGang.app` (double-click; first launch: right-click → Open, since it is not notarized).
-* **From source:** `godot --path game` (Godot 4.7: `brew install --cask godot`).
-* Saves go to `~/Library/Application Support/Godot/app_userdata/兴唐传·瓦岗山异闻录/`.
+The original Windows executable was decompiled (Ghidra) and its formats, script language, battle formulas and AI
+were documented, then re-implemented. The game's own data is used unchanged in converted form: all 117 story and
+battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
 
-### Controls
-| | |
+<p align="center">
+  <img src="docs/images/title.png" width="400" alt="Title screen">
+  <img src="docs/images/story.png" width="400" alt="Story scene">
+</p>
+<p align="center">
+  <img src="docs/images/battle-move.png" width="400" alt="Battle: movement range">
+  <img src="docs/images/duel.png" width="400" alt="Duel (单挑)">
+</p>
+
+## Features
+
+* **Story scenes** – isometric towns and cutscenes, portraits and dialogue, captions, CG pictures, videos, branching
+  choices, hub towns with shops and side quests, and the mod's 单挑 mini-games.
+* **Tactical battles** – deployment and sortie selection, movement with zones of control, attacks, counters and
+  double attacks, strategies with their animations, items, terrain and weather effects, experience and promotions,
+  scripted battle events, and the original enemy AI.
+* **Duels** – the 单挑 screen, re-implemented from the decompiled routines (intro, speech bubbles, every action and
+  blow animation, EXP for the winner).
+* **Saves** – 10 slots, usable from story scenes and mid-battle.
+* **Multiple endings** – decided by the story flags and scores the scripts keep, exactly as in the original.
+
+All 117 scripts have been run end to end by an automated play-through harness without script errors.
+
+## Quick start
+
+**Requirements:** macOS 10.13+ on Intel or 11+ on Apple Silicon, and [Godot 4.7](https://godotengine.org)
+(`brew install --cask godot`). The converted game data is included in this repository.
+
+```sh
+git clone https://github.com/seedds/wagang-godot.git
+cd wagang-godot
+./run_game.sh                 # first run imports the project, then starts the game
+```
+
+To use Godot directly, import once with `godot --headless --path game --import`, then run `godot --path game`.
+Without the import step the scripts' class names aren't registered and the game fails to start.
+
+To build a standalone `.app`:
+
+```sh
+godot --headless --path game --import                          # first time only
+godot --headless --path game --export-release "macOS" ../build/WaGang.app
+open build/WaGang.app
+```
+
+The app is ad-hoc signed. If macOS refuses to open a copy that came from another machine, right-click it → **Open**,
+or run `xattr -dr com.apple.quarantine WaGang.app`.
+
+## Controls (summary)
+
+| Input | Action |
 |---|---|
-| Left click / Enter / Space-tap | select, confirm, advance dialogue |
-| Right click / Esc | cancel, open the system menu (battle: 回合结束, 部队一览, 胜利条件, save/load) |
-| Story scenes | click characters to talk; 菜单 button (top right) or right click → 出征 (march out), 装备, 道具, 部队状态, 史录, save/load |
-| Battle | click a unit → click a blue cell to move → 攻击 / 策略 / 道具 / 待命; red cells = attack range |
-| Arrow keys | move the battle cursor; mouse at screen edge / middle-drag scrolls the map |
+| Left click / Enter | select, confirm, advance dialogue |
+| Right click / Esc | cancel; open the menu (story: 菜单, battle: 回合结束 / save / load …) |
+| Arrow keys | move the battle cursor |
+| Mouse at screen edge, middle-drag | scroll the battle map |
 | Hold Space or Ctrl | fast-forward |
 | ⌘F / F11 / Alt+Enter | toggle full screen |
 
-## Layout
-| path | content |
+The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
+
+## Documentation
+
+| Document | Contents |
 |---|---|
-| `wg2025/` | original game (read-only input) |
-| `tools/` | Python converters/RE helpers (`venv/` has capstone, pefile, pillow); `ghidra/gdec.sh` = Ghidra headless decompiler wrapper |
-| `docs/` | reverse-engineering specs: `NOTES.md`, `gfx.md` (all graphics formats), `eex.md` (script language), `rules.md` (data tables, battle formulas, AI), `engine_notes.md` (misc op semantics), `duel.md` (单挑 screen) |
-| `game/` | Godot project; `assets/` = converted data (PNG/JSON/MP3/WAV/OGV, loaded at runtime) |
-| `build/` | exported macOS app |
+| [docs/PLAYING.md](docs/PLAYING.md) | Player guide: story scenes, battles, duels, menus, saving, troubleshooting |
+| [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the app |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the reimplementation works: emulated memory, script VM, stages, UI |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, reverse-engineering workflow |
+| [docs/README.md](docs/README.md) | Index of the reverse-engineering specifications (formats, script ops, rules, AI) |
 
-## Rebuilding the assets
-```
-tools/venv/bin/python -I tools/conv_gfx.py          # graphics → game/assets/gfx
-tools/venv/bin/python -I tools/conv_data.py         # data.wa tables → game/assets/data
-tools/venv/bin/python -I tools/eex.py               # R_xx/S_xx.wagan scripts → game/assets/scripts
-tools/venv/bin/python -I tools/dump_image.py        # exe image for the emulated memory
-python3 -I tools/conv_audio.py && tools/conv_video.sh   # audio, videos (needs ffmpeg-full for Theora)
-python3 -I tools/mark_keep.py                        # mark assets importer=keep
-godot --headless --path game --export-release "macOS" ../build/WaGang.app
-```
+## Repository layout
 
-## Engine design (game/src)
-* `core/eex_vm.gd` – EEX script interpreter (scene/section polling, runtime IF/ELSE/goto nesting, yields).
-* `core/mem.gd` – emulated memory: the mod's scripts poke raw engine memory (pointer table, unit array,
-  game-state block), so persons, units, flags, variables, bag, gold… live in a byte image of the original
-  layout (`assets/data/exe_image.bin`) and the engine reads them through views (`Person`, `BUnit`).
-* `core/script_host.gd` – shared opcode handlers; `story/story_stage.gd` (isometric RPG scenes),
-  `battle/battle_stage.gd` (deployment, turn loop, battle ops, duel), `battle/battle_actions.gd`
-  (combat/strategy/items/exp per docs/rules.md), `battle/battle_ai.gd` (original AIAct scoring).
-* Debug env vars: `WG_START=n` (start at scenario n; at a battle the party becomes the sortie list), `WG_PARTY=0,35`,
-  `WG_AUTO=1` (autoplay), `WG_GOD=1`, `WG_TRACE_SEC=1`, `WG_TRACE_TEXT=1`, `WG_TRACE_BATTLE=1`,
-  `WG_LOADSLOT=n`, `WG_AUTOSAVE=1` + `WG_AUTOSLOT=n` (autosave/retry slot), `WG_INPUTBOT=dir`
-  (+`WG_BOTMODE=load`) drives battles through real input events, `WG_ACCEPT_SPAM=1` taps Enter,
-  `WG_SORTIE_P=n` = autoplay chance (%) to press 出征 when available, `WG_SETFLAGS=755,…` presets story
-  flags for a jump start (branch scenes check flags their predecessor sets), `WG_TRACE_OPS=1` traces every op.
-* Flow tests (autoplay with autosave, retry, and skips for scripted objectives random play can't reach):
-  `tools/flowtrace.sh` (sequential, from slot 9), `tools/flowpar.sh START STOP SLOT` (jump start),
-  `tools/flowres.sh SLOT STOP LOG` (resume) → logs in `extract/`.
+| Path | Contents |
+|---|---|
+| `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime) |
+| `docs/` | Guides and reverse-engineering specifications |
+| `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts |
+| `run_game.sh` | Runs the game from source |
 
-## Known gaps
-* The duel (单挑) screen follows the decompiled routines (docs/duel.md) but upscales sprites with nearest
-  neighbour instead of the original edge-smoothing 2× filter.
-* The original town toolbar is replaced by 菜单 / 出征 buttons in the story scenes' top bar.
-* Some rarely used ops are approximations (see warnings printed for unimplemented ops).
+Not in the repository (see `.gitignore`): the original game (`wg2025/`), build output (`build/`) and scratch data
+(`extract/`).
+
+## Status and known differences
+
+* The whole game is playable from the opening to the endings. Each script has been exercised automatically; long
+  stretches have not yet been checked by a human play-through.
+* Duel sprites are doubled with nearest-neighbour scaling instead of the original's edge-smoothing 2× filter.
+* The original town toolbar is replaced by **菜单** / **出征** buttons in the top bar of story scenes.
 * UI layout follows the original style but is not pixel-identical.
+
+## Legal
+
+This is an unofficial fan project for preservation and study, not affiliated with or endorsed by Koei Tecmo or the
+mod's authors. *三国志曹操传* is © Koei Tecmo. The game content in `game/assets` (graphics, music, sound, video, text,
+scripts) is converted from the original game and remains the property of its respective owners.
+
+The repository has no license file yet, so the code is "all rights reserved" by default; add a `LICENSE` to make
+the source in `game/src`, `tools` and `docs` reusable. Such a license would not cover `game/assets`.

@@ -1,0 +1,127 @@
+# Development
+
+Debug options, the automated test harness, and the reverse-engineering workflow. For the code structure see
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Running from source
+
+```sh
+./run_game.sh                               # windowed; imports the project on first run
+godot --headless --path game ...            # headless, for tests (after one `--import`)
+godot -e --path game                        # open in the Godot editor
+```
+
+Godot prints to the terminal. Harmless noise you can ignore:
+* `WARNING: Case mismatch opening requested file … app_userdata …` comes from the user-data folder name on a
+  case-insensitive file system.
+* `ObjectDB instances were leaked at exit`.
+
+## Debug environment variables
+
+All options are environment variables read at start-up, for example
+`WG_START=21 WG_PARTY=0,8,13 ./run_game.sh`. They also work with the exported app's binary.
+
+**Starting point**
+
+| Variable | Effect |
+|---|---|
+| `WG_START=n` | Skip the title and start a new game at scenario *n* (even = story `R_(n/2)`, odd = battle `S_(n/2)`). At a battle, the party becomes the sortie list. |
+| `WG_PARTY=0,8,13` | With `WG_START`: add these person ids to the party |
+| `WG_SETFLAGS=755,…` | With `WG_START`: preset story flags that an earlier branch would have set |
+| `WG_LOADSLOT=n` | Skip the title and load save slot *n* |
+| `WG_STOP=n` | Quit when scenario *n* is reached |
+| `WG_NOVIDEO=1` | Skip cutscene videos |
+
+**Automatic play**
+
+| Variable | Effect |
+|---|---|
+| `WG_AUTO=1` | Autoplay: the AI plays your phase, dialogue and waits are instant, menus pick automatically, story scenes click characters |
+| `WG_DEMO=1` | Like autoplay but at normal speed (watchable) |
+| `WG_RANDOM=1` | Autoplay picks random choices and clicks (otherwise deterministic) |
+| `WG_GOD=1` | Player side invulnerable and strong. With autoplay: enemies are cleared after turn 12, and a battle still running at turn 60 jumps to its aftermath |
+| `WG_SORTIE_P=n` | Chance (%) that autoplay presses 出征 when available (default 12) |
+
+**Tracing**
+
+| Variable | Effect |
+|---|---|
+| `WG_TRACE_SEC=1` | Print every script section that runs, with battle turn and phase |
+| `WG_TRACE_TEXT=1` | Print dialogue, choices, popups and autoplay clicks |
+| `WG_TRACE_OPS=1` | Print every executed instruction (very verbose) |
+| `WG_TRACE_BATTLE=1` | Print battle details (deployment, joins, area tests) |
+| `WG_MEMWATCH=4b2c50-4b2c74` | Report writes to an address range (hex) in the emulated memory |
+
+**Test harness and bots**
+
+| Variable | Effect |
+|---|---|
+| `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 9) after each scenario, retry from it after a game over |
+| `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
+| `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
+| `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids and screenshot their animations |
+| `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=5` to check the restore |
+| `WG_ACCEPT_SPAM=1` | Press Enter every 0.6 s |
+
+Example: watch the first battle play itself:
+`WG_START=1 WG_DEMO=1 WG_NOVIDEO=1 ./run_game.sh`
+
+## Automated play-through tests ("flow tests")
+
+The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
+
+| Script | Purpose |
+|---|---|
+| `tools/flowtest.sh [seconds] [stop]` | Long autoplay run with autosave and retry: continues from slot 9 if it exists, else (or with `FRESH=1`) starts a new game → `extract/flow.log` |
+| `tools/flowtrace.sh [seconds] [stop]` | The same with section and text tracing → `extract/flow_trace.log` |
+| `tools/flowpar.sh START STOP SLOT [seconds] [PARTY]` | Jump-start a scenario range (for running ranges in parallel) → `extract/flow_par_START.log` |
+| `tools/flowres.sh SLOT STOP LOG [seconds]` | Resume such a run from its autosave slot |
+| `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
+| `tools/gtest.sh t_name` | Run `game/src/debug/t_name.gd` under the headless test runner |
+
+The harness (`WG_AUTOSAVE`) keeps random play moving:
+
+* A **game over** reloads the last autosave and retries.
+* A **battle** lost 3 times jumps to its aftermath on the next try.
+* A **story scene** that fails 30 times (usually chained 单挑 mini-games) is skipped.
+* A **story scene** with more than 2,500 autoplay clicks (an unsolved puzzle or hub) is ended.
+* An **ending** in the last chapters stops the run.
+
+Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
+limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`
+instead.
+
+Tips:
+
+* Jump starts lack the story flags and levels of a real play-through. Start at a story scene (even *n*) where
+  possible, and use `WG_SETFLAGS` for branch scenes.
+* Godot's output is block-buffered when redirected to a file. To see the last line before a hang, run under a
+  pseudo-terminal: `script -q /dev/null godot … < /dev/null > log`.
+* A hung run at 100 % CPU is a script loop; at ~0 % it is an `await` that never completes. `WG_TRACE_OPS=1` shows
+  where.
+
+## Reverse-engineering workflow
+
+The original executable is `wg2025/wagan.wa` (PE32, image base 0x400000). The mod's code lives in an extra
+`.text2` section around 0x4d0000 and hooks the original code with `jmp` patches.
+
+* **Ghidra (preferred):** `tools/ghidra/gdec.sh OUT.c 0x41973c 0x448524 …` decompiles functions headlessly. The
+  first run imports and analyses the executable into `extract/ghidra_proj` (slow, once). The script expects Ghidra
+  and JDK 21 from Homebrew at the paths set at its top.
+* **Quick disassembly:** `tools/venv/bin/python -I tools/disx.py 0x43640e 40` (capstone). `tools/cases.py`
+  disassembles jump-table targets, and `tools/findins.py REGEX` searches instructions.
+* **Data:** `game/assets/data/exe_image.bin` is the mapped executable, so `offset = address − 0x400000` reads any
+  table the game uses. The same image is the game's emulated memory.
+* **Scripts:** `tools/eex.py` also writes human-readable listings to `extract/eex_txt/`. The JSON in
+  `game/assets/scripts/` is what the game runs.
+
+Conventions:
+
+* Findings go into `docs/` with the addresses they come from: `rules.md` for formulas and AI, `eex.md` for
+  opcodes, `engine_notes.md` for op semantics and engine behaviour, `gfx.md` for formats, `duel.md` for the duel
+  screen. Code comments cite the same addresses.
+* **Adding an opcode:** implement `op_<name>(ins)` in `ScriptHost`, or in `StoryStage` / `BattleStage` if it only
+  makes sense there. Read arguments with `arg(ins, i)` (resolves `{"var": n}`) or `sarg()`; test ops return a bool.
+  An unimplemented op prints `EEX unimplemented op …` once.
+* Script names in `opcodes.json` come from the original parser and can be misleading; trust the decompiled handler
+  (see `engine_notes.md`).
