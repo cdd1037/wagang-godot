@@ -6,7 +6,7 @@ Debug options, the automated test harness, and the reverse-engineering workflow.
 ## Running from source
 
 ```sh
-./run_game.sh                               # windowed; imports the project on first run
+./run_game.sh                               # windowed; first run downloads the HD pack and imports the project
 godot --headless --path game ...            # headless, for tests (after one `--import`)
 godot -e --path game                        # open in the Godot editor
 ```
@@ -82,6 +82,14 @@ The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
 | `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
 | `tools/gtest.sh t_name` | Run `game/src/debug/t_name.gd` under the headless test runner |
 
+Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
+
+```sh
+cd game
+TEST=res://src/debug/t_hd.gd godot --path . res://src/debug/test_runner.tscn       # prints t_hd: PASS
+TEST=res://src/debug/t_resize.gd godot --path . res://src/debug/test_runner.tscn   # prints t_resize: PASS
+```
+
 The harness (`WG_AUTOSAVE`) keeps random play moving:
 
 * A **game over** reloads the last autosave and retries.
@@ -102,6 +110,13 @@ Tips:
   pseudo-terminal: `script -q /dev/null godot … < /dev/null > log`.
 * A hung run at 100 % CPU is a script loop; at ~0 % it is an `await` that never completes. `WG_TRACE_OPS=1` shows
   where.
+
+## HD graphics and releases
+
+* `tools/get_hd_pack.sh` downloads the HD graphics pack into `game/assets_hd/`. `tools/upscale_assets.py`
+  rebuilds it, and `tools/upscale.py` upscales single images for trying models. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
+* Every push to `main` that changes the game builds and publishes *Build N* for macOS and Windows; see
+  "Automatic releases" in [BUILDING.md](BUILDING.md). Check a run with `gh run list --workflow release.yml`.
 
 ## Reverse-engineering workflow
 

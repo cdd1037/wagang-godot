@@ -5,18 +5,22 @@ How to start the game and play it: story scenes, battles, duels, menus and savin
 
 ## Starting the game
 
-* **Exported app:** open `build/WaGang.app`; see "Exporting the macOS app" in [BUILDING.md](BUILDING.md) to make
-  one. If macOS blocks a copy that came from another machine, right-click it → **Open**, or run
-  `xattr -dr com.apple.quarantine WaGang.app`.
-* **From source:** `./run_game.sh` in the repository root (needs Godot 4.7). The first run imports the project,
-  which takes a few seconds.
+* **Download (recommended):** the [Releases page](https://github.com/seedds/wagang-godot/releases) has a ready
+  build for macOS and Windows for every update; take the newest *Build N*.
+  * **macOS** (11+ on Apple Silicon, 10.13+ on Intel): unzip and open the app. It is not notarized, so the first
+    time right-click it → **Open**, or run `xattr -dr com.apple.quarantine <app>`.
+  * **Windows** (64-bit): unzip and run `WaGang.exe`; keep `WaGang.pck` in the same folder. If SmartScreen warns
+    about an unknown publisher, choose **More info → Run anyway**.
+* **From source:** `./run_game.sh` in the repository root (needs Godot 4.7). The first run downloads the HD
+  graphics pack (about 720 MB) and imports the project. See [BUILDING.md](BUILDING.md) to export an app yourself.
 
 The window opens at the largest of 3×, 2.5×, 2×, 1.5× or 1× the original 640×480 that fits your screen. You can
 resize it freely; when you let go, it snaps to the game's 4:3 shape so the picture fills it. Toggle full screen with
 **⌘F**, **F11** or **Alt+Enter**.
 
 The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit). After an ending has
-been reached once, the title picture changes.
+been reached once, the title picture changes. Downloaded builds show their version (版本 1.0.N) in the bottom-right
+corner.
 
 The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 
@@ -116,15 +120,21 @@ winner may gain experience when the duel closes.
 
 * **10 save slots**, from the story menu or the battle system menu, including mid-battle. Loading works from the
   title screen or in-game.
-* Saves are stored in `~/Library/Application Support/Godot/app_userdata/兴唐传·瓦岗山异闻录/` as `save_00.json` …
-  `save_09.json`. The file `niuniu.bin` there records reached endings, as the original's `Niuniu.wa` did.
+* Saves are stored as `save_00.json` … `save_09.json` in the game's user folder:
+  * macOS: `~/Library/Application Support/Godot/app_userdata/兴唐传·瓦岗山异闻录/`
+  * Windows: `%APPDATA%\Godot\app_userdata\兴唐传·瓦岗山异闻录\`
+
+  The file `niuniu.bin` there records reached endings, as the original's `Niuniu.wa` did. Saves can be copied
+  between the macOS and Windows versions.
 * A defeat (game over) returns to the title screen, so save often.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| "App can't be opened" / unidentified developer | Right-click → **Open**, or `xattr -dr com.apple.quarantine WaGang.app` |
+| macOS: "App can't be opened" / unidentified developer | Right-click → **Open**, or `xattr -dr com.apple.quarantine <app>` |
+| Windows: SmartScreen "Windows protected your PC" | **More info → Run anyway** (the build is not code-signed) |
+| Windows: the game starts with an error about a missing pack | Keep `WaGang.pck` next to `WaGang.exe` (unzip the whole folder) |
 | Window too small or large | Drag the window's edge or corner (it snaps to 4:3), or toggle full screen (⌘F) |
-| Missing characters (▯) in text | The game uses the system fonts Songti SC, Hiragino Sans GB and Heiti SC, which ship with macOS. Make sure they are not disabled in Font Book |
+| Missing characters (▯) in text | The game uses system Chinese fonts: Songti SC, Hiragino Sans GB and Heiti SC on macOS (make sure they are not disabled in Font Book); SimSun, Microsoft YaHei and SimHei on Windows (install the Chinese supplemental fonts if your Windows lacks them) |
 | A town scene "does nothing" | It is waiting for you: find the character or place that continues the story, or check the menu for **出征** |

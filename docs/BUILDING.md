@@ -1,13 +1,16 @@
 # Building
 
-The repository already contains the converted game data (`game/assets/`), so to play or develop you only need
-Godot. This page covers the two build tasks: **exporting the macOS app**, and **re-generating `game/assets/` from
-an original copy of the game**.
+The repository contains the converted game data (`game/assets/`); the HD graphics pack (`game/assets_hd/`) is
+downloaded by `run_game.sh` or `tools/get_hd_pack.sh`. To play or develop you only need Godot. This page covers
+**exporting the apps** yourself, the **automatic releases**, and **re-generating `game/assets/`** from an original
+copy of the game.
 
-## Exporting the macOS app
+## Exporting the apps
 
-Requirements: [Godot 4.7](https://godotengine.org) (`brew install --cask godot`) with the macOS export templates
-installed (Godot → Editor → Manage Export Templates → Download).
+Requirements: [Godot 4.7](https://godotengine.org) (`brew install --cask godot`) with the export templates
+installed (Godot → Editor → Manage Export Templates → Download; the full download has macOS and Windows).
+
+### macOS
 
 ```sh
 godot --headless --path game --import                                  # build Godot's import cache (first time)
@@ -17,18 +20,23 @@ godot --headless --path game --export-release "macOS" ../build/WaGang.app
 * The output path is relative to `game/`, so `../build/WaGang.app` ends up in `build/` at the repository root.
 * The preset (`game/export_presets.cfg`) builds a **universal** binary (Intel macOS 10.13+, Apple Silicon 11+),
   ad-hoc code-signed, bundle id `local.wg2025.wagang`. It packs `assets/*`, `assets_hd/*` (the HD graphics pack,
-  if present) and the scripts. Without the HD pack the app is about 860 MB, of which 730 MB is the `.pck`;
-  with it, about 1.5 GB.
+  if present) and the scripts. A local export keeps the original pictures too: about 1.5 GB with the HD pack,
+  860 MB without. (The release builds leave the originals out; see below.)
 * Smoke test without a window: `WG_START=0 WG_AUTO=1 WG_STOP=2 WG_NOVIDEO=1 build/WaGang.app/Contents/MacOS/* --headless`.
   It should print `== scenario 0: R_00` … `== scenario 2: R_01`.
 
 For distribution outside your own machines, sign with a Developer ID and notarize. Set `codesign/*` and
 `notarization/*` in the preset.
 
-The **Windows** preset exports `WaGang.exe` plus `WaGang.pck` (x86-64, no code signing, icon and version
-resources not modified so no `rcedit` is needed):
-`godot --headless --path game --export-release "Windows" ../build/windows/WaGang.exe`. It needs the Windows
-export templates (the full template download includes them).
+### Windows
+
+```sh
+godot --headless --path game --export-release "Windows" ../build/windows/WaGang.exe
+```
+
+The preset exports `WaGang.exe` plus `WaGang.pck` (x86-64, no code signing; icon and version resources are not
+modified, so no `rcedit` is needed). The `.pck` is the same on every platform, so it can be checked on a Mac:
+`godot --headless --main-pack build/windows/WaGang.pck` with the smoke-test variables above.
 
 ## Automatic releases (GitHub Actions)
 
@@ -43,7 +51,7 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*).
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
   between runs), imports the project, exports `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's
   built-in signer) and `WaGang-Windows-build-N.zip`, then creates the release with both files and install notes.
-  A run takes 2–3 minutes; each release is about 1.2 GB (macOS 600 MB, Windows 580 MB).
+  A run takes about 5 minutes; each release is about 2.2 GB (macOS 1.09 GB, Windows 1.07 GB, HD art only).
 * **HD graphics only:** the workflow downloads the HD graphics pack (`assets_hd.zip` from the release tagged
   `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures under
   `assets/gfx` stay out of the builds (palettes, index files and the terrain-patch index images stay). It then

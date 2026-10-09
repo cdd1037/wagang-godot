@@ -39,7 +39,8 @@ All 117 scripts have been run end to end by an automated play-through harness wi
 
 Ready-to-play builds for **macOS** (Apple Silicon and Intel) and **Windows** (64-bit) are on the
 [Releases page](https://github.com/seedds/wagang-godot/releases). Every change to the game publishes a new
-numbered build automatically; the build number is shown in the corner of the title screen.
+numbered build automatically; the build number is shown in the corner of the title screen. The builds contain the
+HD art only; each platform's zip is about 1.1 GB.
 
 * **macOS:** unzip and open the app. It is not notarized, so the first time right-click it → **Open** (or run
   `xattr -dr com.apple.quarantine <app>`).

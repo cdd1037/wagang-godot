@@ -39,7 +39,8 @@
 
 可直接游玩的 **macOS**（Apple 芯片与 Intel）和 **Windows**（64 位）版本发布在
 [Releases 页面](https://github.com/seedds/wagang-godot/releases)。游戏代码每次更新，都会自动构建并发布新版本，
-构建号自动递增（Build 1、Build 2……），标题画面右下角会显示版本号（例如“版本 1.0.2”）。
+构建号自动递增（Build 1、Build 2……），标题画面右下角会显示版本号（例如“版本 1.0.3”）。发布版本只包含高清画面，
+每个平台的压缩包约 1.1 GB。
 
 * **macOS**：解压后打开应用。应用未经苹果公证，第一次打开时请右键点击应用并选择“打开”，或在终端执行
   `xattr -dr com.apple.quarantine <应用路径>`。

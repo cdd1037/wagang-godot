@@ -139,8 +139,10 @@ texture (`UIStyle`). The out-of-battle menus are `StatusPanel` and `PartyMenu` (
 3. Game over, endings, title and loading all go through `_stop_flow()`, which abandons the running stage. The
    scenario loop is tagged with a generation counter, so an orphaned loop can never continue.
 
-Window handling (integer-ish scaling, full screen) and the Space/Ctrl fast-forward (`Engine.time_scale = 4`) are
-also in `main.gd`.
+Also in `main.gd`: window handling (the initial size is the largest of 3×–1× that fits the screen; after the user
+resizes the window it snaps back to 4:3 so the picture fills it; full screen), the Space/Ctrl fast-forward
+(`Engine.time_scale = 4`), the version label on the title screen (`application/config/version`, set by the release
+workflow) and the `WG_SHOTS` debug screenshots.
 
 ## Source map
 
@@ -151,4 +153,4 @@ also in `main.gd`.
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `status_panel`, `party_menu`, `ui_style`, `video_layer` |
-| `debug/` | `test_runner`, `input_bot`, small test scripts (see [DEVELOPMENT.md](DEVELOPMENT.md)) |
+| `debug/` | `test_runner`, `input_bot`, small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |
