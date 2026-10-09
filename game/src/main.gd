@@ -26,6 +26,24 @@ func _process(_d: float) -> void:
 	# hold Space / Ctrl to fast-forward animations (like the original patch's Space fast-click)
 	var fast := (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_CTRL)) and not ui.video.visible
 	Engine.time_scale = 4.0 if fast else 1.0
+	_debug_shots()
+
+
+var _shot_t := 0.0
+var _shot_n := 0
+
+
+## Debug: WG_SHOTS=dir saves a screenshot every WG_SHOT_EVERY seconds (default 3).
+func _debug_shots() -> void:
+	var dir := OS.get_environment("WG_SHOTS")
+	if dir == "":
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _shot_t < float(OS.get_environment("WG_SHOT_EVERY") if OS.get_environment("WG_SHOT_EVERY") != "" else "3"):
+		return
+	_shot_t = now
+	_shot_n += 1
+	get_viewport().get_texture().get_image().save_png("%s/%03d.png" % [dir, _shot_n])
 
 
 func _fit_window() -> void:
@@ -41,11 +59,57 @@ func _fit_window() -> void:
 			scale = s
 			break
 	var size := Vector2i(int(640 * scale), int(480 * scale))
-	w.size = size
+	_set_window_size(size)
 	w.position = usable.position + (usable.size - size) / 2
 
 
+# The picture keeps the game's 4:3 shape, so a window resized by one edge only gets black bars and the picture
+# does not grow. Once the user stops resizing, snap the window back to 4:3 around the dimension they changed.
+var _settled_size := Vector2i.ZERO
+var _snapping := false
+var _snap_timer: Timer
+
+
+func _set_window_size(size: Vector2i) -> void:
+	_snapping = true
+	get_window().size = size
+	_settled_size = get_window().size
+	_snapping = false
+
+
+func _on_window_resized() -> void:
+	if not _snapping:
+		_snap_timer.start()    # restarted on every step of a drag; fires once it has stopped
+
+
+func _snap_aspect() -> void:
+	var w := get_window()
+	if w.mode != Window.MODE_WINDOWED:
+		return
+	var s := w.size
+	var target: Vector2i
+	if absi(s.x - _settled_size.x) * 3 >= absi(s.y - _settled_size.y) * 4:
+		target = Vector2i(s.x, roundi(s.x * 0.75))
+	else:
+		target = Vector2i(roundi(s.y * 4.0 / 3.0), s.y)
+	var usable := DisplayServer.screen_get_usable_rect(w.current_screen)
+	var fit := minf(1.0, minf(float(usable.size.x) / target.x, float(usable.size.y) / target.y))
+	target = Vector2i(roundi(target.x * fit), roundi(target.y * fit))
+	if target != s:
+		_set_window_size(target)
+		# keep the grown window on screen
+		w.position = Vector2i(clampi(w.position.x, usable.position.x, maxi(usable.position.x, usable.end.x - target.x)),
+				clampi(w.position.y, usable.position.y, maxi(usable.position.y, usable.end.y - target.y)))
+	_settled_size = w.size
+
+
 func _ready() -> void:
+	_snap_timer = Timer.new()
+	_snap_timer.one_shot = true
+	_snap_timer.wait_time = 0.3
+	_snap_timer.timeout.connect(_snap_aspect)
+	add_child(_snap_timer)
+	get_window().size_changed.connect(_on_window_resized)
 	_fit_window.call_deferred()
 	ui = GameUI.new()
 	add_child(ui)
@@ -173,9 +237,18 @@ func _title_screen() -> void:
 	var v := nb[0]
 	_title_bg.texture = Assets.tex("gfx/screens/%02d.png" % (12 + v if v >= 1 and v <= 3 else 0))
 	_title_bg.visible = true
+	_show_version()
 	ui.set_black(false)
 	while true:
-		var i := await ui.menu.choose(["开始新游戏", "读取进度", "结束游戏"], Vector2(250, 330), false, "", [], 140)
+		var items := ["开始新游戏", "读取进度", "结束游戏"]
+		if Assets.hd_pack:
+			items.insert(2, "画面：" + ("高清" if Assets.hd else "原版"))
+		var i := await ui.menu.choose(items, Vector2(250, 330), false, "", [], 140)
+		if i == 2 and Assets.hd_pack:
+			# toggle the HD graphics pack; the title picture reloads with the new setting
+			Assets.set_hd(not Assets.hd)
+			_title_bg.texture = Assets.tex("gfx/screens/%02d.png" % (12 + v if v >= 1 and v <= 3 else 0))
+			continue
 		if i == 0:
 			_title_bg.visible = false
 			Game.new_game_state()
@@ -189,6 +262,19 @@ func _title_screen() -> void:
 		else:
 			get_tree().quit()
 			return
+
+
+## Build number in the title screen's corner (application/config/version, set by the release workflow).
+func _show_version() -> void:
+	var ver := str(ProjectSettings.get_setting("application/config/version", ""))
+	if ver == "" or _title_bg.has_node("Version"):
+		return
+	var l := UIStyle.label("版本 " + ver, 12, Color(1, 1, 1, 0.75))
+	l.name = "Version"
+	l.position = Vector2(540, 380)
+	l.size = Vector2(96, 16)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_title_bg.add_child(l)
 
 
 # ------------------------------------------------------------------ scenario loop

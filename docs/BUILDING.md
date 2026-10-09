@@ -16,13 +16,41 @@ godot --headless --path game --export-release "macOS" ../build/WaGang.app
 
 * The output path is relative to `game/`, so `../build/WaGang.app` ends up in `build/` at the repository root.
 * The preset (`game/export_presets.cfg`) builds a **universal** binary (Intel macOS 10.13+, Apple Silicon 11+),
-  ad-hoc code-signed, bundle id `local.wg2025.wagang`. It packs only `assets/*` and the scripts. The app is about
-  860 MB, of which 730 MB is the `.pck`.
+  ad-hoc code-signed, bundle id `local.wg2025.wagang`. It packs `assets/*`, `assets_hd/*` (the HD graphics pack,
+  if you built it) and the scripts. Without the HD pack the app is about 860 MB, of which 730 MB is the `.pck`;
+  with it, about 1.5 GB.
 * Smoke test without a window: `WG_START=0 WG_AUTO=1 WG_STOP=2 WG_NOVIDEO=1 build/WaGang.app/Contents/MacOS/* --headless`.
   It should print `== scenario 0: R_00` … `== scenario 2: R_01`.
 
 For distribution outside your own machines, sign with a Developer ID and notarize. Set `codesign/*` and
 `notarization/*` in the preset.
+
+The **Windows** preset exports `WaGang.exe` plus `WaGang.pck` (x86-64, no code signing, icon and version
+resources not modified so no `rcedit` is needed):
+`godot --headless --path game --export-release "Windows" ../build/windows/WaGang.exe`. It needs the Windows
+export templates (the full template download includes them).
+
+## Automatic releases (GitHub Actions)
+
+`.github/workflows/release.yml` builds and publishes both platforms on every push to `main` that changes the game
+(pushes touching only `docs/`, Markdown files, `tools/` or `.gitignore` are skipped). It can also be started by
+hand from the repository's **Actions** tab (*Release builds → Run workflow*).
+
+* **Build number:** the workflow's run number *N*, which increases with every run. The release is tagged
+  `build-N` and titled *Build N*; the game's version is `1.0.N`. The version is written into
+  `application/config/version`, shown in the title screen's corner, and into the macOS bundle version. The
+  repository itself keeps no version, so local builds show none.
+* **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
+  between runs), imports the project, exports `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's
+  built-in signer) and `WaGang-Windows-build-N.zip`, then creates the release with both files and install notes.
+  A run takes about 10 minutes; each release is about 1.3 GB.
+* **HD graphics:** the pack is not in git. If the repository has a release tagged `hd-pack` with an asset
+  `assets_hd.zip` (the contents of `game/assets_hd`), the workflow adds it to both builds. Each build then
+  roughly doubles in size. To publish the pack:
+  ```sh
+  (cd game/assets_hd && zip -qr ../../build/assets_hd.zip .)
+  gh release create hd-pack build/assets_hd.zip --title "HD graphics pack" --notes "Used by the release builds" --prerelease
+  ```
 
 ## Re-generating the game data
 
@@ -82,6 +110,9 @@ Notes:
   ```
 * **Step 9 is required.** Godot only ships the raw PNG/JSON/MP3/WAV/OGV files (which the game loads at run time
   with `Assets.*`) if they are marked `importer="keep"`.
+
+Optionally, build the HD graphics pack (`game/assets_hd/`) from the converted graphics:
+`tools/venv/bin/python -I tools/upscale_assets.py`. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
 
 After converting, run the game once (`./run_game.sh`) and an automated smoke test (see
 [DEVELOPMENT.md](DEVELOPMENT.md)) before exporting.

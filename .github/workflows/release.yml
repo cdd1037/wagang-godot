@@ -1,0 +1,112 @@
+# Builds the game for macOS and Windows on every push to main and publishes them as a GitHub release.
+# The build number is the workflow's run number, so it increases with every build: tag build-N, version 1.0.N.
+name: Release builds
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:          # documentation and offline tools don't change the game
+      - "docs/**"
+      - "**/*.md"
+      - "tools/**"
+      - ".gitignore"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build number
+        run: |
+          echo "BUILD=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and export templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-macos-windows
+
+      - name: Install Godot and export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          templates="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p ~/godot "$templates"
+          curl -sSL --fail -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          mv /tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+          # only the two templates we export with (the full bundle is 1.3 GB)
+          curl -sSL --fail -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j /tmp/templates.tpz templates/version.txt templates/macos.zip \
+            templates/windows_release_x86_64.exe -d "$templates"
+          rm /tmp/templates.tpz /tmp/godot.zip
+
+      - name: Add the HD graphics pack, if published
+        # Optional: a release tagged hd-pack with an asset assets_hd.zip (the contents of game/assets_hd)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view hd-pack >/dev/null 2>&1; then
+            gh release download hd-pack -p "assets_hd.zip" -D /tmp/hd
+            unzip -q /tmp/hd/assets_hd.zip -d game/assets_hd
+            rm -r /tmp/hd
+            echo "HD pack included: $(find game/assets_hd -name '*.webp' | wc -l) images"
+          else
+            echo "No hd-pack release: building with the original art only"
+          fi
+
+      - name: Stamp the version
+        run: |
+          # title screen (application/config/version) and the macOS bundle version
+          sed -i "/^config\/name=/a config/version=\"${VERSION}\"" game/project.godot
+          sed -i "s/^application\/short_version=.*/application\/short_version=\"${VERSION}\"/; s/^application\/version=.*/application\/version=\"${BUILD}\"/" game/export_presets.cfg
+          grep -n "config/version" game/project.godot
+
+      - name: Import the project
+        run: ~/godot/godot --headless --path game --import
+
+      - name: Export
+        run: |
+          mkdir -p build/windows
+          ~/godot/godot --headless --path game --export-release "macOS" "../build/WaGang-macOS-build-${BUILD}.zip"
+          ~/godot/godot --headless --path game --export-release "Windows" ../build/windows/WaGang.exe
+          test -s "build/WaGang-macOS-build-${BUILD}.zip"
+          test -s build/windows/WaGang.exe && test -s build/windows/WaGang.pck
+          (cd build/windows && zip -q -r "../WaGang-Windows-build-${BUILD}.zip" .)
+          ls -la build
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          subject="$(git log -1 --format=%s)"
+          cat > /tmp/notes.md <<EOF
+          Automatic build ${BUILD} (version ${VERSION}) of commit ${GITHUB_SHA::7}: ${subject}
+
+          **macOS** (macOS 11+ on Apple Silicon, 10.13+ on Intel): unzip \`WaGang-macOS-build-${BUILD}.zip\` and open the app.
+          It is not notarized: the first time, right-click the app → **Open**, or run
+          \`xattr -dr com.apple.quarantine <app>\` in Terminal.
+
+          **Windows** (64-bit): unzip \`WaGang-Windows-build-${BUILD}.zip\` and run \`WaGang.exe\` (keep \`WaGang.pck\`
+          next to it). If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
+          EOF
+          gh release create "build-${BUILD}" \
+            "build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip" \
+            --target "${GITHUB_SHA}" --title "Build ${BUILD}" --notes-file /tmp/notes.md --latest

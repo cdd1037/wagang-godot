@@ -141,9 +141,18 @@ func clear_highlights() -> void:
 
 ## Paste a Nima.wa 3x3-cell (144x144) terrain patch centred on cell c, coloured with this map's palette.
 func add_patch(entry: int, c: Vector2i) -> Node:
+	var sp := Sprite2D.new()
+	sp.centered = false
+	sp.position = cell_pos(c - Vector2i(1, 1))
+	# HD pack: pre-upscaled with this map's palette (tools/upscale_assets.py patch_combos)
+	sp.texture = Assets.hd_only("gfx/effects/map_patches/map%02d/%03d.png" % [map_id, entry])
+	if sp.texture:
+		patch_layer.add_child(sp)
+		return sp
 	var idx := Assets.image("gfx/effects/map_patches/idx/%03d.png" % entry)
 	var pals: Variant = Assets.json("gfx/palettes/fei.json")
 	if idx == null or pals == null:
+		sp.free()
 		return null
 	var pal: Array = pals[map_id] if pals is Array else pals[str(map_id)]
 	var cols: Array[Color] = []
@@ -155,10 +164,14 @@ func add_patch(entry: int, c: Vector2i) -> Node:
 		for x in idx.get_width():
 			var k := int(round(idx.get_pixel(x, y).r * 255.0))
 			img.set_pixel(x, y, cols[k] if k < cols.size() else Color.BLACK)
-	var sp := Sprite2D.new()
-	sp.centered = false
-	sp.texture = ImageTexture.create_from_image(img)
-	sp.position = cell_pos(c - Vector2i(1, 1))
+	if Assets.hd_active():
+		# no AI-upscaled patch for this palette: a smooth 4x resize blends in with the HD map
+		img.resize(img.get_width() * 4, img.get_height() * 4, Image.INTERPOLATE_LANCZOS)
+		var t := ImageTexture.create_from_image(img)
+		t.set_size_override(idx.get_size())
+		sp.texture = t
+	else:
+		sp.texture = ImageTexture.create_from_image(img)
 	patch_layer.add_child(sp)
 	return sp
 

@@ -10,3 +10,5 @@ __pycache__/
 /game/.godot/
 # macOS
 .DS_Store
+/tools/upscale_models/
+/game/assets_hd/

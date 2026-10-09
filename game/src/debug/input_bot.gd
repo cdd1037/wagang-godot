@@ -86,6 +86,29 @@ func fx_test(ids: PackedStringArray) -> void:
 	st.get_tree().quit()
 
 
+## WG_BOTMODE=duel: run a scripted 单挑 between the first player unit and the first enemy, with screenshots.
+func duel_test() -> void:
+	await _wait(0.6)
+	var a: BUnit = st.input._player_units()[0]
+	var b: BUnit = null
+	for e in st.units:
+		if e.active() and e.is_enemy_of(a):
+			b = e
+			break
+	var d := st._duel()
+	await d.setup(b.pid, a.pid, 5)
+	await shot("duel_setup")
+	await d.open()
+	await d.appear_say(0, "来者何人！", 0)
+	await shot("duel_say")
+	await d.action(1, 3)
+	await d.exchange(0, 1, 0)
+	await shot("duel_exchange")
+	await d.result(0)
+	await shot("duel_result")
+	st.get_tree().quit()
+
+
 ## WG_BOTMODE=load: open the system menu, pick 读取进度 and load slot WG_BOTSLOT (default 9),
 ## exercising an in-game load from inside the running battle.
 func load_test() -> void:
@@ -112,6 +135,9 @@ func run_phase() -> void:
 		return
 	if OS.get_environment("WG_BOTMODE") == "load":
 		await load_test()
+		return
+	if OS.get_environment("WG_BOTMODE") == "duel":
+		await duel_test()
 		return
 	await _wait(0.6)
 	for u in st.input._player_units():

@@ -11,11 +11,15 @@ How to start the game and play it: story scenes, battles, duels, menus and savin
 * **From source:** `./run_game.sh` in the repository root (needs Godot 4.7). The first run imports the project,
   which takes a few seconds.
 
-The window opens at the largest of 3×, 2.5×, 2×, 1.5× or 1× the original 640×480 that fits your screen. Toggle full screen with
+The window opens at the largest of 3×, 2.5×, 2×, 1.5× or 1× the original 640×480 that fits your screen. You can
+resize it freely; when you let go, it snaps to the game's 4:3 shape so the picture fills it. Toggle full screen with
 **⌘F**, **F11** or **Alt+Enter**.
 
 The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit). After an ending has
 been reached once, the title picture changes.
+
+If the HD graphics pack is installed, the title screen also shows **画面：高清** / **画面：原版**. Click it to switch
+between the 4× upscaled art and the original pixels. The choice is remembered. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
 
 ## General controls
 
@@ -122,6 +126,6 @@ winner may gain experience when the duel closes.
 | Problem | Fix |
 |---|---|
 | "App can't be opened" / unidentified developer | Right-click → **Open**, or `xattr -dr com.apple.quarantine WaGang.app` |
-| Window too small or large | Toggle full screen (⌘F); the window size picks the largest of 3×, 2.5×, 2×, 1.5×, 1× that fits |
+| Window too small or large | Drag the window's edge or corner (it snaps to 4:3), or toggle full screen (⌘F) |
 | Missing characters (▯) in text | The game uses the system fonts Songti SC, Hiragino Sans GB and Heiti SC, which ship with macOS. Make sure they are not disabled in Font Book |
 | A town scene "does nothing" | It is waiting for you: find the character or place that continues the story, or check the menu for **出征** |

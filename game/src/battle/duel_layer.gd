@@ -70,7 +70,7 @@ void fragment() {
 		_mat = ShaderMaterial.new()
 		_mat.shader = _shader
 		material = _mat
-		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if Assets.hd_active() else CanvasItem.TEXTURE_FILTER_NEAREST
 
 	func setup(e: int) -> void:
 		entry = e

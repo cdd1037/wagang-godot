@@ -31,6 +31,7 @@ All options are environment variables read at start-up, for example
 | `WG_LOADSLOT=n` | Skip the title and load save slot *n* |
 | `WG_STOP=n` | Quit when scenario *n* is reached |
 | `WG_NOVIDEO=1` | Skip cutscene videos |
+| `WG_HD=0` / `WG_HD=1` | Use the original art / the HD graphics pack, overriding the saved setting |
 
 **Automatic play**
 
@@ -59,9 +60,11 @@ All options are environment variables read at start-up, for example
 | `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 9) after each scenario, retry from it after a game over |
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
+| `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
 | `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids and screenshot their animations |
 | `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=5` to check the restore |
 | `WG_ACCEPT_SPAM=1` | Press Enter every 0.6 s |
+| `WG_SHOTS=dir` | Save a screenshot to *dir* every `WG_SHOT_EVERY` seconds (default 3) |
 
 Example: watch the first battle play itself:
 `WG_START=1 WG_DEMO=1 WG_NOVIDEO=1 ./run_game.sh`
