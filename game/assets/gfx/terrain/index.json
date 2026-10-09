@@ -1,0 +1,286 @@
+{
+ "source": "Mapatr.dll RT_BITMAP 100+terrain (loaded into an ImageList at 0x46c675)",
+ "note": "terrain-info picture shown for a cell; names are CCZ defaults, the data agent has the authoritative names in data.wa",
+ "tiles": [
+  {
+   "terrain": 0,
+   "file": "00.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 100,
+   "name_guess": "平原"
+  },
+  {
+   "terrain": 1,
+   "file": "01.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 101,
+   "name_guess": "草原"
+  },
+  {
+   "terrain": 2,
+   "file": "02.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 102,
+   "name_guess": "树林"
+  },
+  {
+   "terrain": 3,
+   "file": "03.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 103,
+   "name_guess": "荒地"
+  },
+  {
+   "terrain": 4,
+   "file": "04.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 104,
+   "name_guess": "山地"
+  },
+  {
+   "terrain": 5,
+   "file": "05.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 105,
+   "name_guess": "岩山"
+  },
+  {
+   "terrain": 6,
+   "file": "06.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 106,
+   "name_guess": "山崖"
+  },
+  {
+   "terrain": 7,
+   "file": "07.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 107,
+   "name_guess": "雪原"
+  },
+  {
+   "terrain": 8,
+   "file": "08.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 108,
+   "name_guess": "桥梁"
+  },
+  {
+   "terrain": 9,
+   "file": "09.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 109,
+   "name_guess": "浅滩"
+  },
+  {
+   "terrain": 10,
+   "file": "10.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 110,
+   "name_guess": "沼泽"
+  },
+  {
+   "terrain": 11,
+   "file": "11.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 111,
+   "name_guess": "池塘"
+  },
+  {
+   "terrain": 12,
+   "file": "12.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 112,
+   "name_guess": "小河"
+  },
+  {
+   "terrain": 13,
+   "file": "13.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 113,
+   "name_guess": "大河"
+  },
+  {
+   "terrain": 14,
+   "file": "14.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 114,
+   "name_guess": "栅栏"
+  },
+  {
+   "terrain": 15,
+   "file": "15.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 115,
+   "name_guess": "城墙"
+  },
+  {
+   "terrain": 16,
+   "file": "16.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 116,
+   "name_guess": "城内"
+  },
+  {
+   "terrain": 17,
+   "file": "17.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 117,
+   "name_guess": "城门"
+  },
+  {
+   "terrain": 18,
+   "file": "18.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 118,
+   "name_guess": "城池"
+  },
+  {
+   "terrain": 19,
+   "file": "19.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 119,
+   "name_guess": "关隘"
+  },
+  {
+   "terrain": 20,
+   "file": "20.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 120,
+   "name_guess": "鹿砦"
+  },
+  {
+   "terrain": 21,
+   "file": "21.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 121,
+   "name_guess": "村庄"
+  },
+  {
+   "terrain": 22,
+   "file": "22.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 122,
+   "name_guess": "兵营"
+  },
+  {
+   "terrain": 23,
+   "file": "23.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 123,
+   "name_guess": "民居"
+  },
+  {
+   "terrain": 24,
+   "file": "24.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 124,
+   "name_guess": "宝物库"
+  },
+  {
+   "terrain": 25,
+   "file": "25.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 125,
+   "name_guess": "?"
+  },
+  {
+   "terrain": 26,
+   "file": "26.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 126,
+   "name_guess": "火"
+  },
+  {
+   "terrain": 27,
+   "file": "27.png",
+   "size": [
+    48,
+    48
+   ],
+   "resource_id": 127,
+   "name_guess": "?"
+  }
+ ]
+}

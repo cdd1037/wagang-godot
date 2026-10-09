@@ -1,0 +1,317 @@
+extends Node
+## Boot + top-level flow: title screen, scenario loop (R_xx story / S_xx battle files),
+## save/load, game over and ending.
+
+const SAVE_SLOTS := 10
+
+var ui: GameUI
+var stage: ScriptHost
+var _title_bg: Sprite2D
+var _abort_flow := false
+var _flow_running := false
+var _flow_gen := 0          # bumped to orphan a running scenario loop (load / title / retry)
+var _pending_load: Dictionary = {}
+var _retries: Dictionary = {}
+
+
+func _unhandled_key_input(ev: InputEvent) -> void:
+	# Cmd+F / F11 / Alt+Enter toggles full screen
+	if ev is InputEventKey and ev.pressed and (ev.keycode == KEY_F11 or (ev.keycode == KEY_F and ev.meta_pressed) or (ev.keycode == KEY_ENTER and ev.alt_pressed)):
+		var w := get_window()
+		w.mode = Window.MODE_WINDOWED if w.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+		get_viewport().set_input_as_handled()
+
+
+func _process(_d: float) -> void:
+	# hold Space / Ctrl to fast-forward animations (like the original patch's Space fast-click)
+	var fast := (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_CTRL)) and not ui.video.visible
+	Engine.time_scale = 4.0 if fast else 1.0
+
+
+func _fit_window() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var w := get_window()
+	if w.mode != Window.MODE_WINDOWED:
+		return
+	var usable := DisplayServer.screen_get_usable_rect(w.current_screen)
+	var scale := 1.0
+	for s in [3.0, 2.5, 2.0, 1.5, 1.0]:
+		if 640 * s <= usable.size.x * 0.92 and 480 * s <= usable.size.y * 0.9:
+			scale = s
+			break
+	var size := Vector2i(int(640 * scale), int(480 * scale))
+	w.size = size
+	w.position = usable.position + (usable.size - size) / 2
+
+
+func _ready() -> void:
+	_fit_window.call_deferred()
+	ui = GameUI.new()
+	add_child(ui)
+	_boot.call_deferred()
+
+
+func _boot() -> void:
+	if OS.get_environment("WG_ACCEPT_SPAM") != "":
+		# debug: tap ui_accept every 0.6 s (advances dialogue, like a player mashing Enter)
+		var t := Timer.new()
+		t.wait_time = 0.6
+		t.autostart = true
+		t.timeout.connect(func() -> void:
+			for pressed in [true, false]:
+				var ev := InputEventAction.new()
+				ev.action = "ui_accept"
+				ev.pressed = pressed
+				Input.parse_input_event(ev)
+				for k in 2:
+					await get_tree().process_frame)
+		add_child(t)
+	var ls := OS.get_environment("WG_LOADSLOT")
+	if ls != "":
+		var extra := Game.load_game(int(ls))
+		_pending_load = extra
+		print("== loaded slot %s at scenario %d" % [ls, Game.scenario])
+		_run_flow()
+		return
+	var start := OS.get_environment("WG_START")
+	if start != "":
+		# debug: WG_START=<scenario number> jumps straight into a scenario
+		Game.new_game_state()
+		Game.scenario = int(start)
+		var party := OS.get_environment("WG_PARTY")
+		if party != "":
+			for x in party.split(","):
+				Game.join_party(int(x), 1)
+		for fl in OS.get_environment("WG_SETFLAGS").split(",", false):
+			Mem.set_flag(int(fl), true)          # debug: story flags an earlier branch would have set
+		if Game.scenario % 2 == 1:
+			# starting at a battle: no story scene built the sortie list (u32[] @0x48b350, 0xffff end)
+			var ids := Game.party_ids()
+			var n := mini(ids.size(), 12)
+			for i in n:
+				Mem.w32(0x48b350 + 4 * i, ids[i])
+			Mem.w32(0x48b350 + 4 * n, 0xffff)
+		if OS.get_environment("WG_AUTOSAVE") != "":
+			Game.save_game(_autoslot(), {})
+		_run_flow()
+		return
+	if OS.get_environment("WG_NOVIDEO") == "":
+		await ui.video.play("pre")
+	to_title()
+
+
+# ------------------------------------------------------------------ title
+func to_title() -> void:
+	_stop_flow()
+	if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "" and not Game.save_info(_autoslot()).is_empty():
+		# flow-test: retry from the last autosave instead of restarting the game
+		_retry_autosave.call_deferred()
+		return
+	_title_screen.call_deferred()
+
+
+## Abandon the running scenario loop and its stage. The loop may be suspended inside the stage
+## (often the very call chain that asked for this), so it is orphaned via _flow_gen instead of
+## being waited for; anything of it that still resumes sees the stale generation and returns.
+func _stop_flow() -> void:
+	_flow_gen += 1
+	_abort_flow = true
+	_flow_running = false
+	if stage:
+		if stage.vm:
+			stage.vm.abort = true
+			stage.vm.active = false
+		stage.queue_free()
+		stage = null
+
+
+## Flow-test autosave slot (WG_AUTOSLOT, default 9) so parallel runs don't share one.
+func _autoslot() -> int:
+	var s := OS.get_environment("WG_AUTOSLOT")
+	return int(s) if s != "" else 9
+
+
+func _retry_autosave() -> void:
+	var failed := Game.scenario            # the scenario that just ended in game over / an ending
+	var was_ending := Game.ending_reached
+	Game.ending_reached = false
+	if was_ending and failed >= 106:
+		# the endgame (R_53 / R_54 hub) ends the game: the playthrough is complete
+		print("== flow-test: reached an ending in %s" % scenario_file(failed))
+		get_tree().quit()
+		return
+	_stop_flow()
+	await get_tree().process_frame
+	_pending_load = Game.load_game(_autoslot())
+	var tries := int(_retries.get(failed, 0)) + 1
+	_retries[failed] = tries
+	# a battle random play keeps losing (scripted objective): jump to its aftermath on the next try
+	if failed % 2 == 1 and tries >= 3:
+		Game.skip_battle_scenario = failed   # cleared by the battle when it is used
+	print("== retry from autosave at scenario %d (scenario %d failed, try %d)" % [Game.scenario, failed, tries])
+	if failed % 2 == 0 and tries >= 30 and Game.scenario == failed:
+		# a story scene random play keeps losing (chained 单挑 mini-games) — move on
+		print("== flow-test: skipping story %s" % scenario_file(failed))
+		_pending_load = {}
+		Game.scenario += 1
+		Game.save_game(_autoslot(), {})      # don't come back to it on the next retry
+	_run_flow()
+
+
+func _title_screen() -> void:
+	await get_tree().process_frame
+	_abort_flow = false
+	Audio.play_bgm(2)
+	if _title_bg == null:
+		_title_bg = Sprite2D.new()
+		_title_bg.centered = false
+		_title_bg.position = Vector2(0, 40)
+		add_child(_title_bg)
+	# 0x42bd90: title picture 0, or 12 + Niuniu.wa[0] (13..15) once an ending has been recorded
+	var nb := SpecialFuncs.read_niuniu()
+	var v := nb[0]
+	_title_bg.texture = Assets.tex("gfx/screens/%02d.png" % (12 + v if v >= 1 and v <= 3 else 0))
+	_title_bg.visible = true
+	ui.set_black(false)
+	while true:
+		var i := await ui.menu.choose(["开始新游戏", "读取进度", "结束游戏"], Vector2(250, 330), false, "", [], 140)
+		if i == 0:
+			_title_bg.visible = false
+			Game.new_game_state()
+			Game.scenario = 0
+			_run_flow()
+			return
+		elif i == 1:
+			if await load_menu():
+				_title_bg.visible = false
+				return
+		else:
+			get_tree().quit()
+			return
+
+
+# ------------------------------------------------------------------ scenario loop
+func scenario_file(n: int) -> String:
+	return ("R_%02d" if n % 2 == 0 else "S_%02d") % (n / 2)
+
+
+func _run_flow() -> void:
+	if _flow_running:
+		return
+	_flow_running = true
+	_abort_flow = false
+	_flow_gen += 1
+	var gen := _flow_gen
+	while not _abort_flow:
+		var n := Game.scenario
+		var file := scenario_file(n)
+		if not Assets.exists("scripts/%s.json" % file):
+			if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
+				print("== flow-test: reached the end of the game")
+				get_tree().quit()
+				return
+			await ending()
+			return
+		Game.scenario_jumped = false
+		print("== scenario %d: %s" % [n, file])
+		var stop := OS.get_environment("WG_STOP")
+		if stop != "" and n >= int(stop):
+			get_tree().quit()
+			return
+		if n % 2 == 0:
+			stage = StoryStage.new()
+		else:
+			stage = BattleStage.new()
+		stage.name = "Stage"
+		add_child(stage)
+		move_child(stage, 0)
+		if not _pending_load.is_empty():
+			stage.restore_state(_pending_load)
+			_pending_load = {}
+		var st := stage
+		await st.run_file(file)
+		if gen != _flow_gen:
+			return
+		if _abort_flow or stage == null:
+			break
+		stage.queue_free()
+		stage = null
+		Game.scenario = (Game.scenario + 1) & 0xff
+		if OS.get_environment("WG_AUTOSAVE") != "":
+			Game.save_game(_autoslot(), {})
+	if gen == _flow_gen:
+		_flow_running = false
+
+
+func game_over() -> void:
+	ui.set_black(true)
+	var s := Sprite2D.new()
+	s.centered = false
+	s.position = Vector2(0, 40)
+	s.texture = Assets.tex("gfx/screens/07.png")
+	s.z_index = 50
+	ui.add_child(s)
+	await ui.fade_from_black()
+	await ui.popup("", 4.0)
+	s.queue_free()
+	to_title()
+
+
+func ending() -> void:
+	await ui.video.play("end")
+	to_title()
+
+
+# ------------------------------------------------------------------ save / load
+func _slot_labels() -> Array:
+	var out := []
+	for i in SAVE_SLOTS:
+		var info := Game.save_info(i)
+		if info.is_empty():
+			out.append("%2d：——空——" % (i + 1))
+		else:
+			out.append("%2d：%s  %s" % [i + 1, str(info.get("chapter_title", "")), str(info.get("time", "")).substr(0, 16)])
+	return out
+
+
+func save_menu() -> void:
+	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")
+	if i < 0:
+		return
+	var extra := {}
+	if stage and stage.has_method("save_state"):
+		extra = stage.save_state()
+	if Game.save_game(i, extra):
+		await ui.popup("进度已保存。", 1.0)
+
+
+func load_menu() -> bool:
+	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "读取进度")
+	if i < 0 or Game.save_info(i).is_empty():
+		return false
+	_stop_flow()
+	var extra := Game.load_game(i)
+	if _title_bg:
+		_title_bg.visible = false
+	_pending_load = extra
+	# start after the caller's chain (possibly inside the old stage) has unwound
+	_run_flow.call_deferred()
+	return true
+
+
+# ------------------------------------------------------------------ status screens
+func show_party_status() -> void:
+	var ids := Game.party_ids()
+	if ids.is_empty():
+		await ui.popup("没有部队。", 1.0)
+		return
+	var labels := []
+	for pid in ids:
+		var p := Game.person(pid)
+		labels.append("%s  %s  Lv%d" % [p.name, p.class_name_str(), p.level])
+	while true:
+		var i := await ui.menu.choose(labels, Vector2(-1, -1), true, "部队")
+		if i < 0:
+			return
+		await StatusPanel.show_person(ui, Game.person(ids[i]))

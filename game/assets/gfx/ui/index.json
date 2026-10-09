@@ -1,0 +1,286 @@
+{
+ "items": [
+  {
+   "source": "wagan.wa",
+   "resource_id": 106,
+   "file": "exe/106.png",
+   "size": [
+    288,
+    28
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 302,
+   "file": "exe/302.png",
+   "size": [
+    288,
+    24
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 341,
+   "file": "exe/341.png",
+   "size": [
+    48,
+    48
+   ],
+   "keyed_index0": true
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 342,
+   "file": "exe/342.png",
+   "size": [
+    48,
+    48
+   ],
+   "keyed_index0": true
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 343,
+   "file": "exe/343.png",
+   "size": [
+    48,
+    48
+   ],
+   "keyed_index0": true
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 344,
+   "file": "exe/344.png",
+   "size": [
+    48,
+    48
+   ],
+   "keyed_index0": true
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 350,
+   "file": "exe/350.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": true
+  },
+  {
+   "source": "wagan.wa",
+   "resource_id": 351,
+   "file": "exe/351.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": true
+  },
+  {
+   "group": "exe",
+   "description": "main exe RT_BITMAP: 106/302 = 12-button toolbar strips (24px), 341-344 = 48x48 pictures, 350/351 = 16x16"
+  },
+  {
+   "source": "mark.wa",
+   "resource_id": 2,
+   "file": "mark/2.png",
+   "size": [
+    8,
+    80
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "mark.wa",
+   "resource_id": 3,
+   "file": "mark/3.png",
+   "size": [
+    8,
+    80
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "mark.wa",
+   "resource_id": 5,
+   "file": "mark/5.png",
+   "size": [
+    24,
+    24
+   ],
+   "keyed_index0": false
+  },
+  {
+   "group": "mark",
+   "description": "resource DLL loaded by mod code (LoadImage wrapper 0x4d4144): ids 2/3 = 8x80 message-window side pieces, 5 = 24x24 speech mark"
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 103,
+   "file": "xres/103.png",
+   "size": [
+    18,
+    18
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 201,
+   "file": "xres/201.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 202,
+   "file": "xres/202.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 203,
+   "file": "xres/203.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 204,
+   "file": "xres/204.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 205,
+   "file": "xres/205.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 206,
+   "file": "xres/206.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 207,
+   "file": "xres/207.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 208,
+   "file": "xres/208.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 209,
+   "file": "xres/209.png",
+   "size": [
+    16,
+    16
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 210,
+   "file": "xres/210.png",
+   "size": [
+    9,
+    13
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 211,
+   "file": "xres/211.png",
+   "size": [
+    9,
+    13
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 212,
+   "file": "xres/212.png",
+   "size": [
+    400,
+    120
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 213,
+   "file": "xres/213.png",
+   "size": [
+    75,
+    27
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 214,
+   "file": "xres/214.png",
+   "size": [
+    75,
+    27
+   ],
+   "keyed_index0": false
+  },
+  {
+   "source": "XRes.dll",
+   "resource_id": 215,
+   "file": "xres/215.png",
+   "size": [
+    75,
+    27
+   ],
+   "keyed_index0": false
+  },
+  {
+   "group": "xres",
+   "description": "launcher (wg.exe) skin: window buttons, title bar, 400x120 dialog"
+  }
+ ]
+}

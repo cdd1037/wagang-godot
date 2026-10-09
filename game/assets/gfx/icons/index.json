@@ -1,0 +1,743 @@
+{
+ "rule": "bitmap id = 100 + 2*i + size (size 0 = 16x16, 1 = 32x32); ImageList builder 0x40b19e; palette index 0 is the transparency key (mask built by 0x40a58a)",
+ "sets": {
+  "items": {
+   "source": "Itemicon.dll",
+   "count": 105,
+   "icons": [
+    {
+     "id": 0,
+     "small": "items/small/000.png",
+     "large": "items/large/000.png"
+    },
+    {
+     "id": 1,
+     "small": "items/small/001.png",
+     "large": "items/large/001.png"
+    },
+    {
+     "id": 2,
+     "small": "items/small/002.png",
+     "large": "items/large/002.png"
+    },
+    {
+     "id": 3,
+     "small": "items/small/003.png",
+     "large": "items/large/003.png"
+    },
+    {
+     "id": 4,
+     "small": "items/small/004.png",
+     "large": "items/large/004.png"
+    },
+    {
+     "id": 5,
+     "small": "items/small/005.png",
+     "large": "items/large/005.png"
+    },
+    {
+     "id": 6,
+     "small": "items/small/006.png",
+     "large": "items/large/006.png"
+    },
+    {
+     "id": 7,
+     "small": "items/small/007.png",
+     "large": "items/large/007.png"
+    },
+    {
+     "id": 8,
+     "small": "items/small/008.png",
+     "large": "items/large/008.png"
+    },
+    {
+     "id": 9,
+     "small": "items/small/009.png",
+     "large": "items/large/009.png"
+    },
+    {
+     "id": 10,
+     "small": "items/small/010.png",
+     "large": "items/large/010.png"
+    },
+    {
+     "id": 11,
+     "small": "items/small/011.png",
+     "large": "items/large/011.png"
+    },
+    {
+     "id": 12,
+     "small": "items/small/012.png",
+     "large": "items/large/012.png"
+    },
+    {
+     "id": 13,
+     "small": "items/small/013.png",
+     "large": "items/large/013.png"
+    },
+    {
+     "id": 14,
+     "small": "items/small/014.png",
+     "large": "items/large/014.png"
+    },
+    {
+     "id": 15,
+     "small": "items/small/015.png",
+     "large": "items/large/015.png"
+    },
+    {
+     "id": 16,
+     "small": "items/small/016.png",
+     "large": "items/large/016.png"
+    },
+    {
+     "id": 17,
+     "small": "items/small/017.png",
+     "large": "items/large/017.png"
+    },
+    {
+     "id": 18,
+     "small": "items/small/018.png",
+     "large": "items/large/018.png"
+    },
+    {
+     "id": 19,
+     "small": "items/small/019.png",
+     "large": "items/large/019.png"
+    },
+    {
+     "id": 20,
+     "small": "items/small/020.png",
+     "large": "items/large/020.png"
+    },
+    {
+     "id": 21,
+     "small": "items/small/021.png",
+     "large": "items/large/021.png"
+    },
+    {
+     "id": 22,
+     "small": "items/small/022.png",
+     "large": "items/large/022.png"
+    },
+    {
+     "id": 23,
+     "small": "items/small/023.png",
+     "large": "items/large/023.png"
+    },
+    {
+     "id": 24,
+     "small": "items/small/024.png",
+     "large": "items/large/024.png"
+    },
+    {
+     "id": 25,
+     "small": "items/small/025.png",
+     "large": "items/large/025.png"
+    },
+    {
+     "id": 26,
+     "small": "items/small/026.png",
+     "large": "items/large/026.png"
+    },
+    {
+     "id": 27,
+     "small": "items/small/027.png",
+     "large": "items/large/027.png"
+    },
+    {
+     "id": 28,
+     "small": "items/small/028.png",
+     "large": "items/large/028.png"
+    },
+    {
+     "id": 29,
+     "small": "items/small/029.png",
+     "large": "items/large/029.png"
+    },
+    {
+     "id": 30,
+     "small": "items/small/030.png",
+     "large": "items/large/030.png"
+    },
+    {
+     "id": 31,
+     "small": "items/small/031.png",
+     "large": "items/large/031.png"
+    },
+    {
+     "id": 32,
+     "small": "items/small/032.png",
+     "large": "items/large/032.png"
+    },
+    {
+     "id": 33,
+     "small": "items/small/033.png",
+     "large": "items/large/033.png"
+    },
+    {
+     "id": 34,
+     "small": "items/small/034.png",
+     "large": "items/large/034.png"
+    },
+    {
+     "id": 35,
+     "small": "items/small/035.png",
+     "large": "items/large/035.png"
+    },
+    {
+     "id": 36,
+     "small": "items/small/036.png",
+     "large": "items/large/036.png"
+    },
+    {
+     "id": 37,
+     "small": "items/small/037.png",
+     "large": "items/large/037.png"
+    },
+    {
+     "id": 38,
+     "small": "items/small/038.png",
+     "large": "items/large/038.png"
+    },
+    {
+     "id": 39,
+     "small": "items/small/039.png",
+     "large": "items/large/039.png"
+    },
+    {
+     "id": 40,
+     "small": "items/small/040.png",
+     "large": "items/large/040.png"
+    },
+    {
+     "id": 41,
+     "small": "items/small/041.png",
+     "large": "items/large/041.png"
+    },
+    {
+     "id": 42,
+     "small": "items/small/042.png",
+     "large": "items/large/042.png"
+    },
+    {
+     "id": 43,
+     "small": "items/small/043.png",
+     "large": "items/large/043.png"
+    },
+    {
+     "id": 44,
+     "small": "items/small/044.png",
+     "large": "items/large/044.png"
+    },
+    {
+     "id": 45,
+     "small": "items/small/045.png",
+     "large": "items/large/045.png"
+    },
+    {
+     "id": 46,
+     "small": "items/small/046.png",
+     "large": "items/large/046.png"
+    },
+    {
+     "id": 47,
+     "small": "items/small/047.png",
+     "large": "items/large/047.png"
+    },
+    {
+     "id": 48,
+     "small": "items/small/048.png",
+     "large": "items/large/048.png"
+    },
+    {
+     "id": 49,
+     "small": "items/small/049.png",
+     "large": "items/large/049.png"
+    },
+    {
+     "id": 50,
+     "small": "items/small/050.png",
+     "large": "items/large/050.png"
+    },
+    {
+     "id": 51,
+     "small": "items/small/051.png",
+     "large": "items/large/051.png"
+    },
+    {
+     "id": 52,
+     "small": "items/small/052.png",
+     "large": "items/large/052.png"
+    },
+    {
+     "id": 53,
+     "small": "items/small/053.png",
+     "large": "items/large/053.png"
+    },
+    {
+     "id": 54,
+     "small": "items/small/054.png",
+     "large": "items/large/054.png"
+    },
+    {
+     "id": 55,
+     "small": "items/small/055.png",
+     "large": "items/large/055.png"
+    },
+    {
+     "id": 56,
+     "small": "items/small/056.png",
+     "large": "items/large/056.png"
+    },
+    {
+     "id": 57,
+     "small": "items/small/057.png",
+     "large": "items/large/057.png"
+    },
+    {
+     "id": 58,
+     "small": "items/small/058.png",
+     "large": "items/large/058.png"
+    },
+    {
+     "id": 59,
+     "small": "items/small/059.png",
+     "large": "items/large/059.png"
+    },
+    {
+     "id": 60,
+     "small": "items/small/060.png",
+     "large": "items/large/060.png"
+    },
+    {
+     "id": 61,
+     "small": "items/small/061.png",
+     "large": "items/large/061.png"
+    },
+    {
+     "id": 62,
+     "small": "items/small/062.png",
+     "large": "items/large/062.png"
+    },
+    {
+     "id": 63,
+     "small": "items/small/063.png",
+     "large": "items/large/063.png"
+    },
+    {
+     "id": 64,
+     "small": "items/small/064.png",
+     "large": "items/large/064.png"
+    },
+    {
+     "id": 65,
+     "small": "items/small/065.png",
+     "large": "items/large/065.png"
+    },
+    {
+     "id": 66,
+     "small": "items/small/066.png",
+     "large": "items/large/066.png"
+    },
+    {
+     "id": 67,
+     "small": "items/small/067.png",
+     "large": "items/large/067.png"
+    },
+    {
+     "id": 68,
+     "small": "items/small/068.png",
+     "large": "items/large/068.png"
+    },
+    {
+     "id": 69,
+     "small": "items/small/069.png",
+     "large": "items/large/069.png"
+    },
+    {
+     "id": 70,
+     "small": "items/small/070.png",
+     "large": "items/large/070.png"
+    },
+    {
+     "id": 71,
+     "small": "items/small/071.png",
+     "large": "items/large/071.png"
+    },
+    {
+     "id": 72,
+     "small": "items/small/072.png",
+     "large": "items/large/072.png"
+    },
+    {
+     "id": 73,
+     "small": "items/small/073.png",
+     "large": "items/large/073.png"
+    },
+    {
+     "id": 74,
+     "small": "items/small/074.png",
+     "large": "items/large/074.png"
+    },
+    {
+     "id": 75,
+     "small": "items/small/075.png",
+     "large": "items/large/075.png"
+    },
+    {
+     "id": 76,
+     "small": "items/small/076.png",
+     "large": "items/large/076.png"
+    },
+    {
+     "id": 77,
+     "small": "items/small/077.png",
+     "large": "items/large/077.png"
+    },
+    {
+     "id": 78,
+     "small": "items/small/078.png",
+     "large": "items/large/078.png"
+    },
+    {
+     "id": 79,
+     "small": "items/small/079.png",
+     "large": "items/large/079.png"
+    },
+    {
+     "id": 80,
+     "small": "items/small/080.png",
+     "large": "items/large/080.png"
+    },
+    {
+     "id": 81,
+     "small": "items/small/081.png",
+     "large": "items/large/081.png"
+    },
+    {
+     "id": 82,
+     "small": "items/small/082.png",
+     "large": "items/large/082.png"
+    },
+    {
+     "id": 83,
+     "small": "items/small/083.png",
+     "large": "items/large/083.png"
+    },
+    {
+     "id": 84,
+     "small": "items/small/084.png",
+     "large": "items/large/084.png"
+    },
+    {
+     "id": 85,
+     "small": "items/small/085.png",
+     "large": "items/large/085.png"
+    },
+    {
+     "id": 86,
+     "small": "items/small/086.png",
+     "large": "items/large/086.png"
+    },
+    {
+     "id": 87,
+     "small": "items/small/087.png",
+     "large": "items/large/087.png"
+    },
+    {
+     "id": 88,
+     "small": "items/small/088.png",
+     "large": "items/large/088.png"
+    },
+    {
+     "id": 89,
+     "small": "items/small/089.png",
+     "large": "items/large/089.png"
+    },
+    {
+     "id": 90,
+     "small": "items/small/090.png",
+     "large": "items/large/090.png"
+    },
+    {
+     "id": 91,
+     "small": "items/small/091.png",
+     "large": "items/large/091.png"
+    },
+    {
+     "id": 92,
+     "small": "items/small/092.png",
+     "large": "items/large/092.png"
+    },
+    {
+     "id": 93,
+     "small": "items/small/093.png",
+     "large": "items/large/093.png"
+    },
+    {
+     "id": 94,
+     "small": "items/small/094.png",
+     "large": "items/large/094.png"
+    },
+    {
+     "id": 95,
+     "small": "items/small/095.png",
+     "large": "items/large/095.png"
+    },
+    {
+     "id": 96,
+     "small": "items/small/096.png",
+     "large": "items/large/096.png"
+    },
+    {
+     "id": 97,
+     "small": "items/small/097.png",
+     "large": "items/large/097.png"
+    },
+    {
+     "id": 98,
+     "small": "items/small/098.png",
+     "large": "items/large/098.png"
+    },
+    {
+     "id": 99,
+     "small": "items/small/099.png",
+     "large": "items/large/099.png"
+    },
+    {
+     "id": 100,
+     "small": "items/small/100.png",
+     "large": "items/large/100.png"
+    },
+    {
+     "id": 101,
+     "small": "items/small/101.png",
+     "large": "items/large/101.png"
+    },
+    {
+     "id": 102,
+     "small": "items/small/102.png",
+     "large": "items/large/102.png"
+    },
+    {
+     "id": 103,
+     "small": "items/small/103.png",
+     "large": "items/large/103.png"
+    },
+    {
+     "id": 104,
+     "small": "items/small/104.png",
+     "large": "items/large/104.png"
+    }
+   ]
+  },
+  "strategies": {
+   "source": "Mgcicon.dll",
+   "count": 31,
+   "icons": [
+    {
+     "id": 0,
+     "small": "strategies/small/000.png",
+     "large": "strategies/large/000.png"
+    },
+    {
+     "id": 1,
+     "small": "strategies/small/001.png",
+     "large": "strategies/large/001.png"
+    },
+    {
+     "id": 2,
+     "small": "strategies/small/002.png",
+     "large": "strategies/large/002.png"
+    },
+    {
+     "id": 3,
+     "small": "strategies/small/003.png",
+     "large": "strategies/large/003.png"
+    },
+    {
+     "id": 4,
+     "small": "strategies/small/004.png",
+     "large": "strategies/large/004.png"
+    },
+    {
+     "id": 5,
+     "small": "strategies/small/005.png",
+     "large": "strategies/large/005.png"
+    },
+    {
+     "id": 6,
+     "small": "strategies/small/006.png",
+     "large": "strategies/large/006.png"
+    },
+    {
+     "id": 7,
+     "small": "strategies/small/007.png",
+     "large": "strategies/large/007.png"
+    },
+    {
+     "id": 8,
+     "small": "strategies/small/008.png",
+     "large": "strategies/large/008.png"
+    },
+    {
+     "id": 9,
+     "small": "strategies/small/009.png",
+     "large": "strategies/large/009.png"
+    },
+    {
+     "id": 10,
+     "small": "strategies/small/010.png",
+     "large": "strategies/large/010.png"
+    },
+    {
+     "id": 11,
+     "small": "strategies/small/011.png",
+     "large": "strategies/large/011.png"
+    },
+    {
+     "id": 12,
+     "small": "strategies/small/012.png",
+     "large": "strategies/large/012.png"
+    },
+    {
+     "id": 13,
+     "small": "strategies/small/013.png",
+     "large": "strategies/large/013.png"
+    },
+    {
+     "id": 14,
+     "small": "strategies/small/014.png",
+     "large": "strategies/large/014.png"
+    },
+    {
+     "id": 15,
+     "small": "strategies/small/015.png",
+     "large": "strategies/large/015.png"
+    },
+    {
+     "id": 16,
+     "small": "strategies/small/016.png",
+     "large": "strategies/large/016.png"
+    },
+    {
+     "id": 17,
+     "small": "strategies/small/017.png",
+     "large": "strategies/large/017.png"
+    },
+    {
+     "id": 18,
+     "small": "strategies/small/018.png",
+     "large": "strategies/large/018.png"
+    },
+    {
+     "id": 19,
+     "small": "strategies/small/019.png",
+     "large": "strategies/large/019.png"
+    },
+    {
+     "id": 20,
+     "small": "strategies/small/020.png",
+     "large": "strategies/large/020.png"
+    },
+    {
+     "id": 21,
+     "small": "strategies/small/021.png",
+     "large": "strategies/large/021.png"
+    },
+    {
+     "id": 22,
+     "small": "strategies/small/022.png",
+     "large": "strategies/large/022.png"
+    },
+    {
+     "id": 23,
+     "small": "strategies/small/023.png",
+     "large": "strategies/large/023.png"
+    },
+    {
+     "id": 24,
+     "small": "strategies/small/024.png",
+     "large": "strategies/large/024.png"
+    },
+    {
+     "id": 25,
+     "small": "strategies/small/025.png",
+     "large": "strategies/large/025.png"
+    },
+    {
+     "id": 26,
+     "small": "strategies/small/026.png",
+     "large": "strategies/large/026.png"
+    },
+    {
+     "id": 27,
+     "small": "strategies/small/027.png",
+     "large": "strategies/large/027.png"
+    },
+    {
+     "id": 28,
+     "small": "strategies/small/028.png",
+     "large": "strategies/large/028.png"
+    },
+    {
+     "id": 29,
+     "small": "strategies/small/029.png",
+     "large": "strategies/large/029.png"
+    },
+    {
+     "id": 30,
+     "small": "strategies/small/030.png",
+     "large": "strategies/large/030.png"
+    }
+   ]
+  },
+  "commands": {
+   "source": "Cmdicon.dll (16x16, ids 100..104)",
+   "count": 5,
+   "icons": [
+    {
+     "id": 0,
+     "file": "commands/000.png",
+     "size": [
+      16,
+      16
+     ]
+    },
+    {
+     "id": 1,
+     "file": "commands/001.png",
+     "size": [
+      16,
+      16
+     ]
+    },
+    {
+     "id": 2,
+     "file": "commands/002.png",
+     "size": [
+      16,
+      16
+     ]
+    },
+    {
+     "id": 3,
+     "file": "commands/003.png",
+     "size": [
+      16,
+      16
+     ]
+    },
+    {
+     "id": 4,
+     "file": "commands/004.png",
+     "size": [
+      16,
+      16
+     ]
+    }
+   ]
+  }
+ }
+}

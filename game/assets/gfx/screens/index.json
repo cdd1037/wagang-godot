@@ -1,0 +1,226 @@
+{
+ "source": "GHAI.WA (Ls12); palettes from DeDe.WA (0x41e050(i, 2)); entries using only indices <174 render identically with any game palette",
+ "notes": "title loader 0x42bd90 picks entry 0 or 13..15 (0x41a284(0)+0xc, save-progress dependent); entry 6 via 0x42b6f6, 12 via 0x42bc8f, 7 via 0x42c12f",
+ "screens": [
+  {
+   "entry": 0,
+   "file": "00.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[0]",
+   "role": "title screen (default)"
+  },
+  {
+   "entry": 1,
+   "file": "01.png",
+   "size": [
+    64,
+    64
+   ],
+   "palette": "dede[0]",
+   "role": "64x64 emblem (red bird)"
+  },
+  {
+   "entry": 2,
+   "file": "02.png",
+   "size": [
+    64,
+    64
+   ],
+   "palette": "dede[0]",
+   "role": "64x64 emblem (yellow bird)"
+  },
+  {
+   "entry": 3,
+   "file": "03.png",
+   "size": [
+    64,
+    64
+   ],
+   "palette": "dede[0]",
+   "role": "64x64 emblem (blue bird)"
+  },
+  {
+   "entry": 4,
+   "file": "04.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[0]",
+   "role": "grey battle illustration 640x400"
+  },
+  {
+   "entry": 5,
+   "file": "05.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "grey stone-relief backdrop 624x384"
+  },
+  {
+   "entry": 6,
+   "file": "06.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[1]",
+   "role": "Koei Tecmo / 轩辕 credits logo (0x42b6fa: DeDe[1])"
+  },
+  {
+   "entry": 7,
+   "file": "07.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[2]",
+   "role": "GAME OVER screen (0x42c12f: DeDe[2])"
+  },
+  {
+   "entry": 8,
+   "file": "08.png",
+   "size": [
+    48,
+    48
+   ],
+   "palette": "dede[0]",
+   "role": "48x48 tile"
+  },
+  {
+   "entry": 9,
+   "file": "09.png",
+   "size": [
+    48,
+    48
+   ],
+   "palette": "dede[0]",
+   "role": "48x48 tile"
+  },
+  {
+   "entry": 10,
+   "file": "10.png",
+   "size": [
+    48,
+    48
+   ],
+   "palette": "dede[0]",
+   "role": "48x48 tile"
+  },
+  {
+   "entry": 11,
+   "file": "11.png",
+   "size": [
+    48,
+    48
+   ],
+   "palette": "dede[0]",
+   "role": "48x48 tile"
+  },
+  {
+   "entry": 12,
+   "file": "12.png",
+   "size": [
+    640,
+    480
+   ],
+   "palette": "dede[3]",
+   "role": "轩辕学院 splash, heavily dithered (0x42bc8f: DeDe[3])"
+  },
+  {
+   "entry": 13,
+   "file": "13.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[0]",
+   "role": "title screen variant"
+  },
+  {
+   "entry": 14,
+   "file": "14.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[0]",
+   "role": "title screen variant"
+  },
+  {
+   "entry": 15,
+   "file": "15.png",
+   "size": [
+    640,
+    400
+   ],
+   "palette": "dede[0]",
+   "role": "title screen variant"
+  },
+  {
+   "entry": 16,
+   "file": "16.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: army camp"
+  },
+  {
+   "entry": 17,
+   "file": "17.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: field"
+  },
+  {
+   "entry": 18,
+   "file": "18.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: night"
+  },
+  {
+   "entry": 19,
+   "file": "19.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: market"
+  },
+  {
+   "entry": 20,
+   "file": "20.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: fog"
+  },
+  {
+   "entry": 21,
+   "file": "21.png",
+   "size": [
+    624,
+    384
+   ],
+   "palette": "dede[0]",
+   "role": "624x384 backdrop: plain"
+  }
+ ]
+}

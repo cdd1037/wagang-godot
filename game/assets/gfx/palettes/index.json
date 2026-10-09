@@ -1,0 +1,32 @@
+{
+ "format": "each palette = 256 \"#rrggbb\" strings (already converted from the stored B,R,G order; indices 0-9/246-255 = Windows static colours)",
+ "quantized_to_4bit": false,
+ "files": {
+  "fei": {
+   "file": "fei.json",
+   "source": "Fei.WA",
+   "count": 58,
+   "role": "battle map palettes: fei[N] for HMnn.wa / Xixi[N]"
+  },
+  "niuqun": {
+   "file": "niuqun.json",
+   "source": "Niuqun.wa",
+   "count": 337,
+   "role": "story background palettes: niuqun[N] for Giji.WA[N]"
+  },
+  "dede": {
+   "file": "dede.json",
+   "source": "DeDe.WA",
+   "count": 4,
+   "role": "misc palettes (0,2: 246-colour game palettes; 1: 6x6x6 cube; 3: grey ramp)"
+  }
+ },
+ "shared_range": [
+  10,
+  173
+ ],
+ "background_range": [
+  174,
+  245
+ ]
+}
