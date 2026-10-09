@@ -1,127 +1,133 @@
-# 兴唐传·瓦岗山异闻录 — Godot reimplementation
+# 兴唐传·瓦岗山异闻录 — Godot 重制版
 
-A reverse-engineered reimplementation of **兴唐传·瓦岗山异闻录** (*Xing Tang Zhuan: Wagang Mountain Chronicles*), a
-Sui–Tang story mod built on Koei's 1998 *三国志曹操传* (Cao Cao Zhuan) engine, rewritten in **Godot 4.7** so it runs
-natively on macOS.
+**中文** | [English](README.en.md)
 
-The original Windows executable was decompiled (Ghidra) and its formats, script language, battle formulas and AI
-were documented, then re-implemented. The game's own data is used unchanged in converted form: all 117 story and
-battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
+本项目通过逆向工程，用 **Godot 4.7** 重新实现了 **《兴唐传·瓦岗山异闻录》**，使其可以在 **macOS** 和 **Windows** 上原生运行。
+原作是基于光荣 1998 年《三国志曹操传》引擎制作的隋唐题材 MOD。
+
+原版 Windows 程序经 Ghidra 反编译，其文件格式、剧本脚本语言、战斗公式和敌军 AI 都整理成了文档，再据此重新实现。
+游戏数据全部来自原作，只做了格式转换、内容未作改动：117 个剧情与战斗脚本、地图、人物和部队图像、头像、音乐、音效和过场动画。
 
 <p align="center">
-  <img src="docs/images/title.png" width="400" alt="Title screen">
-  <img src="docs/images/story.png" width="400" alt="Story scene">
+  <img src="docs/images/title.png" width="400" alt="标题画面">
+  <img src="docs/images/story.png" width="400" alt="剧情场景">
 </p>
 <p align="center">
-  <img src="docs/images/battle-move.png" width="400" alt="Battle: movement range">
-  <img src="docs/images/duel.png" width="400" alt="Duel (单挑)">
+  <img src="docs/images/battle-move.png" width="400" alt="战斗：移动范围">
+  <img src="docs/images/duel.png" width="400" alt="单挑">
 </p>
 
-## Features
+## 功能
 
-* **Story scenes** – isometric towns and cutscenes, portraits and dialogue, captions, CG pictures, videos, branching
-  choices, hub towns with shops and side quests, and the mod's 单挑 mini-games.
-* **Tactical battles** – deployment and sortie selection, movement with zones of control, attacks, counters and
-  double attacks, strategies with their animations, items, terrain and weather effects, experience and promotions,
-  scripted battle events, and the original enemy AI.
-* **Duels** – the 单挑 screen, re-implemented from the decompiled routines (intro, speech bubbles, every action and
-  blow animation, EXP for the winner).
-* **HD graphics (optional)** – every texture the game draws re-rendered at 4× with AI upscalers chosen per kind of
-  art; switchable on the title screen. See [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
-* **Saves** – 10 slots, usable from story scenes and mid-battle.
-* **Multiple endings** – decided by the story flags and scores the scripts keep, exactly as in the original.
+* **剧情场景**：斜视角城镇与过场，头像对话，字幕，CG 图片，视频，剧情分支选项，可以购物、接支线任务的城镇，以及 MOD
+  自带的单挑小游戏。
+* **战棋战斗**：布阵与出场选择，带敌军阻挡（ZOC）的移动，攻击、反击与二次攻击，策略及其动画，道具，地形与天气，
+  经验与转职，剧本战斗事件，以及原版敌军 AI。
+* **单挑**：根据反编译代码重现的单挑画面，包括开场、对话气泡、全部动作与招式动画、胜者获得经验。
+* **高清画面（可选）**：游戏用到的全部图像都经 AI 放大到 4 倍，并按画面类型分别选用最合适的模型，可在标题画面切换，
+  详见 [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。
+* **存档**：10 个存档位，剧情中和战斗中都能存读档。
+* **多结局**：与原作一样，由脚本记录的剧情标志和好感度决定。
 
-All 117 scripts have been run end to end by an automated play-through harness without script errors.
+全部 117 个脚本都已用自动通关测试从头跑到尾，没有出现脚本错误。
 
-## Download
+<p align="center">
+  <img src="docs/images/hd-compare.jpg" width="640" alt="原版画面与高清画面对比">
+</p>
 
-Ready-to-play builds for **macOS** (Apple Silicon and Intel) and **Windows** (64-bit) are on the
-[Releases page](https://github.com/seedds/wagang-godot/releases). Every change to the game publishes a new
-numbered build automatically; the build number is shown in the corner of the title screen.
+## 下载
 
-* **macOS:** unzip and open the app. It is not notarized, so the first time right-click it → **Open** (or run
-  `xattr -dr com.apple.quarantine <app>`).
-* **Windows:** unzip and run `WaGang.exe`, keeping `WaGang.pck` next to it. If SmartScreen warns about an
-  unknown publisher, choose **More info → Run anyway**.
+可直接游玩的 **macOS**（Apple 芯片与 Intel）和 **Windows**（64 位）版本发布在
+[Releases 页面](https://github.com/seedds/wagang-godot/releases)。游戏代码每次更新，都会自动构建并发布新版本，
+构建号自动递增（Build 1、Build 2……），标题画面右下角会显示版本号（例如“版本 1.0.2”）。
 
-## Quick start (from source)
+* **macOS**：解压后打开应用。应用未经苹果公证，第一次打开时请右键点击应用并选择“打开”，或在终端执行
+  `xattr -dr com.apple.quarantine <应用路径>`。
+* **Windows**：解压后运行 `WaGang.exe`，`WaGang.pck` 要放在同一目录。如果 SmartScreen 提示“未知发布者”，
+  请点击“更多信息”→“仍要运行”。
 
-**Requirements:** macOS 10.13+ on Intel or 11+ on Apple Silicon, and [Godot 4.7](https://godotengine.org)
-(`brew install --cask godot`). The converted game data is included in this repository.
+自动发布的版本使用原版画面。高清画面包体积较大，没有放进仓库，自行生成方法见下文。
+
+## 从源码运行
+
+**环境要求**：macOS 10.13 及以上（Intel）或 macOS 11 及以上（Apple 芯片），以及
+[Godot 4.7](https://godotengine.org)（`brew install --cask godot`）。转换好的游戏数据已包含在仓库中。
 
 ```sh
 git clone https://github.com/seedds/wagang-godot.git
 cd wagang-godot
-./run_game.sh                 # first run imports the project, then starts the game
+./run_game.sh                 # 首次运行会先导入项目，然后启动游戏
 ```
 
-To use Godot directly, import once with `godot --headless --path game --import`, then run `godot --path game`.
-Without the import step the scripts' class names aren't registered and the game fails to start.
+如果直接使用 Godot，需要先执行一次导入：`godot --headless --path game --import`，然后运行 `godot --path game`。
+不导入的话，脚本的类名不会注册，游戏无法启动。
 
-The HD graphics pack is not in the repository (it is several hundred MB). Build it once with
-`tools/upscale_assets.py` ([docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)); without it the game uses the original art.
+高清画面包不在仓库中（约 740 MB）。可以用 `tools/upscale_assets.py` 生成一次，方法见
+[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。没有高清包时，游戏使用原版画面。
 
-To build a standalone `.app`:
+自己打包 macOS 应用：
 
 ```sh
-godot --headless --path game --import                          # first time only
+godot --headless --path game --import                          # 仅首次需要
 godot --headless --path game --export-release "macOS" ../build/WaGang.app
 open build/WaGang.app
 ```
 
-The app is ad-hoc signed. If macOS refuses to open a copy that came from another machine, right-click it → **Open**,
-or run `xattr -dr com.apple.quarantine WaGang.app`.
+Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出。导出预设和自动发布流程见
+[docs/BUILDING.md](docs/BUILDING.md)。
 
-## Controls (summary)
+## 操作
 
-| Input | Action |
+| 操作 | 作用 |
 |---|---|
-| Left click / Enter | select, confirm, advance dialogue |
-| Right click / Esc | cancel; open the menu (story: 菜单, battle: 回合结束 / save / load …) |
-| Arrow keys | move the battle cursor |
-| Mouse at screen edge, middle-drag | scroll the battle map |
-| Hold Space or Ctrl | fast-forward |
-| ⌘F / F11 / Alt+Enter | toggle full screen |
+| 鼠标左键 / 回车 | 选择、确认、推进对话 |
+| 鼠标右键 / Esc | 取消；打开菜单（剧情中为“菜单”，战斗中为回合结束、存档、读档等） |
+| 方向键 | 移动战场光标 |
+| 鼠标移到画面边缘 / 按住中键拖动 | 滚动战场地图 |
+| 按住空格或 Ctrl | 快进 |
+| ⌘F / F11 / Alt+回车 | 切换全屏 |
+| 拖动窗口边缘 | 调整窗口大小，松开后窗口自动恢复 4:3 比例 |
 
-The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
+完整的游戏说明见 **[docs/PLAYING.md](docs/PLAYING.md)**（英文）。
 
-## Documentation
+## 文档
 
-| Document | Contents |
+`docs/` 中的文档目前为英文。
+
+| 文档 | 内容 |
 |---|---|
-| [docs/PLAYING.md](docs/PLAYING.md) | Player guide: story scenes, battles, duels, menus, saving, troubleshooting |
-| [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the app |
-| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The optional 4× AI-upscaled graphics pack: using it, building it, model choice |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the reimplementation works: emulated memory, script VM, stages, UI |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, reverse-engineering workflow |
-| [docs/README.md](docs/README.md) | Index of the reverse-engineering specifications (formats, script ops, rules, AI) |
+| [docs/PLAYING.md](docs/PLAYING.md) | 游戏说明：剧情、战斗、单挑、菜单、存档、常见问题 |
+| [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows 版本；自动发布流程 |
+| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 可选的 4 倍 AI 高清画面包：使用、生成和模型选择 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 重制版的实现原理：模拟内存、脚本虚拟机、场景、界面 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、逆向工作流程 |
+| [docs/README.md](docs/README.md) | 逆向分析规格文档索引（文件格式、脚本指令、规则、AI） |
 
-## Repository layout
+## 目录结构
 
-| Path | Contents |
+| 路径 | 内容 |
 |---|---|
-| `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime), `assets_hd/` = HD graphics pack (generated, not in git) |
-| `docs/` | Guides and reverse-engineering specifications |
-| `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts |
-| `run_game.sh` | Runs the game from source |
+| `game/` | Godot 项目。`src/` 为 GDScript 源码，`assets/` 为转换后的游戏数据（运行时加载），`assets_hd/` 为高清画面包（生成后才有，不在 git 中） |
+| `docs/` | 使用说明与逆向分析规格文档 |
+| `tools/` | Python 转换工具、分析辅助脚本、Ghidra 无界面反编译脚本、测试脚本、AI 放大工具 |
+| `.github/workflows/` | 自动构建并发布 macOS / Windows 版本的 GitHub Actions 工作流 |
+| `run_game.sh` | 从源码启动游戏 |
 
-Not in the repository (see `.gitignore`): the original game (`wg2025/`), build output (`build/`), scratch data
-(`extract/`), the HD graphics pack (`game/assets_hd/`) and the upscaling models (`tools/upscale_models/`).
+以下内容不在仓库中（见 `.gitignore`）：原版游戏（`wg2025/`）、构建输出（`build/`）、临时数据（`extract/`）、
+高清画面包（`game/assets_hd/`）和 AI 放大模型（`tools/upscale_models/`）。
 
-## Status and known differences
+## 现状与已知差异
 
-* The whole game is playable from the opening to the endings. Each script has been exercised automatically; long
-  stretches have not yet been checked by a human play-through.
-* Duel sprites are doubled with nearest-neighbour scaling instead of the original's edge-smoothing 2× filter (with
-  the HD pack they are smooth).
-* The original town toolbar is replaced by **菜单** / **出征** buttons in the top bar of story scenes.
-* UI layout follows the original style but is not pixel-identical.
+* 整个游戏从开场到各个结局都可以玩通。所有脚本都经过自动测试，但很多段落还没有经过人工完整试玩。
+* 原版单挑画面用带边缘平滑的 2 倍滤镜放大人物，本作使用最近邻放大；开启高清画面后则是平滑的。
+* 原版城镇工具栏改为剧情场景顶部的“菜单”和“出征”按钮。
+* 界面沿用原版风格，但不是逐像素一致。
+* Windows 版在 macOS 上导出，并用同一份数据包验证过可以运行，但还没有在 Windows 实机上测试。
 
-## Legal
+## 法律声明
 
-This is an unofficial fan project for preservation and study, not affiliated with or endorsed by Koei Tecmo or the
-mod's authors. *三国志曹操传* is © Koei Tecmo. The game content in `game/assets` (graphics, music, sound, video, text,
-scripts) is converted from the original game and remains the property of its respective owners.
+本项目是非官方的爱好者作品，仅用于保存和研究，与光荣特库摩及原 MOD 作者无关，也未获其认可。《三国志曹操传》版权归光荣特库摩所有。
+`game/assets` 中的游戏内容（图像、音乐、音效、视频、文本、脚本）由原版游戏转换而来，版权归各自权利人所有。
 
-The repository has no license file yet, so the code is "all rights reserved" by default; add a `LICENSE` to make
-the source in `game/src`, `tools` and `docs` reusable. Such a license would not cover `game/assets`.
+本仓库暂无许可证文件，因此代码默认保留所有权利。如需允许他人复用 `game/src`、`tools` 和 `docs` 中的代码与文档，
+需要添加 `LICENSE` 文件；该许可证不适用于 `game/assets`。
