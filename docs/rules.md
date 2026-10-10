@@ -584,6 +584,8 @@ Notation: `R` = script reader object @0x492f90; `ctx` = battle object 0x4b3d08 (
 touched. An explicit item (0x407dec) must be of the slot's kind (0x40c6ea) and usable by the person (0x407907: class
 equip table for weapons/armour; accessories by the family in item byte +0x17, 0xFF = anyone); its level 0 means
 automatic (as above for normal items, treasures L/7+1 ≤ 10) and is capped at 3 (treasures 10).
+*Port:* units whose entry got no op 0x48 keep the equipment of their reloaded base data instead of the class
+default (deliberate, keeps the enemy strength the port always had); explicit 0x48 codes follow the original.
 
 **op 0x44 battle_init** (0x412230): clear flags 0..255; 0x426c32(); u32 @0x55e9d4 = 0; for all 115 entries:
 person = 0xffff, flags = 0, mod byte @0x55a500[i] = 0; then entry[k].person = sortie_list[k] for the sortie list
@@ -672,7 +674,8 @@ Unit struct U (0x24 bytes):
 ### 10.3 AI modes and AI codes
 Slot `ai_mode` (0..6) → AI code unit[+0xe] via table 0x48e380 (SetAI 0x459d8b; refused for party members, who get
 code 7 = player control when on the player side, 0x45b700; modes ≥ 7 change nothing; a target person without a
-unit (0x45a751) or a point off the map (0x45a6bf) leaves the old target):
+unit (0x45a751) or a point off the map (0x45a6bf) leaves the old target). *Port:* party members deployed as allies
+(op 0x46) get the AI of their entry and act in the ally phase, as before; only op 0x4e leaves them alone:
 | ai_mode | code | meaning (CCZ editor names) [names G] | target |
 |---|---|---|---|
 | 0 | 3 | 被动出击 passive: acts only if it can reach a cell from which an opposite unit is attackable | — |

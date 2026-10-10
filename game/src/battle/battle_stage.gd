@@ -439,13 +439,15 @@ func create_battlefield(id: int) -> void:
 			var lv := int(d.get("lv", 0))
 			var level := mini(base + lv, 70) if lv <= 50 else maxi(base - (lv - 50), 1)
 			_promote(p, int(d.get("promo", 2)), level)
-			# 0x44cc85 → 0x4429f9 per slot; entries start with code 0 (default equipment) and level 1
-			p.equip_code(0, int(d.get("weapon", 0)), int(d.get("wlv", 1)))
-			p.equip_code(1, int(d.get("armor", 0)), int(d.get("alv", 1)))
-			p.equip_code(2, int(d.get("acc", 0)), 0xff)
+			# equipment codes from op 0x48 (0x4429f9 per slot). Without 0x48 the person keeps the equipment of its
+			# base data (the original would give the class default, code 0; kept as before on purpose).
+			if d.has("weapon"):
+				p.equip_code(0, int(d.get("weapon", 0)), int(d.get("wlv", 1)))
+				p.equip_code(1, int(d.get("armor", 0)), int(d.get("alv", 1)))
+				p.equip_code(2, int(d.get("acc", 0)), 0xff)
 		_unit_init(u, pid, flags, int(d.get("x", 0)), int(d.get("y", 0)), int(d.get("dir", 2)), bool(d.get("hidden", false)))
-		# SetAI refuses party members: on the player side they are player-controlled (code 7, 0x45b700)
-		if flags & 3 != 0 and not (flags & 1 == 0 and Game.is_member(pid)):
+		# allies and enemies get the AI of their entry, party members deployed as allies too
+		if flags & 3 != 0:
 			Mem.w8(u.addr + 8, 0xff)
 			_set_ai(u, clampi(int(d.get("ai", 1)), 0, 6), int(d.get("ai_person", 0xffff)), int(d.get("ai_x", 0)), int(d.get("ai_y", 0)))
 		else:
@@ -510,8 +512,6 @@ func _unit_reenter(u: BUnit, x: int, y: int, d: int) -> void:
 	for off in keep:
 		Mem.w8(u.addr + off, keep[off])
 	u.extra = extra
-	if u.slot < 35 and Game.is_member(u.pid):
-		u.mode = 7
 
 
 func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: bool) -> void:
