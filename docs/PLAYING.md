@@ -51,8 +51,10 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | Drag on the battle map | scroll the map; a drag never counts as a click |
 | Drag up/down on a long list | scroll the list (history, unit list, items …) |
 | Slide on a menu, lift | the entry under the finger is highlighted and picked when you lift it, so you can correct a near-miss before lifting |
-| **返回** (left of the picture) | a right click / Esc: cancel or go back; with nothing to cancel it opens the menu (in battle: end turn, unit list, save, load) |
-| **快进** (right of the picture) | fast-forward on/off: ×4 speed and text skips ahead, like holding Ctrl |
+| Tap an empty spot | cancel, like a right click: a tap outside a list closes it (outside the 攻击/策略/道具/待命 list it takes the move back, as a right click does); outside the highlighted range while picking a target stops picking; outside the blue range drops the selected unit |
+| **菜单** (top left) | the menu: in battle the system menu (end turn, unit list, objectives, save, load), in a story scene the scene menu. Only available when nothing is selected or open |
+| **返回** (left of the picture) | cancel or go back, like Esc (also advances text and skips a video). Dimmed when 菜单 is available |
+| **快进** (right of the picture) | fast-forward on/off: ×4 speed and text skips ahead, like holding Ctrl; the button is lit while on |
 
 Dialogue boxes show the speaker's portrait and name. Text types out; a click shows the rest, the next click
 continues.
@@ -117,7 +119,7 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 * Click an enemy or ally to show its movement and attack ranges.
 * Turn number, turn limit and weather are shown top right.
 
-**System menu** (right click / Esc on the map; **返回** on iPhone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
+**System menu** (right click / Esc on the map; **菜单** on iPhone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
 (objectives), **存储进度 / 读取进度** (save / load), **回到标题** (title).
 
 **Moving around the map:** arrow keys move the cursor; the mouse at a screen edge or a middle-button drag scrolls.

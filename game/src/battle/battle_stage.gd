@@ -361,6 +361,16 @@ func op_battle_prepare(ins: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ battlefield creation
+## Touch shell: at the player phase's top level (no unit selected) its 菜单 is the right click there.
+func menu_ready() -> bool:
+	return input != null and input.idle
+
+
+func open_menu() -> void:
+	if menu_ready():
+		view.cell_clicked.emit(view.cursor_cell, MOUSE_BUTTON_RIGHT)
+
+
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
 	if mode == 3:

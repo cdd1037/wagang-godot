@@ -16,6 +16,15 @@ func _ready() -> void:
 	ui = Game.main.ui
 
 
+## Touch shell: true while the scene waits at its top level, where its 菜单 button opens the system menu.
+func menu_ready() -> bool:
+	return false
+
+
+func open_menu() -> void:
+	pass
+
+
 # ------------------------------------------------------------------ argument helpers
 ## Integer argument with the mod's EV indirection resolved ({"var": n} -> EV[n]).
 func arg(ins: Dictionary, i: int) -> int:

@@ -102,8 +102,10 @@ On iPhone the game plays in landscape with the 4:3 picture in the middle and tou
 | Tap | left click: select, confirm, advance dialogue; on the battle map it also shows that cell's unit or terrain |
 | Drag on the battle map | scroll the map |
 | Drag up/down on a long list | scroll it; on a list, slide the finger to the entry you want and lift to pick it |
-| **返回** (left) | right click / Esc: cancel, or open the menu when there is nothing to cancel (battle: end turn, save, load) |
-| **快进** (right) | fast-forward on/off (like holding Ctrl) |
+| Tap an empty spot | cancel: outside a list closes it (outside the attack/strategy/item command list it takes the move back); outside a target range stops picking a target; outside the move range drops the selected unit |
+| **菜单** (top left) | the system menu (story: 菜单; battle: end turn, save, load …); only when nothing is selected |
+| **返回** (left) | cancel / go back, like Esc; dimmed when 菜单 is available |
+| **快进** (right) | fast-forward on/off (like holding Ctrl); lit while on |
 
 The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 

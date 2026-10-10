@@ -54,9 +54,9 @@ func _menu_tests() -> void:
 	var m := ChoiceMenu.new()
 	add_child(m)
 	var res := [-2]                   # lambdas capture locals by value: share a reference instead
-	var open := func(items: Array) -> void:
+	var open := func(items: Array, can_cancel := true) -> void:
 		res[0] = -2
-		res[0] = await m.choose(items)
+		res[0] = await m.choose(items, Vector2(-1, -1), can_cancel)
 	var long := []
 	for i in 30:
 		long.append("项目%d" % i)
@@ -106,6 +106,38 @@ func _menu_tests() -> void:
 	await _motion(a, b)
 	await _button(b, false)
 	_check(res[0] == 2, "slide to row 2 on a short list (got %d)" % res[0])
+	# a tap outside the box cancels a menu that can be cancelled …
+	var outside := Vector2(4, 4)
+	open.call(["甲", "乙", "丙", "丁"])
+	await get_tree().process_frame
+	_check(not m._rect.has_point(outside), "test point is outside the menu")
+	await _button(outside, true)
+	await _button(outside, false)
+	_check(res[0] == -1, "tap outside cancels (got %d)" % res[0])
+	# … but not one that can't (the title menu)
+	open.call(["甲", "乙", "丙", "丁"], false)
+	await get_tree().process_frame
+	await _button(outside, true)
+	await _button(outside, false)
+	_check(res[0] == -2, "tap outside a menu that can't be cancelled does nothing (got %d)" % res[0])
+	# a press on a row dragged out of the box picks nothing and cancels nothing
+	var r1 := m._row_rect(1).get_center()
+	await _button(r1, true)
+	await _motion(r1, outside)
+	await _button(outside, false)
+	_check(res[0] == -2, "drag from a row to outside does nothing (got %d)" % res[0])
+	await _button(r1, true)
+	await _button(r1, false)
+	_check(res[0] == 1, "then a tap picks row 1 (got %d)" % res[0])
+	# picking a target: a tap outside the highlighted cells cancels (touch only), a right click always
+	var bi := BattleInput.new(null)
+	var cells: Array[Vector2i] = [Vector2i(3, 3), Vector2i(4, 3)]
+	_check(bi._cancels([Vector2i(9, 9), MOUSE_BUTTON_LEFT], cells), "target pick: tap outside the range cancels")
+	_check(not bi._cancels([Vector2i(4, 3), MOUSE_BUTTON_LEFT], cells), "target pick: tap inside does not")
+	_check(bi._cancels([Vector2i(4, 3), MOUSE_BUTTON_RIGHT], cells), "target pick: right click cancels")
+	Game.touch = false
+	_check(not bi._cancels([Vector2i(9, 9), MOUSE_BUTTON_LEFT], cells), "target pick with a mouse: a click outside is ignored")
+	Game.touch = true
 	m.queue_free()
 	await get_tree().process_frame
 

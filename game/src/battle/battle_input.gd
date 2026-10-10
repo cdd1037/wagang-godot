@@ -4,6 +4,7 @@ extends RefCounted
 
 var st: BattleStage
 var end_turn := false
+var idle := false              # the player phase waits at its top level (no unit selected; touch shell's 菜单)
 var _bot: InputBot
 
 
@@ -64,7 +65,9 @@ func player_phase() -> void:
 	if pu.is_empty():
 		return      # no unit to command (0x44e0d9)
 	while not end_turn and not st._battle_finished():
+		idle = true
 		var r := await _click()
+		idle = false
 		if st._battle_finished():
 			break
 		var cell: Vector2i = r[0]
@@ -192,12 +195,18 @@ func command_menu(u: BUnit) -> bool:
 	return false
 
 
+## Picking a target: a right click cancels; with touch controls so does a tap outside the highlighted cells
+## (a tap inside them that hits no target is ignored, as with a mouse).
+func _cancels(r: Array, cells: Array) -> bool:
+	return r[1] == MOUSE_BUTTON_RIGHT or (Game.touch and not cells.has(r[0]))
+
+
 func _do_attack(u: BUnit, targets: Array[BUnit]) -> bool:
 	var cells := st.actions.attack_cells(u, u.pos)
 	st.view.set_attack_cells(cells)
 	while true:
 		var r := await _click()
-		if r[1] == MOUSE_BUTTON_RIGHT:
+		if _cancels(r, cells):
 			st.view.clear_highlights()
 			return false
 		var t := st.unit_at(r[0])
@@ -229,7 +238,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 		var chosen := false
 		while true:
 			var r := await _click()
-			if r[1] == MOUSE_BUTTON_RIGHT:
+			if _cancels(r, cells):
 				break
 			var c: Vector2i = r[0]
 			if not cells.has(c):
@@ -278,7 +287,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 	st.view.set_attack_cells(cells)
 	while true:
 		var r := await _click()
-		if r[1] == MOUSE_BUTTON_RIGHT:
+		if _cancels(r, cells):
 			st.view.clear_highlights()
 			return false
 		var t := st.unit_at(r[0])

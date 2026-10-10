@@ -2,19 +2,26 @@ class_name TouchShell
 extends Control
 ## Mobile front end (the main scene on iOS; run res://src/touch/touch_shell.tscn to try it on a desktop).
 ## The game, still a 640x480 world, runs in a SubViewport scaled to the screen height at 4:3 in the middle of the
-## landscape screen; the side bars hold touch buttons for what needs a right button or a key with a mouse:
-##   返回 = right click / Esc: cancels, and with nothing to cancel opens the system menu (end turn, save, ...)
+## landscape screen; the side bars hold touch buttons for what needs a right button or a key with a mouse. The
+## original's right click does two jobs, which get a button each here:
+##   返回 = cancel / go back (Esc); dimmed at the top level, where a right click would open the menu instead
+##   菜单 = (top left) the system menu (end turn, save, ...), only at the top level: no unit selected / a story
+##          scene waiting
 ##   快进 = holding Ctrl (toggle): fast animations, text skips ahead
 ## Taps reach the game as left clicks (Godot's touch-to-mouse emulation); Game.touch makes the battle map click on
-## release and pan on drag, and lets menus scroll by dragging.
+## release and pan on drag, lets menus scroll by dragging, and makes a tap outside a menu or a target range cancel.
 
 const GAME_SIZE := Vector2i(640, 480)
+const BACK := 0
+const MENU := 1
+const FAST := 2
 
 var _box: SubViewportContainer
 var _vp: SubViewport
 var _game_rect := Rect2()
 var _buttons: Array = []          # {text, sub, rect: Rect2, toggle: bool}
 var _held := -1                   # button under the pressing finger / mouse
+var _menu_ready := false          # the game waits at its top level (菜单 on, 返回 dimmed)
 var _shot_t := 0.0
 var _shot_n := 0
 
@@ -30,8 +37,9 @@ func _ready() -> void:
 	Game.shell = self
 	Game.touch = true
 	_buttons = [
-		{"text": "返回", "sub": "取消 · 菜单", "toggle": false, "rect": Rect2()},
-		{"text": "快进", "sub": "", "toggle": true, "rect": Rect2()},
+		{"text": "返回", "toggle": false, "rect": Rect2()},
+		{"text": "菜单", "toggle": false, "rect": Rect2()},
+		{"text": "快进", "toggle": true, "rect": Rect2()},
 	]
 	_box = SubViewportContainer.new()
 	_box.stretch = true
@@ -77,9 +85,27 @@ func _layout() -> void:
 	var bh := s.y * 0.17
 	var y := s.y * 0.58 - bh / 2              # within thumb reach
 	var left_x := inset + (bar - inset - bw) / 2
-	_buttons[0]["rect"] = Rect2(left_x, y, bw, bh)
-	_buttons[1]["rect"] = Rect2(s.x - left_x - bw, y, bw, bh)
+	_buttons[MENU]["rect"] = Rect2(left_x, s.y * 0.06, bw, bh)           # top left
+	_buttons[BACK]["rect"] = Rect2(left_x, y, bw, bh)
+	_buttons[FAST]["rect"] = Rect2(s.x - left_x - bw, y, bw, bh)
 	queue_redraw()
+
+
+## Whether a button does anything now: 菜单 only at the game's top level, 返回 everywhere else.
+func _enabled(i: int) -> bool:
+	match i:
+		BACK:
+			return not _menu_ready
+		MENU:
+			return _menu_ready
+	return true
+
+
+func _stage() -> Node:
+	var m: Variant = Game.main
+	if m == null or not is_instance_valid(m) or m.stage == null or not is_instance_valid(m.stage):
+		return null
+	return m.stage
 
 
 func _draw() -> void:
@@ -91,17 +117,17 @@ func _draw() -> void:
 		if r.size.x <= 0:
 			continue
 		UIStyle.draw_panel(self, r)
-		if i == _held or (b["toggle"] and Game.fast_toggle):
+		var on: bool = b["toggle"] and Game.fast_toggle
+		if i == _held or on:
 			draw_rect(r.grow(-4), UIStyle.HILITE)
 		var fs := int(h * 0.05)
-		var col := UIStyle.NAME_COLOR if not (b["toggle"] and Game.fast_toggle) else Color(1, 1, 1)
-		var sub: String = b["sub"]
-		var ty := r.position.y + r.size.y * (0.5 if sub == "" else 0.42) + fs * 0.35
+		var col := Color(1, 1, 1) if on else UIStyle.NAME_COLOR
+		if not _enabled(i):
+			draw_rect(r, Color(0, 0, 0, 0.55))
+			col = Color(0.55, 0.55, 0.6)
+		var ty := r.position.y + r.size.y * 0.5 + fs * 0.35
 		draw_string(f, Vector2(r.position.x + 2, ty + 2), b["text"], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, UIStyle.SHADOW)
 		draw_string(f, Vector2(r.position.x, ty), b["text"], HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, col)
-		if sub != "":
-			var fs2 := int(h * 0.026)
-			draw_string(f, Vector2(r.position.x, r.position.y + r.size.y * 0.78), sub, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs2, UIStyle.TEXT_COLOR)
 
 
 func _button_at(p: Vector2) -> int:
@@ -127,9 +153,10 @@ func _input(ev: InputEvent) -> void:
 	var i := _button_at(p)
 	if pressed:
 		if i >= 0:
-			_held = i
-			queue_redraw()
 			get_viewport().set_input_as_handled()
+			if _enabled(i):
+				_held = i
+				queue_redraw()
 		return
 	if _held < 0:
 		return
@@ -137,15 +164,19 @@ func _input(ev: InputEvent) -> void:
 	_held = -1
 	queue_redraw()
 	get_viewport().set_input_as_handled()
-	if i == was:
+	if i == was and _enabled(i):
 		_activate(i)
 
 
 func _activate(i: int) -> void:
 	match i:
-		0:
+		BACK:
 			_send_cancel()
-		1:
+		MENU:
+			var st := _stage()
+			if st:
+				st.open_menu()
+		FAST:
 			Game.fast_toggle = not Game.fast_toggle
 			queue_redraw()
 
@@ -161,6 +192,11 @@ func _send_cancel() -> void:
 
 
 func _process(_d: float) -> void:
+	var st := _stage()
+	var ready: bool = st != null and st.menu_ready()
+	if ready != _menu_ready:
+		_menu_ready = ready
+		queue_redraw()
 	# debug: WG_SHELLSHOT=dir saves the whole screen (side bars included) every WG_SHOT_EVERY seconds (default 3)
 	var dir := OS.get_environment("WG_SHELLSHOT")
 	if dir == "":

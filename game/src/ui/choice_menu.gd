@@ -24,6 +24,7 @@ var _touch_down := false     # touch: a press on this open menu, not yet release
 var _touch_y := 0.0          # touch: finger y where the list last scrolled by a row
 var _touch_from := Vector2.ZERO
 var _touch_scrolled := false
+var _touch_outside := false  # touch: the press was outside the menu box (a tap there cancels)
 
 
 func _init() -> void:
@@ -157,11 +158,14 @@ func _row_at(p: Vector2) -> int:
 
 ## Touch: a press highlights the row under the finger and the release picks it, so a finger can slide onto the
 ## right row first. A vertical drag on a list longer than the screen scrolls it instead (and picks nothing).
+## A tap outside the box (pressed and released there) cancels, like a right click, if the menu can be cancelled.
 func _touch_input(ev: InputEventMouse) -> void:
 	if ev is InputEventMouseMotion:
 		if not _touch_down:
 			return
 		var p := ev.position
+		if _touch_outside:
+			return
 		if items.size() > _rows and (_touch_scrolled or absf(p.y - _touch_from.y) > TAP_SLOP):
 			if not _touch_scrolled:
 				_touch_scrolled = true
@@ -184,13 +188,17 @@ func _touch_input(ev: InputEventMouse) -> void:
 		_touch_down = true
 		_touch_scrolled = false
 		_touch_from = mb.position
+		_touch_outside = not _rect.has_point(mb.position)
 		var i := _row_at(mb.position)
 		if i >= 0 and i != sel:
 			sel = i
 			queue_redraw()
 	elif _touch_down:
 		_touch_down = false
-		if not _touch_scrolled:
+		if _touch_outside:
+			if cancellable and not _rect.has_point(mb.position):
+				_finish(-1)
+		elif not _touch_scrolled:
 			var i := _row_at(mb.position)
 			if i >= 0:
 				sel = i

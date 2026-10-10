@@ -43,6 +43,28 @@ func _click_cell(c: Vector2i, button := MOUSE_BUTTON_LEFT) -> void:
 		await get_tree().process_frame
 
 
+## Tap a point of the 640x480 game screen like a finger: press and release, no hover before.
+func _tap(p: Vector2) -> void:
+	var sp := get_viewport().get_screen_transform() * p
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.position = sp
+		ev.global_position = sp
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
+
+
+## A screen point off `box` whose map cell is none of `cells` (an Array of cells or a Dictionary keyed by cell):
+## somewhere to tap "nothing".
+func _empty_point(box: Rect2, cells: Variant) -> Vector2:
+	for p in [Vector2(30, 100), Vector2(610, 100), Vector2(30, 250), Vector2(610, 250), Vector2(320, 90)]:
+		if not box.has_point(p) and not cells.has(st.view.cell_at(st.view.camera.position + p)):
+			return p
+	return Vector2(30, 100)
+
+
 func _key(action: String) -> void:
 	var ev := InputEventAction.new()
 	ev.action = action
@@ -94,6 +116,81 @@ func fx_test(ids: PackedStringArray) -> void:
 		for slot in before:
 			var t := st.units[slot]
 			print("FXTEST s=%d slot %d %s: hp %d→%d status %d→%d buffs %s→%s" % [s, slot, "enemy" if t.is_enemy_of(u) else "own", before[slot][0], t.hp, before[slot][1], t.status, before[slot][2], [t.buff(0), t.buff(1), t.buff(2), t.buff(3), t.buff(4)]])
+	st.get_tree().quit()
+
+
+## WG_BOTMODE=touchcancel (run in the touch shell): taps on empty places cancel — outside the command menu (undoes
+## the move), outside the attack range, outside the move range, outside the system menu (opened by 菜单).
+## Prints "TOUCHCANCEL: PASS", and writes the lines to touchcancel.txt in the bot's folder (an iOS app's prints
+## don't reach a log).
+func touch_cancel_test() -> void:
+	Game.set_meta("bot_owns_input", true)      # stops WG_ACCEPT_SPAM, which would pick menu entries
+	await _wait(1.0)
+	var ok := [true]
+	var lines: Array[String] = []
+	var expect := func(cond: bool, what: String) -> void:
+		lines.append("TOUCHCANCEL %s: %s" % ["ok" if cond else "FAIL", what])
+		print(lines[-1])
+		ok[0] = ok[0] and cond
+	var u: BUnit = null
+	for x in st.input._player_units():
+		if x.active() and not x.acted:
+			u = x
+			break
+	expect.call(u != null and st.input.idle, "player phase at its top level")
+	if u == null:
+		st.get_tree().quit()
+		return
+	var orig := u.pos
+	var reach := st.actions.reachable(u)
+	# move next to the nearest enemy if possible (so 攻击 is available), like run_phase
+	var dest := orig
+	var best := 1 << 30
+	for e in st.units:
+		if e.active() and e.is_enemy_of(u):
+			for c in reach:
+				var d := Grid.manhattan(c, e.pos)
+				if d >= 1 and d < best and c != orig:
+					best = d
+					dest = c
+	await _click_cell(orig)
+	await _wait(0.4)
+	await _click_cell(dest)
+	await _wait(0.9)
+	expect.call(st.ui.menu._active, "command menu open after moving")
+	await _tap(_empty_point(st.ui.menu._rect, []))
+	await _wait(0.5)
+	expect.call(not st.ui.menu._active and u.pos == orig, "a tap outside the command menu undoes the move")
+	await _click_cell(dest)
+	await _wait(0.9)
+	if not st.actions.attackable_targets(u, u.pos).is_empty():
+		await _key("ui_accept")
+		await _wait(0.4)
+		var cells: Array = st.actions.attack_cells(u, u.pos)
+		cells.append(u.pos)
+		await _tap(_empty_point(Rect2(), cells))
+		await _wait(0.5)
+		expect.call(st.ui.menu._active, "a tap outside the attack range goes back to the command menu")
+	else:
+		print("TOUCHCANCEL: no enemy in reach, attack-range check skipped")
+	await _tap(_empty_point(st.ui.menu._rect, []))
+	await _wait(0.5)
+	expect.call(u.pos == orig and not st.input.idle, "undone again, unit still selected")
+	await _tap(_empty_point(Rect2(), reach))
+	await _wait(0.5)
+	expect.call(st.input.idle, "a tap outside the move range drops the selection")
+	Game.shell._activate(TouchShell.MENU)
+	await _wait(0.5)
+	expect.call(st.ui.menu._active, "菜单 opens the system menu")
+	await _tap(_empty_point(st.ui.menu._rect, []))
+	await _wait(0.5)
+	expect.call(not st.ui.menu._active and st.input.idle, "a tap outside the system menu closes it")
+	lines.append("TOUCHCANCEL: PASS" if ok[0] else "TOUCHCANCEL: FAILED")
+	print(lines[-1])
+	var f := FileAccess.open(shot_dir.path_join("touchcancel.txt"), FileAccess.WRITE)
+	if f:
+		f.store_string("\n".join(lines) + "\n")
+		f.close()
 	st.get_tree().quit()
 
 
@@ -152,6 +249,9 @@ func run_phase() -> void:
 	if OS.get_environment("WG_BOTMODE") == "duel":
 		await duel_test()
 		return
+	if OS.get_environment("WG_BOTMODE") == "touchcancel":
+		await touch_cancel_test()
+		return
 	await _wait(0.6)
 	for u in st.input._player_units():
 		if not u.active() or u.acted:
@@ -196,9 +296,10 @@ func run_phase() -> void:
 				await _key("ui_down")
 			await _key("ui_accept")
 			await _wait(0.4)
-	# end turn via system menu (opened by a right click, or in the touch shell by its 返回 button)
+	# end turn via system menu (opened by a right click, or in the touch shell by its 菜单 button)
 	if Game.shell:
-		Game.shell._activate(0)
+		await _wait(0.2)                  # the shell sees the top level on its next frame
+		Game.shell._activate(TouchShell.MENU)
 	else:
 		await _click_cell(st.units[0].pos if st.units[0].active() else Vector2i(0, 0), MOUSE_BUTTON_RIGHT)
 	await _wait(0.5)

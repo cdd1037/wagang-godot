@@ -62,6 +62,15 @@ func _ready() -> void:
 			_menu_sortie())
 
 
+func menu_ready() -> bool:
+	return _waiting_click
+
+
+func open_menu() -> void:
+	if _waiting_click:
+		_system_menu()
+
+
 func _bar_button(text: String, pos: Vector2) -> Button:
 	var b := Button.new()
 	b.text = text

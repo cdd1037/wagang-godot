@@ -61,6 +61,7 @@ All options are environment variables read at start-up, for example
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
+| `WG_BOTMODE=touchcancel` | Input-bot variant for the touch shell: checks that taps on empty spots cancel and that 菜单 opens the system menu; prints `TOUCHCANCEL: PASS` and writes `touchcancel.txt` to the bot folder |
 | `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids from the first player unit at the first enemy and screenshot their animations. With `WG_AUTO=1` instead of the bot (no screenshots) it prints each target's HP, status and buffs before and after, e.g. `WG_START=1 WG_AUTO=1 WG_GOD=1 WG_FXTEST=38,66` |
 | `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=18` to check the restore |
 | `WG_ACCEPT_SPAM=1` | Press Enter every 0.6 s |
@@ -131,15 +132,20 @@ On mobile, `project.godot` runs `res://src/touch/touch_shell.tscn` (`run/main_sc
 * Lays out in window pixels. The window has no content scaling there (`window/stretch/mode.mobile="disabled"`).
 * Runs `main.tscn` inside a `SubViewport` with `size_2d_override` 640×480. The game still sees an exact 640×480
   screen, and it is drawn at the display's resolution, so HD art and text stay sharp.
-* Puts the 4:3 picture in the middle and the **返回** / **快进** buttons in the side bars, clear of the notch.
-  **返回** sends Esc; every cancel path also takes `ui_cancel`. **快进** toggles `Game.fast_toggle`, which
-  `Game.skip_held()` treats like holding Ctrl.
+* Puts the 4:3 picture in the middle and the buttons in the side bars, clear of the notch. The original's right
+  click does two jobs, and each gets its own button:
+  * **菜单** (top left) calls the stage's `open_menu()`. It is only enabled while the stage's `menu_ready()` is
+    true: a story scene waiting (`_waiting_click`), or the battle player phase at its top level (`BattleInput.idle`).
+  * **返回** sends Esc; every cancel path also takes `ui_cancel`. It is dimmed while 菜单 is enabled.
+  * **快进** toggles `Game.fast_toggle`, which `Game.skip_held()` treats like holding Ctrl.
 
 Game-side switches:
 
 * `Game.touch` (set by the shell) makes `BattleView` click a cell on release and pan on drag, and show the tapped
   cell's info panel.
 * It also makes `ChoiceMenu` pick on release and scroll long lists by dragging. Desktop input is unchanged.
+* Tapping an empty spot cancels. Outside a cancellable `ChoiceMenu` (pressed and released there) the menu closes.
+  Outside the highlighted cells while picking a target, `BattleInput._cancels` treats the tap as a right click.
 * `Game.main` replaces `/root/Main`, which does not exist inside the shell.
 * `Game._input` ignores presses on the side bars.
 * On mobile, `Assets` halves HD textures over 4096 px and keeps a smaller HD cache.
@@ -149,8 +155,11 @@ Try it on the desktop; the mouse acts as a finger, and right click still works:
 ```sh
 cd game
 WG_SHELLSIZE=1734x800 godot --path . res://src/touch/touch_shell.tscn
-# the input bot through the shell (taps on release, 返回 for the system menu):
+# the input bot through the shell (taps on release, 菜单 for the system menu):
 WG_START=1 WG_ACCEPT_SPAM=1 WG_NOVIDEO=1 WG_INPUTBOT=/tmp/bot WG_BOTTURNS=2 WG_SHELLSIZE=1734x800 \
+  godot --path . res://src/touch/touch_shell.tscn
+# tap-an-empty-spot checks in a real battle; prints TOUCHCANCEL: PASS, also written to /tmp/bot/touchcancel.txt:
+WG_START=1 WG_ACCEPT_SPAM=1 WG_NOVIDEO=1 WG_INPUTBOT=/tmp/bot WG_BOTMODE=touchcancel WG_SHELLSIZE=1734x800 \
   godot --path . res://src/touch/touch_shell.tscn
 ```
 

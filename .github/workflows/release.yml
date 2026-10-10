@@ -124,7 +124,7 @@ jobs:
           **iPhone** (iOS 15+, iPhone XS or newer): \`WaGang-iOS-build-${BUILD}.ipa\` is added a few minutes after the
           others. It is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID (with a free
           Apple ID the app has to be re-signed every 7 days). Touch controls: tap = click, drag = scroll the map or a
-          list, **返回** = right click (cancel / menu), **快进** = fast forward.
+          list, tap an empty spot or **返回** = cancel, **菜单** (top left) = system menu, **快进** = fast forward.
           EOF
           files=("build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip")
           # only the build of main's newest commit becomes "Latest" (not a re-run of an older one)

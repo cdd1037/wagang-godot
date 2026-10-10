@@ -130,6 +130,8 @@ func _boot() -> void:
 		t.wait_time = 0.6
 		t.autostart = true
 		t.timeout.connect(func() -> void:
+			if Game.has_meta("bot_owns_input"):
+				return
 			for pressed in [true, false]:
 				var ev := InputEventAction.new()
 				ev.action = "ui_accept"
