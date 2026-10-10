@@ -152,11 +152,13 @@ rpg_sprites/backgrounds/screens), effects (`tools/gfx_effects.py`). Shared helpe
 ### 5.2 RPG actor sprites (yueyue.wa)
 * yueyue.wa = Ls12 archive at file offset 0x500 (hidden-offset trick), 960 entries of 48x1280 8bpp
   (20 frames of 48x64, index 0 transparent, shared sprite palette). **Character c = entries 2c (front view,
-  facing down-left) and 2c+1 (back view, facing up-left)** → 480 characters.
+  facing down-left) and 2c+1 (back view, facing up-right)** → 480 characters.
 * Cache loader 0x426c6a(c, slot) builds a 0x3c000-byte slot `[2c+1 | mirror(2c) | 2c | mirror(2c+1)]`
   (mirror = 0x41ee53 row flip); frame pointer 0x42b010 = `slot + (dir*20 + frame)*0xC00`,
-  dir = actor word +0x2e, frame = actor word +0x2a. **Direction codes: 0 = up-left (NW, −X),
-  1 = down-right (SE, +X, mirrored front), 2 = down-left (SW, +Y), 3 = up-right (NE, −Y, mirrored back).**
+  dir = actor word +0x2e, frame = actor word +0x2a. **Direction codes: 0 = up-right (NE, −Y, back view),
+  1 = down-right (SE, +X, mirrored front), 2 = down-left (SW, +Y, front), 3 = up-left (NW, −X, mirrored back).**
+  They are the walk step codes: the step tables are dx@0x48b8c0 = (0,1,0,−1), dy@0x48b8b0 = (−1,0,1,0), and each
+  step sets +0x2e to its code (0x42a4f5).
 * Frames: 0 stand, 1/2 walk; 3..19 action poses (common: 3 kneel, 4/5 raise arm, 6 hand-to-head/sweat,
   8 bow, 12 lying/fallen; later frames are character specific). Action ids of the script ops presumably
   index these frames directly (script agent to confirm).

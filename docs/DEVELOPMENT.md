@@ -91,8 +91,8 @@ write `niuniu.bin` (the endings record).
 
 Headless unit checks (`tools/gtest.sh NAME`): `t_parse` loads every script (catches parse errors anywhere),
 `t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
-`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling), `t_person` prints
-person stats.
+`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling), `t_rpgwalk` story
+walking (route order and facing per step, 0x429159), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 

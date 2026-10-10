@@ -39,13 +39,14 @@ def conv_rpg(out, quantize):
                   '(front view) and 2c+1 (back view), each 48x1280 = 20 frames of 48x64, index 0 transparent',
         'count': n, 'file_pattern': '%03d.png', 'frame_w': FW, 'frame_h': FH, 'frames_per_direction': NF,
         'layout': 'sheet 960x256: row = direction code d (0..3), column = frame 0..19',
-        'directions': {'0': 'up-left / NW (-X): entry 2c+1',
+        'directions': {'0': 'up-right / NE (-Y): entry 2c+1',
                        '1': 'down-right / SE (+X): mirror of entry 2c',
                        '2': 'down-left / SW (+Y): entry 2c',
-                       '3': 'up-right / NE (-Y): mirror of entry 2c+1',
+                       '3': 'up-left / NW (-X): mirror of entry 2c+1',
                        'evidence': 'loader 0x426c6a builds a 0x3c000 slot [2c+1 | mirror(2c) | 2c | mirror(2c+1)]; '
                                    'frame ptr 0x42b010 = slot + (dir*20 + frame)*0xC00 (dir = actor+0x2e, '
-                                   'frame = actor+0x2a)'},
+                                   'frame = actor+0x2a); walk steps set dir to the step code (0x42a4f5), whose '
+                                   'deltas are dx@0x48b8c0 = (0,1,0,-1), dy@0x48b8b0 = (-1,0,1,0)'},
         'frames': {'0': 'stand', '1': 'walk A', '2': 'walk B',
                    '3..19': 'action poses (common: 3 kneel, 4/5 raise arm, 6 hand to head/sweat, 8 bow, '
                             '12 lying/fallen; later frames are character specific)'},

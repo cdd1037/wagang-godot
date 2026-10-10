@@ -3,7 +3,9 @@ extends Node2D
 ## A character in a story (R) scene. Isometric half-cell coordinates (x, y, z).
 ## Screen mapping (0x4272c5 with camX=60, camY=25, W=200, scene view at y=40):
 ##   foot point (sx, sy) = (8*(x-y) + 312, 4*(x+y) - 8*z - 152); 48x64 frame drawn at (sx, sy-64).
-## Directions: 0 up-left (-X), 1 down-right (+X), 2 down-left (+Y), 3 up-right (-Y).
+## Directions (actor +0x2e = sprite row): 0 up-right (-Y, back view), 1 down-right (+X, mirrored front),
+## 2 down-left (+Y, front), 3 up-left (-X, mirrored back) — the walk step tables dx@0x48b8c0 = (0,1,0,-1),
+## dy@0x48b8b0 = (-1,0,1,0); each step sets +0x2e to its code (0x42a4f5).
 ## Actions (table 0x48b920): 0 = walk cycle frames [0,1,0,2] (idle shows frame 0),
 ## 1..17 = single pose frame action+2, 18 = nothing.
 
@@ -81,26 +83,45 @@ func _process(delta: float) -> void:
 			queue_redraw()
 
 
-## Walk to (x, y): first along X, then along Y (original moves axis by axis), then face `end_dir`.
+const STEP_DX := [0, 1, 0, -1]
+const STEP_DY := [-1, 0, 1, 0]
+
+
+## Direction codes of the steps from (x0, y0) to (x1, y1), as the original's path in open ground: it starts along
+## the axis with the larger distance, X on a tie (0x42855f), and keeps its direction while that still gets closer
+## (0x42836e), so it walks that axis first, then the other. (The original's distance field, 0x429266, also routes
+## around blocked cells; that is not modelled.)
+static func walk_steps(x0: int, y0: int, x1: int, y1: int) -> Array[int]:
+	var dx := x1 - x0
+	var dy := y1 - y0
+	var sx: Array[int] = []
+	for i in absi(dx):
+		sx.append(1 if dx > 0 else 3)
+	var sy: Array[int] = []
+	for i in absi(dy):
+		sy.append(2 if dy > 0 else 0)
+	if absi(dy) > absi(dx):
+		sy.append_array(sx)
+		return sy
+	sx.append_array(sy)
+	return sx
+
+
+## Walk to (x, y) step by step (facing each step's direction), then face `end_dir`: op 0x32 → 0x429159, which
+## turns a facing above 3 into 0. end_dir -1 keeps the last step's facing.
 func walk_to(x: int, y: int, end_dir: int = -1, fast := false) -> void:
 	walking = true
 	_anim_t = 0.0
 	var st := 0.0 if fast else STEP_TIME
-	while gx != x:
-		dir = 1 if x > gx else 0
-		var tgt := foot_point(gx + signi(x - gx), gy, gz)
-		await _tween_to(tgt, st)
-		gx += signi(x - gx)
-		_place()
-	while gy != y:
-		dir = 2 if y > gy else 3
-		var tgt2 := foot_point(gx, gy + signi(y - gy), gz)
-		await _tween_to(tgt2, st)
-		gy += signi(y - gy)
+	for d in walk_steps(gx, gy, x, y):
+		dir = d
+		await _tween_to(foot_point(gx + STEP_DX[d], gy + STEP_DY[d], gz), st)
+		gx += STEP_DX[d]
+		gy += STEP_DY[d]
 		_place()
 	walking = false
 	if end_dir >= 0:
-		dir = end_dir & 3
+		dir = end_dir if end_dir <= 3 else 0
 	set_action(action if action != 0 else 0)
 	frame = 0 if action == 0 else action + 2
 	queue_redraw()
