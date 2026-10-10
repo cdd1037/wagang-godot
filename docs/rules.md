@@ -310,7 +310,7 @@ then depth += 1; Attack(def, att)                    # damage mode has counter b
 "Damage strategy" set (0x449bac/0x449c36): ids 0-20, 22, 33-36, 38, 64, 65.
 ```
 if not preview and not chance(StratHit(caster,target,s)): return 0
-if not strategy_terrain_ok(s, caster, target): return 0       # 0x420422 [TODO: terrain/weather rule]
+if not 0x420422(s, caster, target): return 0                  # usability, §5.6
 I = Spirit(caster); J = Spirit(target)          # 0x4e2171 = 0x4db078(1): BU::Int (effect 54 能力校准 → max(atk,int))
 dmg = level(caster) + 45
 if I >= J: dmg += (I - J)/3 else dmg = sat_sub(dmg, (J - I)/3)
@@ -332,7 +332,7 @@ power[s] (%): 焦热75 烈焰90 炎雷50 炼狱70 赤链100 浊流75 惊涛90 �
 ```
 if target.person == 0x89: 0
 if s == 21 暗杀 and target.unit[5] != 0 and target.person < 0xd2: 0
-if not strategy_terrain_ok(...): 0
+if not 0x420422(s, caster, target): 0        # full usability check, §5.6 (AI casters: e.g. 伪书 on a confused target)
 if target.status & 8 and s not in (9, 21): 100
 A = Spirit(caster) + Morale(caster); B = Spirit(target) + Morale(target)
 h = same 4-band curve as physical hit (A vs B): 100 / (A-B)*10/B+90 / (A-B/2)*30/(B/2)+60 / sat_sub(A,B/3)*30/(B/3)+30
@@ -415,21 +415,35 @@ EXP per target (0x420efb, strategy kind byte +0xb = 0): 八阵 is in the damage 
 when the stored amount (damage, or the negated heal as an unsigned number) is not below the target's HP; 玄武 gets the
 small formula. The caster gains the largest value × EXP multiplier.
 
-### 5.6 Strategy usability / terrain check (0x420422(s, caster, target, show_msg)) [C]
-Category table 0x42093c[s] → checks (all "fails" make the strategy unusable on that target):
-* caster has effect 50 (左思兵法 "ignore terrain") → element strategies (cat 0-3) always allowed.
-* fire (焦热..赤链): target terrain ∈ {平原 草原 树林 桥梁 城内 城池 关隘 鹿砦 村庄 兵营 民居 宝物库} (0x420ab6)
-* water (浊流..狂澜): target terrain ∈ {雪原 桥梁 浅滩 沼泽 大河} (0x420b17)
-* wind (烟尘..飓风): target terrain ∈ {平原 草原 荒地 山地 雪原 桥梁 浅滩 沼泽 大河} (0x420b42)
-* earth (落石..移山): target terrain ∈ {荒地 山地} (0x420b98)
-The remaining checks only apply when caster mode byte unit[0xe] != 7 [G: 7 = scripted/AI-forced?]:
-* 暗算: not if caster HP == MaxHP; 暗鬼: not if caster MP == MaxMP
-* debuffs 23-30: not if target's relevant buff level == 2 [G: already debuffed this turn]
-* 伪书/伪令: not if confused; 毒烟/瘴雾: not if poisoned; 陷阱/濠壑: not if paralysed; 封印: not if sealed
-* heals 39-43: not if target HP full; 开导/诫谕 (44,45): not if MP full; 棒喝/超脱: not if no status (0x41e030)
-* buffs 49-56: not if relevant buff level ≥ 4 (already buffed); 聚气: not if attack buff ≥4
-* 战备 (cat 15): not on self ("不能对自己使用"); target must not have acted-flags clear... (0x425af0/0x43ff54)
-* 暗杀 八阵 急行 weather: mod handler 0x4dbf8a.
+### 5.6 Strategy usability (0x420422(s, caster, target, show_msg)) and castability (0x41fec9) [C]
+0x420422: strategies ≥ 0x3e are always usable; otherwise the category table 0x42093c[s] picks a case of the jump table
+0x4208f4. "AI" below means the caster's AI code ≠ 7 (a unit the player does not command); for a player-commanded
+caster only the terrain checks and the self check apply.
+| cat | strategies | fails when |
+|---|---|---|
+| 0–3 | fire 0-4, water 5-9, wind 10-14, earth 15-19 | the target's terrain does not fit (0x420ab6 / 0x420b17 / 0x420b42 / 0x420b98), unless the caster has effect 50 (左思兵法). Message 不能在这里使用。 |
+| 4 | 暗算 20 | AI and caster HP == MaxHP |
+| 5 | 暗鬼 22 | AI and caster MP (low byte, 0x472840) == MaxMP |
+| 6 | debuffs 23-30 | AI and the target's level of that stat (0x420bbd: 爆发, 士气, 攻击/精神 by family, 防御) is exactly 2 |
+| 7 | 伪书 伪令 31-32 | AI and the target is confused (0x08) |
+| 8 | 毒烟 瘴雾 33-34 | AI and the target is poisoned (0x10) |
+| 9 | 陷阱 濠壑 35-36 | AI and the target is paralysed (0x02) |
+| 10 | 封印 37 | AI and the target is sealed (0x04) |
+| 11 | heals 39-43 | AI and the target's HP == MaxHP |
+| 12 | (none) | AI and the target's MP (low byte) == MaxMP |
+| 13 | 棒喝 超脱 46-47 | AI and the target has no status |
+| 14 | buffs 49-56 | AI and the target's level of that stat is ≥ 4 |
+| 15 | 开导 诫谕 44-45, 战备 57 | the target is the caster (不能对自己使用。); AI: the target has neither moved nor acted, or its colour is 0 |
+| 16 | 聚气 61 | AI and the target's 攻击/精神 level is ≥ 4 |
+| 17 | 暗杀 21, 八阵 38, 急行 48, weather 58-60 | mod 0x4dbf8a compares the category (not s) with 0x15, so it never fails |
+Callers: the AI's Usable (0x4390ef = 0x41fec9 && 0x420422 && side test); every strategy handler for the unit on the
+target cell (if it fails nothing happens; other units in the area only pass the element terrain filter 0x42097a of
+0x425349); StratHitRate 0x43b73f (unusable → 0 %) and StratDamage 0x43bfaa (→ 0) for each target. Heals (0x42378d)
+roll no hit.
+0x41fec9(s, caster, show) (AI Usable and the cast dispatcher 0x425627): fire 0-4 fails when the weather (0x44a1d4,
+table 0x48e100) is > 1 (雨 暴雨 雪) unless the caster has effect 50 (在恶劣天气时无法使用。); 战备 fails when byte
+0x55af00[caster] is set (不能再用了！) — 0x423960 sets it on a cast, the side's phase start clears it (0x44ed93 for
+units 0..34, 0x44e851 for 35..114); 暝思 62 fails when the caster's HP < 3 (ＨＰ不足。).
 
 ---------------------------------------------------------------------------------------------------
 ## 6. Range and area shapes [C — obtained by emulating the exe code with tools/rd_emu.py]

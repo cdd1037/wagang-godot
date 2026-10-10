@@ -658,6 +658,7 @@ func _phase_start_effects(a: int, b: int) -> void:
 			continue
 		_status_recovery(u)
 		_buff_decay(u)
+	Mem.fill(Rules.ZHANBEI_USED + a, b - a, 0)     # 战备 may be cast again (0x44ed93 / 0x44e851)
 	for i in range(a, b):
 		var u := units[i]
 		if u.active() and (u.status & BUnit.ST_POISON):

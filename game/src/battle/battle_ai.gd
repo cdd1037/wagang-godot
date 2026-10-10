@@ -168,7 +168,8 @@ func _prepare() -> void:
 	usable_strats.clear()
 	if not (u.status & BUnit.ST_SEAL):
 		for s in st.actions.known_strategies(u):
-			if st.actions.strategy_mp(s) <= u.mp:
+			# Usable (0x4390ef) also asks 0x41fec9, which does not depend on the target
+			if st.actions.strategy_mp(s) <= u.mp and st.actions.cast_refusal(u, s) == "":
 				usable_strats.append(s)
 
 

@@ -217,15 +217,13 @@ static func strat_element(s: int) -> int:
 	return e
 
 
-## Terrain/weather usability of element strategies (0x420422 category part).
-static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, weather: int) -> bool:
+## Terrain usability of element strategies (0x420422 categories 0-3; also the area filter 0x42097a).
+static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, _weather := 0) -> bool:
 	if s >= 20:
 		return true
 	if caster.has_effect(50):
 		return true
 	if s <= 4:
-		if weather in [1, 2]:   # rain / snow
-			return false
 		return target_terrain in [0, 1, 2, 8, 16, 18, 19, 20, 21, 22, 23, 24]
 	if s <= 9:
 		return target_terrain in [7, 8, 9, 10, 13]
@@ -234,12 +232,82 @@ static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, weather
 	return target_terrain in [3, 4]
 
 
-static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, weather: int, leader_slot := 0) -> int:
+## Strategy category per id 0..0x3d (table 0x42093c), which picks the check in 0x420422.
+const STRAT_CATEGORY := [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 17, 5, 6, 6, 6, 6, 6, 6, 6, 6,
+	7, 7, 8, 8, 9, 9, 10, 17, 11, 11, 11, 11, 11, 15, 15, 13, 13, 17, 14, 14, 14, 14, 14, 14, 14, 14, 15, 17, 17, 17, 16]
+
+
+## Can `caster` use strategy s on `target` (0x420422)? Element strategies (categories 0-3) need a fitting target
+## terrain unless the caster has effect 50. Most other checks only bind casters the player does not command
+## (AI code ≠ 7): 暗算 not at full HP, 暗鬼 not at full MP (low byte), debuffs not on a level-2 stat, 伪书/伪令
+## not on a confused target, 毒烟/瘴雾 not on a poisoned one, 陷阱/濠壑 not on a paralysed one, 封印 not on a
+## sealed one, heals not at full HP, 棒喝/超脱 not without a status, buffs and 聚气 not on a stat at level >= 4.
+## Category 15 (开导, 诫谕, 战备): never on oneself; AI casters only on units that have moved or acted and are not
+## of the player's colour. Category 17 (暗杀, 八阵, 急行, weather) goes to the mod's 0x4dbf8a, which compares the
+## category with 0x15 and so always allows.
+static func strat_usable(s: int, caster: BUnit, target: BUnit, target_terrain: int) -> bool:
+	if s < 0 or s >= STRAT_CATEGORY.size():
+		return true
+	var cat: int = STRAT_CATEGORY[s]
+	if cat <= 3:
+		return strat_terrain_ok(s, caster, target_terrain)
+	var ai := caster.mode != 7
+	match cat:
+		4: return not ai or caster.hp != caster.max_hp()
+		5: return not ai or (caster.mp & 0xff) != caster.max_mp()
+		6: return not ai or _code_level(s, target) != 2
+		7: return not ai or not (target.status & BUnit.ST_CONFUSION)
+		8: return not ai or not (target.status & BUnit.ST_POISON)
+		9: return not ai or not (target.status & BUnit.ST_PARALYSIS)
+		10: return not ai or not (target.status & BUnit.ST_SEAL)
+		11: return not ai or target.hp != target.max_hp()
+		12: return not ai or (target.mp & 0xff) != target.max_mp()
+		13: return not ai or target.status != 0
+		14: return not ai or _code_level(s, target) < 4
+		15:
+			if caster.slot == target.slot:
+				return false
+			if ai and not (target.flags & BUnit.F_MOVED) and not (target.flags & BUnit.F_ACTED):
+				return false
+			return not (ai and target.colour == 0)
+		16: return not ai or _code_level(0x35, target) < 4
+	return true
+
+
+## The buff level a stat code looks at (0x420bbd): 0x17/0x31 爆发, 0x19/0x33 士气, 0x1b/0x35 攻击 (精神 for caster
+## families), 0x1d/0x37 防御, 0x30 移动 (and the code + 1 of each pair).
+static func _code_level(code: int, t: BUnit) -> int:
+	match code:
+		0x17, 0x18, 0x31, 0x32: return t.buff(3)
+		0x19, 0x1a, 0x33, 0x34: return t.buff(4)
+		0x1b, 0x1c, 0x35, 0x36: return t.buff(2 if t.family() in [8, 9, 10, 18] else 0)
+		0x1d, 0x1e, 0x37, 0x38: return t.buff(1)
+		0x30: return t.buff(5)
+	return 3
+
+
+## Can `caster` cast s at all right now (0x41fec9)? "" if so, else the original's message: fire strategies not
+## in rain, heavy rain or snow (weather > 1) unless the caster has effect 50; 战备 once per turn (byte
+## 0x55af00[caster], cleared at the side's phase start); 暝思 needs 兵力 >= 3.
+static func strat_castable(s: int, caster: BUnit, weather: int) -> String:
+	if s <= 4 and not caster.has_effect(50) and weather > 1:
+		return "在恶劣天气时无法使用。"
+	if s == 57 and Mem.r8(ZHANBEI_USED + caster.slot) != 0:
+		return "不能再用了！"
+	if s == 62 and caster.hp < 3:
+		return "ＨＰ不足。"
+	return ""
+
+
+const ZHANBEI_USED := 0x55af00
+
+
+static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, leader_slot := 0) -> int:
 	if target.pid == 0x89:
 		return 0
 	if s == 21 and target.colour != 0 and target.pid < 0xd2:
 		return 0      # 暗杀: named officers that are not red units are immune
-	if not strat_terrain_ok(s, caster, target_terrain, weather):
+	if not strat_usable(s, caster, target, target_terrain):
 		return 0
 	if s in STRAT_HIT_ALWAYS:
 		return 100

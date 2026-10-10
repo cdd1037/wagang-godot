@@ -220,6 +220,10 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 		if i < 0:
 			return false
 		var s: int = strats[i]
+		var why := st.actions.cast_refusal(u, s)
+		if why != "":
+			await st.ui.popup(why)       # 0x41fec9 with its message
+			continue
 		var cells := st.actions.strategy_cast_cells(u, s)
 		st.view.set_attack_cells(cells)
 		var chosen := false
@@ -232,6 +236,14 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 				continue
 			var tg := st.actions.strategy_targets(u, s, c)
 			if tg.is_empty() and not (s in [58, 59, 60]):
+				var main := st.unit_at(c)
+				if main and not st.actions.usable_on(u, s, main):
+					# 0x420422's messages for a player-commanded caster
+					var cat: int = Rules.STRAT_CATEGORY[s] if s < Rules.STRAT_CATEGORY.size() else 17
+					if cat <= 3:
+						await st.ui.popup("不能在这里使用。")
+					elif cat == 15 and main == u:
+						await st.ui.popup("不能对自己使用。")
 				continue
 			st.view.set_area_cells(st.actions.strategy_area(u, s, c))
 			var hr := 100

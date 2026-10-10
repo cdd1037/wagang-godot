@@ -397,33 +397,31 @@ func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 			if t.active():
 				out.append(t)
 		return out
+	# the unit on the target cell must pass 0x420422, else nothing happens; the others in the area only need a
+	# fitting terrain for element strategies (0x425349 → 0x42097a)
+	var main := st.unit_at(target)
+	if main == null or not _side_ok(u, side, main) or not usable_on(u, s, main):
+		return out
 	for c in strategy_area(u, s, target):
 		var t := st.unit_at(c)
-		if t == null or not t.active():
+		if t == null or not t.active() or not _side_ok(u, side, t):
 			continue
-		if side == 0 and not t.is_enemy_of(u):
-			continue
-		if side == 1 and t.is_enemy_of(u):
-			continue
-		if usable_on(u, s, t):
+		if t == main or Rules.strat_terrain_ok(s, u, view().terrain_at(t.pos)):
 			out.append(t)
 	return out
 
 
-## Per-target usability (0x420422, abbreviated).
-func usable_on(u: BUnit, s: int, t: BUnit) -> bool:
-	if s >= 0 and s <= 19 and not Rules.strat_terrain_ok(s, u, view().terrain_at(t.pos), st.weather()):
-		return false
-	match s:
-		39, 40, 41, 42, 43:
-			return t.hp < t.max_hp()
-		44, 45:
-			return t.mp < t.max_mp()
-		46, 47:
-			return t.status != 0
-		57:
-			return t != u
+func _side_ok(u: BUnit, side: int, t: BUnit) -> bool:
+	if side == 0:
+		return t.is_enemy_of(u)
+	if side == 1:
+		return not t.is_enemy_of(u)
 	return true
+
+
+## Can u use strategy s on t (0x420422, see Rules.strat_usable)?
+func usable_on(u: BUnit, s: int, t: BUnit) -> bool:
+	return Rules.strat_usable(s, u, t, view().terrain_at(t.pos))
 
 
 func can_cast(u: BUnit, s: int) -> bool:
@@ -432,12 +430,19 @@ func can_cast(u: BUnit, s: int) -> bool:
 	return u.mp >= strategy_mp(s)
 
 
+## Why u cannot cast s right now (0x41fec9), or "".
+func cast_refusal(u: BUnit, s: int) -> String:
+	return Rules.strat_castable(s, u, st.weather())
+
+
 func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	var sd := Game.strategy(s)
 	var cost := strategy_mp(s)
 	u.mp = maxi(u.mp - cost, 0)
 	face(u, target)
 	var targets := strategy_targets(u, s, target)
+	if s == 57 and not targets.is_empty():
+		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
 	if not Game.autoplay:
 		st.hud.popup_number(str(sd.get("name", "")), u.pos, Color(0.8, 0.9, 1))
@@ -471,7 +476,8 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 	if s == 38 or s == 66:
 		return await _apply_random_strategy(u, s, t)
 	var damage_set := s in Rules.DAMAGE_STRATS or s == 21
-	var hit := Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
+	# heals (0x42378d) have no hit roll: the amount is capped by what is missing
+	var hit := s in [39, 40, 41, 42, 43, 44, 45] or Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
 	if not hit:
 		if not Game.autoplay:
 			st.hud.popup_number("失败", t.pos, Color(0.7, 0.7, 0.7))
