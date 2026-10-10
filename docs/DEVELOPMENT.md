@@ -70,6 +70,10 @@ All options are environment variables read at start-up, for example
 | `WG_SHELLSHOT=dir` | Touch shell only: the same for the whole screen, side buttons included (`user://…` works on a phone) |
 | `WG_SHELLSIZE=WxH` | Touch shell on a desktop: open the window at this size, e.g. `1734x800` (iPhone shape) or `1334x750` (16:9) |
 
+The player's autosave (`user://autosave.json`, the title screen's 继续游戏) is neither read nor written while
+`WG_AUTO`, `WG_DEMO`, `WG_START`, `WG_AUTOSAVE` or `WG_INPUTBOT` is set, so tests and bots leave it alone. Other runs,
+`WG_LOADSLOT` among them, keep it up to date like normal play.
+
 Example: watch the first battle play itself:
 `WG_START=1 WG_DEMO=1 WG_NOVIDEO=1 ./run_game.sh`
 

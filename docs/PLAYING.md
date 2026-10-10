@@ -26,7 +26,8 @@ resize it freely; when you let go, it snaps to the game's 4:3 shape so the pictu
 On iPhone the game runs in landscape: the 4:3 picture fills the screen height, with touch buttons on both sides (see
 [Touch controls](#touch-controls-iphone)).
 
-The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit; not on iPhone). After an ending has
+The title screen offers **继续游戏** (continue from the autosave, when there is one), **开始新游戏** (new game),
+**读取进度** (load) and **结束游戏** (quit; not on iPhone). After an ending has
 been reached once, the title picture changes. Downloaded builds show their version (版本 1.0.N) in the bottom-right
 corner.
 
@@ -155,7 +156,14 @@ winner may gain experience when the duel closes.
   between the macOS, Windows and iPhone versions. A save is written to a temporary file first, so a crash while saving
   leaves the old save intact; a damaged save, or one from a newer version of the game, is refused instead of
   loaded.
-* A defeat (game over) returns to the title screen, so save often.
+* **Autosave**: the game keeps `autosave.json` (same folder) and writes it when the app goes to the background,
+  loses focus or is closed, at the start of every scenario, and at most once a minute while playing, so on iPhone it
+  is safe to switch away or swipe the app closed at any time. **继续游戏** on the title screen resumes it. A running
+  scene cannot be saved halfway, so it resumes at the last point where the game waited for the player: a story
+  scene waiting for a click, the battle's player phase with nothing selected, or the start of the scenario. It
+  does not use one of the 10 slots.
+* A defeat (game over) or an ending (全剧终) returns to the title screen; 继续游戏 then resumes from the last
+  autosave, e.g. to try a battle or a choice again.
 
 ## Troubleshooting
 

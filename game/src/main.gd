@@ -32,7 +32,14 @@ func _process(_d: float) -> void:
 	# hold Space / Ctrl (touch: the 快进 toggle) to fast-forward animations (like the original patch's Space fast-click)
 	var fast := (Input.is_key_pressed(KEY_SPACE) or Game.skip_held()) and not ui.video.visible
 	Engine.time_scale = 4.0 if fast else 1.0
+	_autosave_watch()
 	_debug_shots()
+
+
+func _notification(what: int) -> void:
+	# iOS may kill a backgrounded app without notice: write the autosave on the way out (~5 s budget there)
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
+		_autosave_flush()
 
 
 var _shot_t := 0.0
@@ -251,23 +258,30 @@ func _title_screen() -> void:
 	_title_bg.visible = true
 	_show_version()
 	ui.set_black(false)
-	# iOS apps don't quit themselves: no 结束游戏 there
-	var items: Array = ["开始新游戏", "读取进度"] if OS.has_feature("mobile") else ["开始新游戏", "读取进度", "结束游戏"]
 	while true:
-		var i := await ui.menu.choose(items, Vector2(250, 330), false, "", [], 140)
-		if i == 0:
-			_title_bg.visible = false
-			Game.new_game_state()
-			Game.scenario = 0
-			_run_flow()
-			return
-		elif i == 1:
-			if await load_menu():
+		var items: Array = ["开始新游戏", "读取进度"]
+		if _autosave_enabled() and not Game.save_info(Game.AUTO_SLOT).is_empty():
+			items.push_front("继续游戏")
+		if not OS.has_feature("mobile"):
+			items.append("结束游戏")      # iOS apps don't quit themselves
+		# the bottom row stays where the original's three-item menu ends, inside the title picture
+		var i := await ui.menu.choose(items, Vector2(250, 330 - 24 * (items.size() - 3)), false, "", [], 140)
+		match items[i]:
+			"继续游戏":
+				if await _load_slot(Game.AUTO_SLOT):
+					return
+			"开始新游戏":
 				_title_bg.visible = false
+				Game.new_game_state()
+				Game.scenario = 0
+				_run_flow()
 				return
-		else:
-			get_tree().quit()
-			return
+			"读取进度":
+				if await load_menu():
+					return
+			_:
+				get_tree().quit()
+				return
 
 
 ## Build number in the title screen's corner (application/config/version, set by the release workflow).
@@ -306,6 +320,8 @@ func _run_flow() -> void:
 			await ending()
 			return
 		Game.scenario_jumped = false
+		# a new game, the next scenario or a loaded save: the start of this stage is a checkpoint
+		_autosave_checkpoint(_pending_load, true)
 		print("== scenario %d: %s" % [n, file])
 		var stop := OS.get_environment("WG_STOP")
 		if stop != "" and n >= int(stop):
@@ -351,6 +367,9 @@ func game_over() -> void:
 
 
 func ending() -> void:
+	# the game is finished: nothing to continue
+	_autosave = {}
+	Game.delete_save(Game.AUTO_SLOT)
 	await ui.video.play("end")
 	to_title()
 
@@ -384,6 +403,10 @@ func load_menu() -> bool:
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "读取进度")
 	if i < 0 or Game.save_info(i).is_empty():
 		return false
+	return await _load_slot(i)
+
+
+func _load_slot(i: int) -> bool:
 	if Game.read_save(i) == null:
 		await ui.popup("无法读取这个进度。", 1.2)
 		return false
@@ -397,6 +420,53 @@ func load_menu() -> bool:
 	# start after the caller's chain (possibly inside the old stage) has unwound
 	_run_flow.call_deferred()
 	return true
+
+
+# ------------------------------------------------------------------ autosave (继续游戏)
+# A running script lives in await chains and cannot be saved, so the autosave holds the last checkpoint: a
+# stage start, or the stage waiting at its top level (story click / player phase), where 存储进度 works too.
+# It is taken in memory there and written when the app goes to the background or closes (plus once a minute).
+const AUTOSAVE_EVERY_MS := 60000
+
+var _autosave: Dictionary = {}         # capture_save() of the last checkpoint
+var _autosave_dirty := false
+var _autosave_written_ms := 0
+var _was_menu_ready := false
+
+
+## Flow tests and bots must not overwrite the player's autosave.
+func _autosave_enabled() -> bool:
+	if Game.autoplay or Game.demo:
+		return false
+	for e in ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT"]:
+		if OS.get_environment(e) != "":
+			return false
+	return true
+
+
+func _autosave_watch() -> void:
+	var ready := stage != null and stage.menu_ready()
+	if ready and not _was_menu_ready:
+		_autosave_checkpoint(stage.save_state())
+	_was_menu_ready = ready
+
+
+func _autosave_checkpoint(extra: Dictionary, write_now := false) -> void:
+	if not _autosave_enabled():
+		return
+	_autosave = Game.capture_save(extra)
+	_autosave_dirty = true
+	if write_now or Time.get_ticks_msec() - _autosave_written_ms >= AUTOSAVE_EVERY_MS:
+		_autosave_flush()
+
+
+func _autosave_flush() -> void:
+	if not _autosave_dirty or _autosave.is_empty():
+		return
+	_autosave_dirty = false
+	_autosave_written_ms = Time.get_ticks_msec()
+	if not Game.write_capture(Game.AUTO_SLOT, _autosave):
+		push_warning("autosave could not be written")
 
 
 # ------------------------------------------------------------------ status screens

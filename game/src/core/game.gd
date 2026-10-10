@@ -438,14 +438,19 @@ func set_ivar(kind: int, i: int, v: int) -> void:
 
 # ------------------------------------------------------------------ save / load
 const SAVE_VERSION := 1
+const AUTO_SLOT := -1          # the autosave (继续游戏), a file of its own beside the numbered slots
 
 
 func save_path(slot: int) -> String:
+	if slot == AUTO_SLOT:
+		return "user://autosave.json"
 	return "user://save_%02d.json" % slot
 
 
 ## Small summary next to each save so the slot list does not have to parse whole saves.
 func _info_path(slot: int) -> String:
+	if slot == AUTO_SLOT:
+		return "user://autosave.info.json"
 	return "user://save_%02d.info.json" % slot
 
 
@@ -463,6 +468,11 @@ static func _write_atomic(path: String, text: String) -> bool:
 
 
 func save_game(slot: int, extra: Dictionary = {}) -> bool:
+	return write_capture(slot, capture_save(extra))
+
+
+## The current state as save text, taken now (so later changes do not leak in) and written by write_capture.
+func capture_save(extra: Dictionary = {}) -> Dictionary:
 	var info := {
 		"version": SAVE_VERSION,
 		"time": Time.get_datetime_string_from_system(),
@@ -479,10 +489,20 @@ func save_game(slot: int, extra: Dictionary = {}) -> bool:
 		"mem": Mem.snapshot(),
 		"extra": extra,
 	})
-	if not _write_atomic(save_path(slot), JSON.stringify(d)):
+	return {"data": JSON.stringify(d), "info": JSON.stringify(info)}
+
+
+func write_capture(slot: int, cap: Dictionary) -> bool:
+	if not _write_atomic(save_path(slot), cap["data"]):
 		return false
-	_write_atomic(_info_path(slot), JSON.stringify(info))
+	_write_atomic(_info_path(slot), cap["info"])
 	return true
+
+
+func delete_save(slot: int) -> void:
+	for p in [save_path(slot), _info_path(slot)]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
 
 func save_info(slot: int) -> Dictionary:

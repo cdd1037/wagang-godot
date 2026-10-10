@@ -30,7 +30,8 @@ battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
   blow animation, EXP for the winner).
 * **HD graphics** – every texture the game draws re-rendered at 4× with AI upscalers chosen per kind of art. The
   released builds contain only the HD art. See [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
-* **Saves** – 10 slots, usable from story scenes and mid-battle.
+* **Saves** – 10 slots, usable from story scenes and mid-battle, plus an autosave written when the app goes to the
+  background or is closed; 继续游戏 on the title screen resumes it.
 * **Multiple endings** – decided by the story flags and scores the scripts keep, exactly as in the original.
 
 All 117 scripts have been run end to end by an automated play-through harness without script errors.
