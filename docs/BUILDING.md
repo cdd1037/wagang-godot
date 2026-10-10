@@ -50,6 +50,8 @@ godot --headless --path game --import      # first time
 tools/build_ios.sh --device                # build, install and start it on the connected iPhone
 tools/build_ios.sh                         # build a signed app only (build/ios_sym/Release-iphoneos/WaGang.app)
 tools/build_ios.sh --unsigned              # unsigned build/WaGang-iOS.ipa for sideloading (what the releases ship)
+tools/build_ios_sim_lib.sh                 # once per Godot version: arm64 engine library for the simulator
+tools/build_ios.sh --sim                   # native arm64 build, installed and started in the Xcode Simulator
 ```
 
 * The script exports the **iOS** preset as an Xcode project (`build/ios/`), then builds it with `xcodebuild`.
@@ -61,9 +63,13 @@ tools/build_ios.sh --unsigned              # unsigned build/WaGang-iOS.ipa for s
 * **Device:** `--device` picks the first paired, reachable iPhone with Developer Mode on (or pass its UDID; list
   them with `xcrun devicectl list devices`). It must be unlocked. `IOS_ENV='{"WG_START":"1"}'` passes debug
   variables to the app.
-* **Simulator:** not supported with the official template. Its simulator library is x86-64 only, and current
-  iOS simulators on Apple Silicon do not run x86-64 apps. Test on a device, or test the touch layer on the desktop
-  (see [DEVELOPMENT.md](DEVELOPMENT.md)).
+* **Simulator:** always a native Apple Silicon (arm64) build. The official template's simulator library is x86-64
+  only, so `tools/build_ios_sim_lib.sh` compiles the same Godot version's library for the arm64 simulator
+  (about 20 minutes once; the source stays in `build/godot-src`). `--sim` adds it to the exported project and
+  builds with `ARCHS=arm64`.
+  * The default simulator is *iPhone 18 Pro*; `--sim "iPhone 17e"` picks another, by name or UDID.
+  * The game's output goes to `build/ios_sim.log`.
+  * The simulator has no Metal driver in Godot, so it runs the Compatibility (OpenGL) renderer; a phone uses Metal.
 * The preset targets iPhone (iOS 15+, A12 or newer), landscape only. File sharing is on, so the saves show up in
   the Files app. The icon is `game/export/ios_icon.png`, cut from the title art. On iOS the project runs
   `res://src/touch/touch_shell.tscn` instead of `main.tscn` (`run/main_scene.mobile`).

@@ -11,6 +11,8 @@ var shots := 0
 func _init(stage: BattleStage, dir: String) -> void:
 	st = stage
 	shot_dir = dir
+	if dir != "":
+		DirAccess.make_dir_recursive_absolute(dir)
 
 
 func shot(tag: String) -> void:

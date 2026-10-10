@@ -170,4 +170,6 @@ func _process(_d: float) -> void:
 		return
 	_shot_t = now
 	_shot_n += 1
+	if _shot_n == 1:
+		DirAccess.make_dir_recursive_absolute(dir)       # e.g. user://shots on a phone
 	get_viewport().get_texture().get_image().save_png("%s/shell_%03d.png" % [dir, _shot_n])

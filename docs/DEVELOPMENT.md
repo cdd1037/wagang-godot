@@ -154,11 +154,15 @@ WG_START=1 WG_ACCEPT_SPAM=1 WG_NOVIDEO=1 WG_INPUTBOT=/tmp/bot WG_BOTTURNS=2 WG_S
   godot --path . res://src/touch/touch_shell.tscn
 ```
 
-Building and installing on a phone: `tools/build_ios.sh --device` (see [BUILDING.md](BUILDING.md)). Debug variables
+Building and installing on a phone: `tools/build_ios.sh --device`; in the Xcode Simulator (native arm64, after
+`tools/build_ios_sim_lib.sh` once): `tools/build_ios.sh --sim` (see [BUILDING.md](BUILDING.md)). Debug variables
 reach the app through `IOS_ENV`. For example,
 `IOS_ENV='{"WG_SHELLSHOT":"user://shots"}' tools/build_ios.sh --device` saves screenshots in the app's Documents
-folder. Fetch them with
-`xcrun devicectl device copy from --device UDID --domain-type appDataContainer --domain-identifier com.seedds.wagang --source Documents/shots --destination DIR`.
+folder. Fetch them from a phone with
+`xcrun devicectl device copy from --device UDID --domain-type appDataContainer --domain-identifier com.seedds.wagang --source Documents/shots --destination DIR`;
+in the simulator they are under `$(xcrun simctl get_app_container booted com.seedds.wagang data)/Documents`. For
+example, this plays one battle turn through the touch path with screenshots:
+`IOS_ENV='{"WG_START":"1","WG_NOVIDEO":"1","WG_ACCEPT_SPAM":"1","WG_INPUTBOT":"user://bot","WG_BOTTURNS":"1","WG_SHELLSHOT":"user://shots"}' tools/build_ios.sh --sim`.
 
 ## HD graphics and releases
 
