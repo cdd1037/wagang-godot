@@ -73,7 +73,12 @@ func player_phase() -> void:
 		var cell: Vector2i = r[0]
 		var btn: int = r[1]
 		if btn == MOUSE_BUTTON_RIGHT:
-			await system_menu()
+			# 0x44e0d9: a right click on any unit opens 武将情报; elsewhere (and Esc / 菜单) the system menu
+			var ru := st.unit_at(cell) if st.view.right_from_pointer else null
+			if ru:
+				await InfoWindow.open_unit(st.ui, st, ru)
+			else:
+				await system_menu()
 			continue
 		var u := st.unit_at(cell)
 		if u == null:
@@ -298,7 +303,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 	return false
 
 
-## 部队一览: every unit on the field by side; picking one centres the camera and shows its status.
+## 部队一览: every unit on the field by side; picking one centres the camera and shows its 武将情报 (0x47ade4).
 func unit_list() -> void:
 	var lst: Array[BUnit] = []
 	var labels := []
@@ -318,7 +323,7 @@ func unit_list() -> void:
 		await st.view.center_on(u.pos)
 		st.view.cursor_cell = u.pos
 		st.hud.set_hover(u.pos)
-		await StatusPanel.show_person(st.ui, u.person)
+		await InfoWindow.open_unit(st.ui, st, u)
 
 
 func system_menu() -> void:

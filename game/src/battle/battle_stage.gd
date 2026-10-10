@@ -51,6 +51,7 @@ func _ready() -> void:
 	super._ready()
 	view = BattleView.new()
 	add_child(view)
+	view.long_press_ok = func(c: Vector2i) -> bool: return unit_at(c) != null
 	view.input_enabled = false
 	view.show_cursor = false
 	hud = BattleHUD.new()
@@ -368,6 +369,7 @@ func menu_ready() -> bool:
 
 func open_menu() -> void:
 	if menu_ready():
+		view.right_from_pointer = false
 		view.cell_clicked.emit(view.cursor_cell, MOUSE_BUTTON_RIGHT)
 
 

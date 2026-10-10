@@ -33,6 +33,13 @@ var _drag_from := Vector2.ZERO
 var _dragging := false
 var _touch_down := false         # touch: a press this view saw, not yet released
 var _touch_panned := false       # touch: that press became a drag (pans the map, no click)
+var _press_gen := 0              # touch: counts presses, so a long-press timer knows its press is still down
+## The last right click came from the pointer (mouse right button, touch long press) at the clicked cell, not
+## from Esc / the touch 菜单 button at the cursor: only a pointer right click on a unit opens 武将情报.
+var right_from_pointer := false
+## Touch: a long press on a cell sends a right click there when this returns true for the cell (a unit stands
+## there), as a right click does with a mouse.
+var long_press_ok: Callable
 var _cam_target := Vector2.ZERO
 var _cam_tween: Tween
 
@@ -317,6 +324,8 @@ func _world_of(ev: InputEventMouse) -> Vector2:
 
 ## Finger travel (viewport px) before a touch counts as a drag instead of a tap.
 const TAP_SLOP := 10.0
+## Seconds a finger rests on a cell before it counts as a long press.
+const LONG_PRESS := 0.5
 
 
 ## Touch: a tap clicks a cell on release (and shows its unit / terrain, as hovering does with a mouse); dragging
@@ -340,6 +349,9 @@ func _touch_input(ev: InputEventMouse) -> void:
 			_touch_down = true
 			_touch_panned = false
 			_drag_from = mb.position
+			_press_gen += 1
+			var g := _press_gen
+			get_tree().create_timer(LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
 		elif _touch_down:
 			_touch_down = false
 			if not _touch_panned:
@@ -350,8 +362,23 @@ func _touch_input(ev: InputEventMouse) -> void:
 				cell_clicked.emit(c, MOUSE_BUTTON_LEFT)
 		get_viewport().set_input_as_handled()
 	elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+		right_from_pointer = false
 		cell_clicked.emit(cursor_cell, MOUSE_BUTTON_RIGHT)
 		get_viewport().set_input_as_handled()
+
+
+## The finger of press `g` is still down on the same spot: a right click on that cell, and its release is no tap.
+func _long_press(g: int) -> void:
+	if g != _press_gen or not _touch_down or _touch_panned or not input_enabled:
+		return
+	var c := cell_at(get_canvas_transform().affine_inverse() * _drag_from)
+	if not in_bounds(c) or not long_press_ok.is_valid() or not long_press_ok.call(c):
+		return
+	_touch_down = false
+	cursor_cell = c
+	cell_hovered.emit(c)
+	right_from_pointer = true
+	cell_clicked.emit(c, MOUSE_BUTTON_RIGHT)
 
 
 func _unhandled_input(ev: InputEvent) -> void:
@@ -376,6 +403,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			var c := cell_at(_world_of(ev))
 			if in_bounds(c):
 				cursor_cell = c
+			right_from_pointer = ev.button_index == MOUSE_BUTTON_RIGHT
 			cell_clicked.emit(c, ev.button_index)
 			get_viewport().set_input_as_handled()
 	elif ev is InputEventKey and ev.pressed:
@@ -391,5 +419,6 @@ func _unhandled_input(ev: InputEvent) -> void:
 			cell_clicked.emit(cursor_cell, MOUSE_BUTTON_LEFT)
 			get_viewport().set_input_as_handled()
 		elif ev.is_action_pressed("ui_cancel"):
+			right_from_pointer = false
 			cell_clicked.emit(cursor_cell, MOUSE_BUTTON_RIGHT)
 			get_viewport().set_input_as_handled()

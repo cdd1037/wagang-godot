@@ -42,6 +42,7 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 |---|---|
 | Left click / Enter | confirm, select, advance dialogue |
 | Right click / Esc | cancel or go back; opens the menu where there is one |
+| Right click on a unit or party member | **武将情报** (character information; see [Battles](#battles)) |
 | Arrow keys / mouse wheel / Page Up, Page Down | move through menus (long lists scroll) |
 | Hold **Space** or **Ctrl** | fast-forward animations and text (×4 game speed) |
 | Click / Enter / Esc during a video | skip the cutscene |
@@ -55,6 +56,7 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | Drag on the battle map | scroll the map; a drag never counts as a click |
 | Drag up/down on a long list | scroll the list (history, unit list, items …) |
 | Slide on a menu, lift | the entry under the finger is highlighted and picked when you lift it, so you can correct a near-miss before lifting |
+| Hold a finger on a unit (½ s) | **武将情报**, like a right click on it; also on a party member in a story scene and on a name in 出场选择 |
 | Tap an empty spot | cancel, like a right click: a tap outside a list closes it (outside the 攻击/策略/道具/待命 list it takes the move back, as a right click does); outside the highlighted range while picking a target stops picking; outside the blue range drops the selected unit |
 | **菜单** (top left) | the menu: in battle the system menu (end turn, unit list, objectives, save, load), in a story scene the scene menu. Only available when nothing is selected or open |
 | **返回** (left of the picture) | cancel or go back, like Esc (also advances text and skips a video). Dimmed when 菜单 is available |
@@ -73,7 +75,8 @@ thing that moves the story on, such as talking to a particular person.
 While a scene is waiting for you:
 
 * **菜单** (top right, or right click / Esc) opens the menu:
-  * **部队状态** – party roster and each character's status (class, level, stats, equipment)
+  * **部队状态** – party roster; pick a character for the 武将情报 window (also: right-click a party member in the
+    scene)
   * **装备** – equip weapons, armour and accessories from the bag
   * **道具** – use items outside battle (stat fruits, level-up and promotion items)
   * **存储进度 / 读取进度** – save or load
@@ -122,9 +125,25 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 * Hover over a unit or cell to see its panel: portrait, class and level, troops (兵), MP (策), status effects
   (毒 poison, 乱 confusion, 麻 paralysis, 封 seal, 怯 fear) and the terrain bonus.
 * Click an enemy or ally to show its movement and attack ranges.
+* **Right-click any unit** (yours, allied or enemy; hold a finger on it on a phone) for its **武将情报** window:
+  portrait, class, level and experience, current troops (HP) and MP, status (混乱, 中毒 … and raised or lowered
+  stats, 行动完毕 once it has acted), the five base abilities (武艺 统制 智谋 感知 胆魄), biography, its special
+  skill (技能), sorties and retreats, and four pages:
+  * **能力** – 攻击 / 防御 / 精神 / 反应 / 士气 with equipment; a raised or lowered stat shows "battle value/base"
+    (cyan or red under the bar), and 机动 the move points (± 2 when raised or lowered);
+  * **装备** – weapon, armour and accessory with level, experience and effect; click one for its details (属性,
+    价格, 效果, which unit types can use it);
+  * **策略** – the strategies it knows with their MP; click one for its effect, MP cost, range and area;
+  * **兵种** – the class: weapon and armour kinds, growth grades (C/B/A/S/X) for the five stats, move, attack range
+    and description.
+
+  **上一武将 / 下一武将** step through the units of the same side (yours and allies, or the enemy) on the map. ←/→
+  change the page, Page Up/Down (or Q/E) the unit; Esc, a right click or **确定** close it. The same window opens
+  from **部队一览**, from the menu's **部队状态** outside battle, by right-clicking a party member in a story scene,
+  and by right-clicking a name in 出场选择.
 * Turn number, turn limit and weather are shown top right.
 
-**System menu** (right click / Esc on the map; **菜单** on a phone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
+**System menu** (Esc, or a right click on an empty cell; **菜单** on a phone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
 (objectives), **存储进度 / 读取进度** (save / load), **回到标题** (title).
 
 **Moving around the map:** arrow keys move the cursor; the mouse at a screen edge or a middle-button drag scrolls.

@@ -188,14 +188,7 @@ func text(index: int) -> String:
 func terrain_name(t: int) -> String:
 	if t < 0 or t >= terrain_names.size():
 		return ""
-	var p := Mem.r32(0x48bdb0 + 4 * t)
-	var b := PackedByteArray()
-	for k in 16:
-		var c := Mem.r8(p + k)
-		if c == 0:
-			break
-		b.append(c)
-	var s := b.get_string_from_multibyte_char("GBK") if not b.is_empty() else ""
+	var s := Mem.str_at(Mem.r32(0x48bdb0 + 4 * t), 16)
 	return s if s != "" else str(terrain_names[t])
 
 

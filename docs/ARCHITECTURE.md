@@ -114,7 +114,8 @@ through EV variables.
   (`RpgActor`, 48×64 frames). The foot point of half-cell (x, y, z) is `(8(x−y)+312, 4(x+y)−8z−152)`.
 * After a poll finds nothing to run, the stage waits for a click on an actor. The click sets a flag in `GS` and polls
   again, so sections testing `test_clicked(pid)` fire.
-* The **菜单** / **出征** buttons and the right-click menu replace the original toolbar. **出征** builds the sortie
+* The **菜单** / **出征** buttons and the right-click menu replace the original toolbar. A right click (or long
+  press) on an actor who is a party member opens 武将情报 instead (0x429b81). **出征** builds the sortie
   list (`build_sortie`, port of 0x41856a) and sets the pending flag that the scene's own `test_pending` section
   consumes.
 
@@ -129,7 +130,7 @@ through EV variables.
 | Class | Responsibility |
 |---|---|
 | `BattleView` | map rendering, highlight overlays, cursor, camera and scrolling |
-| `BattleInput` | player phase: select → move range → move → command menu; system menu |
+| `BattleInput` | player phase: select → move range → move → command menu; a right click on a unit → 武将情报 (only a pointer right click, `BattleView.right_from_pointer`; Esc / 菜单 / a right click elsewhere → system menu) |
 | `BattleActions` | movement with zones of control, attacks, counters, criticals, strategies, items, EXP, level-ups, retreats (formulas in `core/rules.gd`, spec in `docs/rules.md`) |
 | `BattleAI` | enemy and ally decision making, a port of the original AIAct scoring |
 | `BattleHUD` | hovered-unit panel, turn and weather, phase banners, damage numbers |
@@ -141,7 +142,13 @@ through EV variables.
 
 `GameUI` sits above the stages and owns the dialogue box (typewriter text, portraits), choice menus, popups,
 banners, captions, chapter titles, fades and the video layer. Panels use the original's blue dragon-pattern window
-texture (`UIStyle`). The out-of-battle menus are `StatusPanel` and `PartyMenu` (equipment and items).
+texture (`UIStyle`). The out-of-battle menus are `PartyMenu` (equipment and items) and the windows below.
+
+* `InfoWindow` is 武将情报 (dialog 166 of wagan.wa) with its pages 能力 / 装备 / 策略 / 兵种, and `DetailPanel` the
+  item (dialog 167) and strategy (dialog 285) details it opens. Both extend `DlgPanel`, which lays a window out by
+  the control rects of the original dialog template (dialog units, scaled ×1.98 / ×1.8 into 640×480), draws group
+  boxes, buttons and the original's bar painter (Kao.wa tiles), and routes clicks to keyed hit areas. The window
+  is modal (the original's is modeless and follows the hovered unit). Spec: [rules.md](rules.md) §11.
 
 * "Click to continue" waits compare `Game.clicks`, a counter of presses kept by `Game._input`, instead of polling
   whether a button is held: a short trackpad tap is never missed, and the click that closed one box does not also
@@ -173,5 +180,5 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
-| `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `status_panel`, `party_menu`, `ui_style`, `video_layer` |
+| `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `party_menu`, `ui_style`, `video_layer` |
 | `debug/` | `test_runner`, `input_bot`, small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

@@ -174,6 +174,35 @@ func copy(dst: int, src: int, n: int) -> void:
 		w8(dst + i, r8(src + i))
 
 
+## NUL-terminated GBK string at addr ("" for a null pointer).
+func str_at(addr: int, maxlen := 64) -> String:
+	if addr == 0:
+		return ""
+	var b := PackedByteArray()
+	for k in maxlen:
+		var c := r8(addr + k)
+		if c == 0:
+			break
+		b.append(c)
+	return gbk(b)
+
+
+## GBK bytes to a String. Godot 4.7's iconv conversion (os_unix multibyte_to_string) never returns for a
+## single two-byte character such as 无 or 船, so a space goes along and comes off again.
+static func gbk(b: PackedByteArray) -> String:
+	if b.is_empty():
+		return ""
+	var t := b.duplicate()
+	t.append(0x20)
+	var s := t.get_string_from_multibyte_char("GBK")
+	return s.substr(0, s.length() - 1) if s.ends_with(" ") else s
+
+
+## Entry i of a table of string pointers.
+func str_ptr(table: int, i: int) -> String:
+	return str_at(r32(table + 4 * i))
+
+
 # ------------------------------------------------------------------ script variables
 func ev(i: int) -> int:
 	return r32(EV + 4 * i)

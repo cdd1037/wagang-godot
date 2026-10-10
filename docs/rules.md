@@ -968,3 +968,91 @@ U+0x20 ≠ 0 and the unit is a player unit (kind 0), the retreat line text #(650
 + animation 0. The unit leaves the map (0x442ae4) and party members get P+0x29 = min(P+0x29+1, 255) (retreat
 counter [G]). Common tail: state = 3, status = 0, mod hook 0x4dbff3, panels refreshed, and every unit whose AI
 target was this unit and whose code is 0 or 4 switches to code 1 (active) with target 0xff.
+
+---------------------------------------------------------------------------------------------------
+## 11. 武将情报 window (dialog 166) and its details (dialogs 167, 285) [C]
+
+Port: `game/src/ui/info_window.gd`, `detail_panel.gd`, `dlg_panel.gd` (layout from the dialog templates).
+
+**The window.** Created once at startup, hidden (0x479b59 `CreateDialogParamA(166, proc 0x479164)`); shown by
+0x479728(pid) (SE 0, only if battle or party member: gate 0x407060), modeless; 确定 hides it. It takes a **person
+id**; 0x477adc finds the person's unit only in battle (first slot 0..114 with state ≠ 0 holding the pid), else
+there is none and base values show (full HP/MP, no buffs, 正常, no side label).
+
+| Opened by | 上一/下一 list (u32 0x4b6cf0, ended by 0xffff; index 0x4b7504) |
+|---|---|
+| Battle player phase (0x44e0d9): right button on **any** unit, acted or not (0x44e526) | 0x47980d: on-map (state 2) units of its group, slots 0..34 or 35..114, by pid |
+| 部队情报一览 (186) row (0x47ade4; also centres the map on it) | the list 我军/敌军 last built |
+| 选择武将 (236) right click on an entry (0x45d7af) | sortie candidates (0x45c119) |
+| Story scene: right click on an actor, pid < 0xff (0x429b81 → 0x4799b0) | party members by pid (0x4768c0), or just that person (0x479954) |
+
+A right button while picking a move or target only cancels; on no unit in the player phase it asks to end the
+turn (state 6). The original has no right-click menu (menu bar APPMENU + toolbar). While open the window follows the
+hovered unit (0x44e313) and refreshes after actions (0x479a01). 上一武将 / 下一武将 stop at the ends and are disabled
+there. The port's window is modal; a right click on an empty cell, Esc and 菜单 open the port's system menu.
+
+**Main area** (refresh 0x478688; P = person, U = unit):
+* Portrait (sge.wa 301+face via mod 0x4d40f8); name with ASCII digits removed (0x407757); side "[ 我军 ]" /
+  "[ 友军 ]" / "[ 敌军 ]" by U+5 (0 / 1 / 2, 3); class name 0x48bea8[P+0x2b]; Lv P+0x2c; Exp bar P+0x2d of 100
+  ("MAX" at 0xff).
+* HP bar: U+0x10 (else MaxHP) of MaxHP, green, magenta when poisoned (0x10); MP bar U+0x14 & 0xff (else MaxMP) of
+  MaxMP, yellow, magenta under 穷计 (0x04) (0x4794a2).
+* 状态 line (0x478a0f + mod 0x4d6140): no unit → 正常; else each part followed by a space: 混乱 0x08, 麻痹 0x02,
+  迷失 0x40, 怯力 0x20, 中毒 0x10, 穷计 0x04, 攻击增加/减少 (U+0x18 ≥ 4 / ≤ 2), 暗杀 (byte 0x569f00[slot] ≠ 0),
+  精神 +0x1a, 防御 +0x19, 反应 +0x1b, 士气 +0x1c 增加/减少; empty → 正常; then " 行动完毕" if U+0xd & 2.
+* 现金 (gold, GS+0xc) only for pid 0. 基本能力 武艺 统制 智谋 感知 胆魄 = raw P+0x21..0x25. Biography
+  Fhua[922+pid] (pid < 210). "出阵数 %2d  撤退数 %2d" = P+0x27, P+0x29 for party members.
+* 技能 caption (mod chain 0x4d3bd3), first match: pid == [0x55ac04] 【招】三板斧 (0x555700), [0x55ac40] 【术】天魔,
+  [0x55ac48] 【术】波若, [0x55ac44] 【术】魔功, [0x55ac60] 【术】锻造; else every code ≥ 0x36 in the per-person code
+  table 0x4dc100[1024] becomes 0xff (0x4d5509); pid in the list 0x55ee08[30] (= EV[898..927]) → code[pid] = 0x27+i,
+  name 0x5559a0+32i; pid 25 with class 41 → code 0x24, 【术】飞将军, else code[25] = 0xff; pid 24 with byte
+  [0x55e25c] ≥ 3 → code 0xf, 【术】贯石, else code[24] = 0xff; pid in the word table 0x4d3c4c (36 pids) → name
+  pointer 0x4d8260[k] (pid 0 → 【招】苍龙过阵枪); else 无 (0x555791). **No script or code writes EV[898..927]**, so its
+  zero entries match pid 0: 管毅 shows 【术】连理 and its text (code 0x27), as in the original.
+* 技能 text: Fhua[450+code[pid]] when active (0x4dc5c5: code < 0xae; code 0 needs [0x55ac04] == 1, 1 needs
+  [0x55ac60] == 16, 2 needs [0x55ac48] == 15, 0x24 needs class 41), else Fhua[598] (empty); pid < 210 only.
+* Button 100 技能说明 (mod 0x4dc720: toggles page 284's text to the biography) lies outside the client area
+  (template rect 300,252,54,10 in a 313×256 dialog); the port leaves it out.
+
+**Pages** (0x478f7b; labels 0x48ec4c; the selected page 0x48e9a8 is kept between openings; SE 0 on a change):
+* 能力 (178, bars 0x476b85): 攻击 防御 精神 反应 士气 = person stats with equipment (0x407126..), bar scale 800.
+  Buff 3 or no unit: blue bar, "%3d". Buff ≥ 4: (v base, v2 battle) cyan under, text "battle/base". Buff ≤ 2:
+  (v battle, v2 base) red under, text "battle/base". 机动 (0x476987) = MovePoints (0x40727b); with a unit, move buff
+  ≥ 4 → "%u ( +%d )" (move+2, 2), ≤ 2 → "%u ( -%d )" (move−2, 2); paralysis is not applied.
+* 装备 (179, 0x476eb4 + mod 0x4d0e6a): "武器∶ %s" / "护具∶ %s" / "辅助∶ %s" (or 无), icon item+0x13, Lv, Exp bar
+  (exp, max, max) with max 100, treasures 150, +100 at Lv 9 (mod 0x4e0021), effect line 0x462005. The mod
+  disables the 辅助 label for pid 11. Clicking a slot opens dialog 167.
+* 策略 (200, list 0x4658c0): strategies 0..0x43 whose learn level for the class (strategy+0x11+class) is ≠ 0 and ≤
+  the level, by id; columns icon (Mgcicon, strategy+0x10) + 策略名, MP (strategy+0xe, ×2 while [0x4d0d61], the
+  second cast of 连续策略). Clicking a row opens dialog 285. (Header-click sorting 0x464e1f is not ported.)
+* 兵种 (284, 0x477b62): map sprite (in battle the unit's frame 0x43e572: 9 kneeling, 6+dir after moving/acting,
+  2·dir walking; else frame 6), class name, 武器 = item group 0x48bc20[i] for the first i in 0..6 with
+  class.equip[2i] ≠ 0 (else "--"), 护具 = 铠甲 (equip[14]) / 衣服 (equip[16]) / "--", grades "EDCBASX"[class bytes
+  2..6] (0x555470) for 攻击 防御 精神 反应 士气, 机动 = class byte 0, 攻击范围 = Jiqi.wa[class byte 1], description
+  Fhua[350+class].
+
+Bar painter 0x46146f(v, v2, max, style): second tile to left + W·v2/max, main tile to left + (that)·v/v2 (W·v/max
+when v2 = 0); text "%3d/%3d " (v, v2), "%3d " when v2 = 0, style 8 prints (v2, v), style 5 "MAX" for 0xff; tiles
+Kao.wa 8×8 at 0x00 red, 0x40 yellow, 0x80 green, 0xc0 blue, 0x100 cyan, 0x140 magenta. Styles: 1 green, 2/4/5
+magenta, 3 yellow, 6 blue, 7 blue over red, 8 blue over cyan.
+
+**Item detail** (dialog 167, 0x40bef7 → 0x4700c4(item < 0x68, level, exp) → fill 0x40c843): icon, name; Lv (if a
+weapon/armour and level ≠ 0xff) and Exp bar (max as above, 0x4d3d08); 属性 = 0x48bc20[type < 0x12 ? type>>1 :
+consumable 0x3f..0x50 ? 10 : 9]; 价格 = byte +0x12 × 100, "---" for 0xff; 效果 line 1 = 0x462005, line 2 = 0x462174
+(a treasure's special effect, else empty); description (200-byte records, item id); 可装备的部队: one label per
+class family 0..25, enabled for weapons/armour when the family's first class may equip the type (class+9+type),
+for accessories when byte +0x17 is 0xff or the family (item 0x4c also families 8, 9, 18, 24: mod 0x4da200), never
+for consumables.
+
+Effect line 0x462005(item, level): kind 0x40681a(type): type < 10 or 0x18 → "攻击 +%u", < 0xe or 0x19 → "精神 +%u",
+< 0x12 or 0x1a → "防御 +%u" with the value at the level (0x40c674: base +0x15, + growth +0x17 per level above 1 for
+weapons/armour, capped 255); otherwise 0x461ef3: for a treasure or type > 0x11, code = (treasure ? special +0x14 :
+type) − 0x12, value v = treasure ? 0x46938f(special value, level) : +0x15; suffix by code (0x4621bb): codes 0 1 3 4
+5 0xf..0x14 0x16..0x1a 0x1c..0x21 0x24 0x26..0x28 0x2a 0x2c 0x2f..0x33 0x39..0x45 0x47 → v = 0 ("--"); 2 6 7 8 0xb
+0xc 0xe 0x2d 0x2e 0x34..0x38 0x48 0x49 → "+%d" ("ALL" for 0xff, "--" for 0); 9 10 0xd 0x15 0x1b 0x22 0x23 0x25 0x46
+→ "+%d%%"; 0x29 0x2b → "-%d%%". Text: v = 0 → the effect name (0x4072d3: 0x48bc50[code], codes ≥ 0x3f from
+0x410f50[code−0x3f]); v & 0xff = 0xff → "%s (%s)" with 0x48bc50[code]; else "%s %s".
+
+**Strategy detail** (dialog 285, 0x47008d(id < 0x44) → fill 0x46fa85): icon (+0x10), name, 效果 =
+0x48bd40[+0xf], 消耗ＭＰ (0x425ad0), 可能范围 = Jiqi.wa[+0xc] (0xff → 0x10), 影响范围 = Drink.wa[+0xd] (0xff → 1),
+description Fhua[150+id]. The original places both details at the mouse (0x46f9ba); the port centres them.

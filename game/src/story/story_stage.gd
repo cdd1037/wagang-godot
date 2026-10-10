@@ -184,10 +184,30 @@ func _clickable_pids() -> Array:
 	return out
 
 
+## Touch: a press on an actor, not yet released ([pid, press counter]); the click happens on release, so a long
+## press can open 武将情报 instead.
+var _press := [-1, 0]
+
+
 func _unhandled_input(ev: InputEvent) -> void:
 	if not _waiting_click:
+		_press[0] = -1
 		return
-	if ev is InputEventMouseButton and ev.pressed:
+	if ev is InputEventMouseButton and Game.touch and ev.button_index == MOUSE_BUTTON_LEFT:
+		var pid := actor_at(ev.position)
+		if ev.pressed:
+			_press = [pid, _press[1] + 1]
+			if pid >= 0:
+				get_viewport().set_input_as_handled()
+				var g: int = _press[1]
+				get_tree().create_timer(BattleView.LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
+		elif _press[0] >= 0:
+			var was: int = _press[0]
+			_press[0] = -1
+			get_viewport().set_input_as_handled()
+			if pid == was:
+				clicked_actor.emit(pid)
+	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_LEFT:
 			var pid := actor_at(ev.position)
 			if pid >= 0:
@@ -195,10 +215,34 @@ func _unhandled_input(ev: InputEvent) -> void:
 				clicked_actor.emit(pid)
 		elif ev.button_index == MOUSE_BUTTON_RIGHT:
 			get_viewport().set_input_as_handled()
-			_system_menu()
+			var pid := actor_at(ev.position)
+			if _info_ok(pid):
+				await _show_info(pid)
+			else:
+				_system_menu()
 	elif ev.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		_system_menu()
+
+
+## 0x429b81: a right click on an actor shows 武将情报 for its person (pid < 0xff), which outside battle opens for
+## party members only (0x407060).
+func _info_ok(pid: int) -> bool:
+	return pid >= 0 and (pid & 0xfff) < 0xff and Game.is_member(pid & 0xfff)
+
+
+func _show_info(pid: int) -> void:
+	_waiting_click = false
+	await InfoWindow.open_party(ui, pid & 0xfff)
+	_waiting_click = true
+
+
+func _long_press(g: int) -> void:
+	if g != _press[1] or _press[0] < 0 or not _waiting_click or not _info_ok(_press[0]):
+		return
+	var pid: int = _press[0]
+	_press[0] = -1             # its release is no tap
+	await _show_info(pid)
 
 
 func actor_at(p: Vector2) -> int:

@@ -65,6 +65,18 @@ func _empty_point(box: Rect2, cells: Variant) -> Vector2:
 	return Vector2(30, 100)
 
 
+## A real Esc key press (the map takes key events only, not synthetic actions): the system menu.
+func _esc() -> void:
+	for pressed in [true, false]:
+		var k := InputEventKey.new()
+		k.keycode = KEY_ESCAPE
+		k.physical_keycode = KEY_ESCAPE
+		k.pressed = pressed
+		Input.parse_input_event(k)
+		for f in 3:
+			await get_tree().process_frame
+
+
 func _key(action: String) -> void:
 	var ev := InputEventAction.new()
 	ev.action = action
@@ -194,11 +206,108 @@ func touch_cancel_test() -> void:
 	st.get_tree().quit()
 
 
+## Hold a finger (the left button) on a point of the 640x480 game screen for t seconds.
+func _hold(p: Vector2, t: float) -> void:
+	var sp := get_viewport().get_screen_transform() * p
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		ev.position = sp
+		ev.global_position = sp
+		Input.parse_input_event(ev)
+		if pressed:
+			await _wait(t)
+		await get_tree().process_frame
+
+
+func _info_window() -> InfoWindow:
+	for c in st.ui.get_children():
+		if c is InfoWindow and not c.is_queued_for_deletion():
+			return c
+	return null
+
+
+## WG_BOTMODE=info: 武将情报 in a battle. A right click on an own unit and on an enemy (a long press in the touch
+## shell) opens it with that group's list; its tabs and 下一武将 work; Esc closes it; Esc on the map and a right
+## click on an empty cell open the system menu instead. Prints "INFOBOT: PASS" (also infobot.txt in the bot folder).
+func info_test() -> void:
+	Game.set_meta("bot_owns_input", true)
+	await _wait(1.0)
+	var ok := [true]
+	var lines: Array[String] = []
+	var expect := func(cond: bool, what: String) -> void:
+		lines.append("INFOBOT %s: %s" % ["ok" if cond else "FAIL", what])
+		print(lines[-1])
+		ok[0] = ok[0] and cond
+	var own: BUnit = st.input._player_units()[0] if not st.input._player_units().is_empty() else null
+	var foe: BUnit = null
+	for e in st.units:
+		if e.active() and own and e.is_enemy_of(own):
+			foe = e
+			break
+	expect.call(own != null and foe != null and st.input.idle, "player phase with an own unit and an enemy")
+	if own == null or foe == null:
+		st.get_tree().quit()
+		return
+	for u in [own, foe]:
+		if Game.touch:
+			await st.view.center_on(u.pos, false)
+			await get_tree().process_frame
+			await _hold(st.view.cell_center(u.pos) - st.view.camera.position, BattleView.LONG_PRESS + 0.3)
+		else:
+			await _click_cell(u.pos, MOUSE_BUTTON_RIGHT)
+		await _wait(0.5)
+		var w := _info_window()
+		var who := "own unit" if u == own else "enemy"
+		expect.call(w != null and w.pids[w.idx] == u.pid, "%s: 武将情报 shows %s" % [who, u.person.name])
+		if w == null:
+			continue
+		var group: Array = InfoWindow.battle_list(st, u)
+		expect.call(w.pids == group, "%s: the list is its group (%d)" % [who, group.size()])
+		await shot("info_%s" % ("own" if u == own else "enemy"))
+		for t in [3, 1]:
+			for h in w._hits:
+				if typeof(h[1]) == TYPE_STRING and h[1] == "tab%d" % t:
+					await _tap((h[0] as Rect2).get_center())
+			await _wait(0.3)
+			expect.call(InfoWindow.tab == t, "%s: tab %d by a tap" % [who, t])
+		await shot("info_%s_tab" % ("own" if u == own else "enemy"))
+		await _key("ui_cancel")
+		await _wait(0.4)
+		expect.call(_info_window() == null and st.input.idle, "%s: Esc closes it" % who)
+	await _esc()
+	await _wait(0.4)
+	expect.call(st.ui.menu._active and _info_window() == null, "Esc on the map opens the system menu")
+	await _key("ui_cancel")
+	await _wait(0.4)
+	if not Game.touch:
+		var empty := own.pos
+		for c in st.actions.reachable(own):
+			if st.unit_at(c) == null:
+				empty = c
+				break
+		await _click_cell(empty, MOUSE_BUTTON_RIGHT)
+		await _wait(0.4)
+		expect.call(st.ui.menu._active and _info_window() == null, "a right click on an empty cell opens the system menu")
+		await _key("ui_cancel")
+		await _wait(0.4)
+	expect.call(st.input.idle and not st.ui.menu._active, "back at the top level")
+	lines.append("INFOBOT: PASS" if ok[0] else "INFOBOT: FAILED")
+	print(lines[-1])
+	var f := FileAccess.open(shot_dir.path_join("infobot.txt"), FileAccess.WRITE)
+	if f:
+		f.store_string("\n".join(lines) + "\n")
+		f.close()
+	st.get_tree().quit()
+
+
 ## WG_BOTMODE=victory: open the system menu, pick 胜利条件 and screenshot the window.
 func victory_test() -> void:
 	Game.set_meta("bot_owns_input", true)      # stops WG_ACCEPT_SPAM
 	await _wait(1.0)
-	await _click_cell(st.view.cursor_cell, MOUSE_BUTTON_RIGHT)
+	await _esc()      # Esc opens the system menu (a right click on a unit opens 武将情报)
 	await _wait(0.4)
 	for k in 2:
 		await _key("ui_down")
@@ -238,7 +347,7 @@ func duel_test() -> void:
 ## exercising an in-game load from inside the running battle.
 func load_test() -> void:
 	await _wait(0.6)
-	await _click_cell(st.view.cursor_cell, MOUSE_BUTTON_RIGHT)
+	await _esc()      # Esc opens the system menu (a right click on a unit opens 武将情报)
 	await _wait(0.4)
 	await shot("sysmenu")
 	for k in 4:
@@ -269,6 +378,9 @@ func run_phase() -> void:
 		return
 	if OS.get_environment("WG_BOTMODE") == "victory":
 		await victory_test()
+		return
+	if OS.get_environment("WG_BOTMODE") == "info":
+		await info_test()
 		return
 	await _wait(0.6)
 	for u in st.input._player_units():
@@ -314,12 +426,12 @@ func run_phase() -> void:
 				await _key("ui_down")
 			await _key("ui_accept")
 			await _wait(0.4)
-	# end turn via system menu (opened by a right click, or in the touch shell by its 菜单 button)
+	# end turn via system menu (opened by Esc, or in the touch shell by its 菜单 button)
 	if Game.shell:
 		await _wait(0.2)                  # the shell sees the top level on its next frame
 		Game.shell._activate(TouchShell.MENU)
 	else:
-		await _click_cell(st.units[0].pos if st.units[0].active() else Vector2i(0, 0), MOUSE_BUTTON_RIGHT)
+		await _esc()
 	await _wait(0.5)
 	await shot("sysmenu")
 	await _key("ui_accept")

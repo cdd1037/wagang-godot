@@ -479,8 +479,10 @@ func show_party_status() -> void:
 	for pid in ids:
 		var p := Game.person(pid)
 		labels.append("%s  %s  Lv%d" % [p.name, p.class_name_str(), p.level])
+	var i_last := 0
 	while true:
-		var i := await ui.menu.choose(labels, Vector2(-1, -1), true, "部队")
+		var i := await ui.menu.choose(labels, Vector2(-1, -1), true, "部队", [], 0, i_last)
 		if i < 0:
 			return
-		await StatusPanel.show_person(ui, Game.person(ids[i]))
+		i_last = i
+		await InfoWindow.open(ui, ids, i)     # 武将情报 with the party list (0x4768c0)

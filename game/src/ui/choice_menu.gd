@@ -25,6 +25,10 @@ var _touch_y := 0.0          # touch: finger y where the list last scrolled by a
 var _touch_from := Vector2.ZERO
 var _touch_scrolled := false
 var _touch_outside := false  # touch: the press was outside the menu box (a tap there cancels)
+var _press_gen := 0          # touch: counts presses, so a long-press timer knows its press is still down
+## Optional: called (and awaited) with a row's index on a right click or long press on that row, instead of
+## cancelling; the menu stays open (出场选择 shows the member's 武将情报 this way).
+var info := Callable()
 
 
 func _init() -> void:
@@ -33,7 +37,8 @@ func _init() -> void:
 	visible = false
 
 
-func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0, first := 0) -> int:
+func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0, first := 0, info_cb := Callable()) -> int:
+	info = info_cb
 	items = PackedStringArray(options)
 	enabled = enabled_mask if enabled_mask.size() == options.size() else []
 	cancellable = can_cancel
@@ -193,6 +198,10 @@ func _touch_input(ev: InputEventMouse) -> void:
 		if i >= 0 and i != sel:
 			sel = i
 			queue_redraw()
+		if i >= 0 and info.is_valid():
+			_press_gen += 1
+			var g := _press_gen
+			get_tree().create_timer(BattleView.LONG_PRESS).timeout.connect(func() -> void: _long_press(g, i))
 	elif _touch_down:
 		_touch_down = false
 		if _touch_outside:
@@ -224,6 +233,8 @@ func _gui_input(ev: InputEvent) -> void:
 					sel = i
 					_finish(i)
 					return
+		elif ev.button_index == MOUSE_BUTTON_RIGHT and info.is_valid() and _row_at(ev.position) >= 0:
+			_show_info(_row_at(ev.position))
 		elif ev.button_index == MOUSE_BUTTON_RIGHT and cancellable:
 			_finish(-1)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -260,6 +271,21 @@ func _page(d: int) -> void:
 	sel = clampi(sel + d * _rows, 0, items.size() - 1)
 	_scroll_to(sel)
 	Audio.se(0)
+	queue_redraw()
+
+
+## Touch: the finger of press `g` still rests on row i.
+func _long_press(g: int, i: int) -> void:
+	if g != _press_gen or not _touch_down or _touch_scrolled or not _active or _row_at(_touch_from) != i:
+		return
+	_touch_down = false        # its release picks nothing
+	_show_info(i)
+
+
+func _show_info(i: int) -> void:
+	_active = false
+	await info.call(i)
+	_active = true
 	queue_redraw()
 
 

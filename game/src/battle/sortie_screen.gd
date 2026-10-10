@@ -28,7 +28,11 @@ static func choose(ui: GameUI, _stage: Node, maxn: int, forced: Array[int], excl
 			var mark := "●" if chosen.has(m) else "○"
 			labels.append("%s %s　%s Lv%d" % [mark, p.name, p.class_name_str(), p.level])
 		labels.append("【出征】（%d/%d）" % [chosen.size(), maxn])
-		var i := await ui.menu.choose(labels, Vector2(-1, -1), false, "出场武将选择", [], 260)
+		# a right click / long press on a member shows its 武将情报 with the candidate list (0x45d7af)
+		var info := func(k: int) -> void:
+			if k < members.size():
+				await InfoWindow.open(ui, members, k)
+		var i := await ui.menu.choose(labels, Vector2(-1, -1), false, "出场武将选择", [], 260, 0, info)
 		if i == labels.size() - 1:
 			if not chosen.is_empty():
 				return chosen

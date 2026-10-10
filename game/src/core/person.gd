@@ -177,7 +177,7 @@ func equip_bonus(s: int) -> int:
 		if stat_of_type(int(it["type"])) == s:
 			b += item_value_at(it, slot[1])
 		if it.get("treasure", false) and it.get("special") != null and stat_of_special(int(it["special"])) == s:
-			b += _treasure_effect_value(it, slot[1])
+			b += treasure_effect_value(it, slot[1])
 	if accessory >= 0:
 		var a := _item(accessory)
 		if not a.is_empty() and stat_of_type(int(a["type"])) == s:
@@ -185,7 +185,8 @@ func equip_bonus(s: int) -> int:
 	return b
 
 
-func _treasure_effect_value(it: Dictionary, lvl: int) -> int:
+## Value of a treasure's special effect at an equipment level (0x46938f / 0x4d9303).
+static func treasure_effect_value(it: Dictionary, lvl: int) -> int:
 	var sp := int(it.get("special", -1))
 	var v := int(it.get("special_value", 0))
 	if sp in [24, 25, 26]:
@@ -215,7 +216,7 @@ func effect_value(eid: int) -> int:
 		if iid >= 0:
 			var it := _item(iid)
 			if it.get("treasure", false) and it.get("special") != null and int(it["special"]) == eid:
-				return _treasure_effect_value(it, slot[1])
+				return treasure_effect_value(it, slot[1])
 	if accessory >= 0:
 		var a := _item(accessory)
 		if not a.is_empty() and int(a["type"]) == eid:
