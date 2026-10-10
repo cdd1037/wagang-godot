@@ -401,7 +401,7 @@ func create_battlefield(id: int) -> void:
 	map_id = id
 	view.load_map(id)
 	for u in units:
-		u.clear(u.slot)
+		u.reset(u.slot)
 		if u.node:
 			u.node.queue_free()
 			u.node = null
@@ -439,18 +439,22 @@ func create_battlefield(id: int) -> void:
 			var lv := int(d.get("lv", 0))
 			var level := mini(base + lv, 70) if lv <= 50 else maxi(base - (lv - 50), 1)
 			_promote(p, int(d.get("promo", 2)), level)
-			# equipment codes from op 0x48 (0x4429f9 per slot). Without 0x48 the person keeps the equipment of its
-			# base data (the original would give the class default, code 0; kept as before on purpose).
-			if d.has("weapon"):
-				p.equip_code(0, int(d.get("weapon", 0)), int(d.get("wlv", 1)))
-				p.equip_code(1, int(d.get("armor", 0)), int(d.get("alv", 1)))
-				p.equip_code(2, int(d.get("acc", 0)), 0xff)
+			# 0x44cc85 → 0x4429f9 per slot; ops 0x46/0x47 start entries with code 0 (default equipment for the
+			# class and level, 0x407fe7) and level 1, op 0x48 sets other codes
+			p.equip_code(0, int(d.get("weapon", 0)), int(d.get("wlv", 1)))
+			p.equip_code(1, int(d.get("armor", 0)), int(d.get("alv", 1)))
+			p.equip_code(2, int(d.get("acc", 0)), 0xff)
 		_unit_init(u, pid, flags, int(d.get("x", 0)), int(d.get("y", 0)), int(d.get("dir", 2)), bool(d.get("hidden", false)))
-		# allies and enemies get the AI of their entry, party members deployed as allies too
 		if flags & 3 != 0:
-			Mem.w8(u.addr + 8, 0xff)
+			# SetAI refuses party members: one deployed as an ally keeps AI code 0 from the reset and the target
+			# point its slot had, and acts in the ally phase (not player-controlled: its colour is 1)
 			_set_ai(u, clampi(int(d.get("ai", 1)), 0, 6), int(d.get("ai_person", 0xffff)), int(d.get("ai_x", 0)), int(d.get("ai_y", 0)))
-		else:
+	# after 0x44cc85 (0x44d427): flag 0x80 and status bits 0x1e cleared; player-side units of the player's colour
+	# are player-controlled (code 7)
+	for u in units:
+		u.flags = u.flags & ~0x80
+		u.status = u.status & ~0x1e
+		if u.slot < 35 and u.state != 0 and u.colour == 0:
 			u.mode = 7
 	field_ready = true
 	if OS.get_environment("WG_TRACE_BATTLE") != "":
@@ -482,9 +486,9 @@ func _promote(p: Person, promo: int, level: int) -> void:
 ## SetAI (0x459d8b): ai_mode 0..6 → AI code (table 0x48e380) and clears flag 0x80; modes 3 and 5 also
 ## set the target person (unit[8] = its slot), 4 and 6 the target point (unit[8] = 0xff, [9], [10] = x, y).
 ## Other modes change nothing; a target person without a unit (0x45a751) or a point off the map (0x45a6bf)
-## leaves the old target.
+## leaves the old target. Refused for party members (0x41a190: person byte +0x2a == 0), wherever they stand.
 func _set_ai(u: BUnit, ai_mode: int, ai_person: int, ax: int, ay: int) -> void:
-	if ai_mode < 0 or ai_mode > 6:
+	if ai_mode < 0 or ai_mode > 6 or Game.is_member(u.pid):
 		return
 	u.flags = u.flags & ~0x80
 	u.mode = AI_CODE[ai_mode]
@@ -501,21 +505,18 @@ func _set_ai(u: BUnit, ai_mode: int, ai_person: int, ax: int, ay: int) -> void:
 				Mem.w8(u.addr + 10, ay)
 
 
-## A retreated unit re-entering (ops 0x55 / 0x6d → 0x4591a1): UnitInit leaves the AI code and target,
-## the flags and the colour alone.
+## A retreated unit re-entering (ops 0x55 / 0x6d → 0x4591a1): UnitInit with the flags of its deployment entry,
+## so the colour stays; the AI code and target and the flags are kept.
 func _unit_reenter(u: BUnit, x: int, y: int, d: int) -> void:
-	var keep := {}
-	for off in [5, 8, 9, 10, 0xd, 0xe]:
-		keep[off] = Mem.r8(u.addr + off)
-	var extra := u.extra.duplicate()
+	var colour := u.colour
 	_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), x, y, d, false)
-	for off in keep:
-		Mem.w8(u.addr + off, keep[off])
-	u.extra = extra
+	u.colour = colour
 
 
+## UnitInit (0x44274c): person, colour (0x449b7b), facing, position and state, full HP/MP, neutral buffs, no
+## status. It leaves the AI code and target ([8]..[0xa]), the order byte and the flags as they are.
 func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: bool) -> void:
-	u.clear(u.slot)
+	u.state = BUnit.STATE_HIDDEN
 	u.pid = pid
 	var kind := 0
 	if flags & 1:
@@ -524,20 +525,22 @@ func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: 
 		kind = 1
 	u.colour = kind
 	u.dir = d & 3
-	u.hp = u.max_hp()
-	u.mp = u.max_mp()
-	u.status = 0
-	Mem.w8(u.addr + 0xb, 0xff)
-	Mem.w8(u.addr + 0x20, 1)
 	if hidden:
-		u.state = BUnit.STATE_HIDDEN
 		u.pos = Vector2i(x, y)
 	else:
 		u.state = BUnit.STATE_ON_MAP
 		u.pos = nearest_free(Vector2i(x, y), u)
+	u.hp = u.max_hp()
+	u.mp = u.max_mp()
+	for i in 6:
+		u.set_buff(i, 3)
+	u.status = 0
 	var p := u.person
 	if Game.is_member(pid):
 		Mem.w8(p.base + 0x27, mini(Mem.r8(p.base + 0x27) + 1, 255))
+	else:
+		for off in [0x27, 0x28, 0x29]:
+			Mem.w8(p.base + off, 0)
 
 
 ## Nearest free cell the unit can stand on (0x43f040).
@@ -1062,8 +1065,6 @@ func op_unit_op_4e(ins: Dictionary) -> void:
 	else:
 		tg = _targets_mode(2, 0, 0, arg(ins, 2), arg(ins, 3), arg(ins, 4), arg(ins, 5), arg(ins, 6))
 	for u in tg:
-		if Game.is_member(u.pid) and u.slot < 35:
-			continue
 		_set_ai(u, ai_mode, arg(ins, 8), arg(ins, 9), arg(ins, 10))
 
 

@@ -62,6 +62,7 @@ func _wait(t: float) -> void:
 func fx_test(ids: PackedStringArray) -> void:
 	await _wait(0.6)
 	var u := st.input._player_units()[0]
+	var headless := DisplayServer.get_name() == "headless" or shot_dir == ""
 	for sid in ids:
 		var s := int(sid)
 		var target: BUnit = null
@@ -72,17 +73,25 @@ func fx_test(ids: PackedStringArray) -> void:
 		if target == null:
 			return
 		u.mp = 255
-		var done := false
+		# what each target had before (printed with the outcome)
+		var before := {}
+		for t in st.actions.strategy_targets(u, s, target.pos):
+			before[t.slot] = [t.hp, t.status, [t.buff(0), t.buff(1), t.buff(2), t.buff(3), t.buff(4)]]
+		var done := [false]      # lambdas capture locals by value: share a reference instead
 		var cast := func() -> void:
 			await st.actions.cast(u, s, target.pos)
-			done = true
+			done[0] = true
 		cast.call()
-		for k in 6:
-			await _wait(0.25)
-			await shot("fx%d_%d" % [s, k])
-		while not done:
+		if not headless:
+			for k in 6:
+				await _wait(0.25)
+				await shot("fx%d_%d" % [s, k])
+		while not done[0]:
 			await _wait(0.3)
 			await _key("ui_accept")
+		for slot in before:
+			var t := st.units[slot]
+			print("FXTEST s=%d slot %d %s: hp %d→%d status %d→%d buffs %s→%s" % [s, slot, "enemy" if t.is_enemy_of(u) else "own", before[slot][0], t.hp, before[slot][1], t.status, before[slot][2], [t.buff(0), t.buff(1), t.buff(2), t.buff(3), t.buff(4)]])
 	st.get_tree().quit()
 
 

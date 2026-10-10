@@ -388,11 +388,32 @@ effect 38 封杀策略 → 封 100%; person 204 (0xcc) special → 中毒.
 39 医疗, 41 补给:            h = Spirit(caster)/8 + 60
 40 痊愈, 42 犒劳, 43 救护, 67 白虎: h = Spirit(caster)/2 + 100
    (both: if not preview and Morale(target) > rand(200): h += rand(6) + 5)
-38 八阵, 66 玄武:             h = MaxHP - HP   (full)
+38 八阵, 66 玄武:             h = MaxHP - HP   (full; used by their random "heal" outcome, see below)
 44 开导, 45 诫谕 (MP):        h = strategy.mp_cost  (field +0xe)
 h = min(h, MaxMP - MP) for 44/45, else min(h, MaxHP - HP)
 ```
 Targets/area come from 0x45533d(caster, ctx+0x2c9, kind, s) (kind 2 = enemies, 3 = allies) [range/area tables TODO].
+
+### 5.5a 八阵 (38, 0x423edc) and 玄武 (66, 0x424810) [C]
+No hit roll of their own. 八阵's targets are the opposite units in its area; 玄武's are **all units on the map**, either
+side (its loop over units 0..114 with state 2 only asks 0x42097a, which passes every strategy ≥ 0x14). Each target
+draws one outcome (rand 0x47fb13 → mod 0x4d966f):
+| 八阵 rand(8) | 玄武 rand(7) | outcome |
+|---|---|---|
+| 0 | — | damage StratDamage(caster, target, 八阵) (power 120, includes its own hit roll, 100 for 八阵) |
+| 1 | 0 | 混乱 (code 0x71) |
+| 2 | 1 | 麻痹 (0x72) |
+| 3 | 2 | 封 (0x74) |
+| 4 | 3 | 中毒 (0x70); 八阵 also deals StratDamage as 毒烟 (33, its hit roll may miss → 0) |
+| 5 | 4 | 0x6f: 0x420cb2(0x17 爆发↓, 0x19 士气↓, 0x1b 攻击↓/精神↓ for caster families, 0x1d 防御↓) |
+| 6 | 5 | 0xaf: 0x420cb2(0x31 爆发↑, 0x33 士气↑, 0x35, 0x37 防御↑) — same as 豪气 |
+| 7 | 6 | 兵力 to full (0x43c548: MaxHP − HP) |
+八阵 applies through 0x4224a8: a status only sticks when the stored damage is below the target's HP. 0x35 is the mod
+routine 0x4d8985: classes 24–26 and 50 raise both 攻击 and 精神, others 精神 for caster families, else 攻击 (also used by
+聚气 61 = code 0xa0 and 豪气 63 = 0xaf, which target the caster itself, 0x423cc0).
+EXP per target (0x420efb, strategy kind byte +0xb = 0): 八阵 is in the damage set (0x449bac), so the kill formula applies
+when the stored amount (damage, or the negated heal as an unsigned number) is not below the target's HP; 玄武 gets the
+small formula. The caster gains the largest value × EXP multiplier.
 
 ### 5.6 Strategy usability / terrain check (0x420422(s, caster, target, show_msg)) [C]
 Category table 0x42093c[s] → checks (all "fails" make the strategy unusable on that target):
@@ -534,7 +555,7 @@ Unit flag byte unit[0xd]: bit 2 / bit 4 = has moved / has acted (cleared by 战�
 ### 9.2 Status ailments (unit[0x1e])
 | bit | name | effect | cured by item |
 |---|---|---|---|
-| 0x02 | 麻 paralysis | cannot move (attack still allowed) [G move] | 活血解毒膏 (clears 0x12) |
+| 0x02 | 麻 paralysis | cannot move: MovePoints 0 (0x43f74f); attack still allowed | 活血解毒膏 (clears 0x12) |
 | 0x04 | 穷/封 seal | cannot use strategies | 宁神镇气散 (clears 0x24) |
 | 0x08 | 乱 confusion | physical & most strategy hits auto-hit it (100%), it cannot counter, AI-controlled [G] | 安魂醒脑丸 (clears 0x48) |
 | 0x10 | 毒 poison | phase start: HP -= MaxHP/5 (player/friend units and generic enemies with person id ≥ 210) or MaxHP/10 (named enemies, id < 210); min 1; never kills (leaves 1 HP) | 活血解毒膏 |
@@ -584,8 +605,20 @@ Notation: `R` = script reader object @0x492f90; `ctx` = battle object 0x4b3d08 (
 touched. An explicit item (0x407dec) must be of the slot's kind (0x40c6ea) and usable by the person (0x407907: class
 equip table for weapons/armour; accessories by the family in item byte +0x17, 0xFF = anyone); its level 0 means
 automatic (as above for normal items, treasures L/7+1 ≤ 10) and is capped at 3 (treasures 10).
-*Port:* units whose entry got no op 0x48 keep the equipment of their reloaded base data instead of the class
-default (deliberate, keeps the enemy strength the port always had); explicit 0x48 codes follow the original.
+Ops 0x46/0x47 start every entry with codes 0 and levels 1 (0x4129a4 / 0x4125c5), so a unit without op 0x48 gets the
+class default for all three slots.
+
+**Battle start** (0x44d427): every unit record is reset (0x442613: person 0xffff, index, x = y = target unit = 0xff,
+AI code 0, state 0, flags 0, +0x20 = 1; the target point [9],[0xa], order, buffs etc. keep what the slot's previous
+unit left). Then 0x44cc85 goes through the 115 entries: players (flags & 3 == 0) get UnitInit only; allies that are
+party members (person +0x2a == 0, 0x41a190) get UnitInit and the refused SetAI; other allies and enemies are reloaded
+(0x41b606), initialised, promoted (0x442890), equipped (0x4429f9 ×3), get full HP/MP and SetAI. Afterwards flag
+0x80 and status bits 0x1e are cleared on every unit, and units 0..34 on the map with colour 0 get code 7. A party
+member deployed as an ally therefore keeps code 0 with no target unit and its slot's old target point, and acts in
+the ally phase (GoTarget toward that point; 3 = passive once there, 0x440252).
+UnitInit (0x44274c): state 1, person, colour (0x449b7b), facing (0x449ae8), then (unless hidden) state 2 at the
+nearest free cell (0x442b03 → 0x43f040), full HP/MP, buffs 3, status 0; party members: person +0x27 += 1 (not when
+re-entering with the fade-in, 0x459417), others: person +0x27..+0x29 = 0. It leaves [8]..[0xb], [0xd], [0xe] alone.
 
 **op 0x44 battle_init** (0x412230): clear flags 0..255; 0x426c32(); u32 @0x55e9d4 = 0; for all 115 entries:
 person = 0xffff, flags = 0, mod byte @0x55a500[i] = 0; then entry[k].person = sortie_list[k] for the sortie list
@@ -663,19 +696,21 @@ Unit struct U (0x24 bytes):
 | +0x0b | u8 | action order in its phase (0xff = unassigned), see 10.4 |
 | +0x0c | u8 | state: 0 none, 1 created but off-map (hidden/伏兵 or not yet appeared), 2 on map, 3/4 defeated/retreated |
 | +0x0d | u8 | flags: 0x02 moved, 0x04 acted, 0x80 cleared by SetAI (AI-has-goal [G]) |
-| +0x0e | u8 | AI code (see 10.3); 7 = controlled by the player (party members on the player side) |
+| +0x0e | u8 | AI code (see 10.3); 7 = controlled by the player (set at battle start for colour-0 units 0..34, and by 0x45a46e when a person joins the player's army mid-battle) |
 | +0x0f | u8 | facing 0..3 |
 | +0x10 | u32 | HP |
 | +0x14 | u32 | MP |
 | +0x18..+0x1d | u8×6 | buff levels atk, def, spirit, agility, morale, move (3 = neutral) |
 | +0x1e | u8 | status ailment bits (§9.2) |
-| +0x20 | u32 | copied by the copy routine 0x45b700 [?] |
+| +0x20 | u32 | 1 after the battle-start reset (0x442613); copied by 0x45b700 |
 
 ### 10.3 AI modes and AI codes
-Slot `ai_mode` (0..6) → AI code unit[+0xe] via table 0x48e380 (SetAI 0x459d8b; refused for party members, who get
-code 7 = player control when on the player side, 0x45b700; modes ≥ 7 change nothing; a target person without a
-unit (0x45a751) or a point off the map (0x45a6bf) leaves the old target). *Port:* party members deployed as allies
-(op 0x46) get the AI of their entry and act in the ally phase, as before; only op 0x4e leaves them alone:
+Slot `ai_mode` (0..6) → AI code unit[+0xe] via table 0x48e380 (SetAI 0x459d8b; refused for party members — person
+byte +0x2a == 0, 0x41a190 — wherever their unit stands; modes ≥ 7 change nothing; a target person without a unit
+(0x45a751) or a point off the map (0x45a6bf) leaves the old target). When a person changes army during a battle
+(0x45a46e) the unit moves to a free slot of the new side (copy 0x45b700: code 7 if the new slot is player-side and the
+person is a party member, else 3) and gets code 7 when it joins the player. The player can command a unit whose
+colour is 0 or whose code is 7 (0x43d5f8 / 0x43ff54):
 | ai_mode | code | meaning (CCZ editor names) [names G] | target |
 |---|---|---|---|
 | 0 | 3 | 被动出击 passive: acts only if it can reach a cell from which an opposite unit is attackable | — |
@@ -705,9 +740,9 @@ Decision globals ("choice" @0x4b2c1c): +4 dest pos (0x4b2c20), 0x4b2c24 bit0 = r
 0x4b2c30 best physical target, 0x4b2c40/0x4b2c2c best strategy / its target.
 ```
 AIAct(U):
-  mv = (U.flags & 0x80) ? 100 : MovePoints(U)      # 0x43f74f: class+equip move; 麻 → 0; move buff ≥4 → +2, ≤2 → −2 [G]
+  mv = (U.flags & 0x80) ? 100 : MovePoints(U)      # 0x43f74f: class+equip move; 麻 → 0; move buff ≥4 → +2 (≤ 255), <3 → sat −2
   choice.forbidden = 0xff
-  if U.target != 0xff and U[U.target].state != 2: U.target = 0xff; U.ai = 1
+  if U.target != 0xff and U[U.target].state != 2: U.target = 0xff; U.ai = 1      # whatever the code was
   if U.state != 2 or U.flags & 2 (moved) or U.status & 0x08 (乱) or U.status & 0x40 (迷): return   # see 10.5.4
   Prepare(U)                                       # 0x43a28a, below
   if choice.retreat and !(U.flags & 0x80) and U.index != 35:
@@ -733,7 +768,11 @@ wounded (10.4 pass 2) and U.ai ∉ {2,4}: layerB[c] += 50 for every healing-terr
 Choice is reset (dest/target/strategy = 0xff, best = 0).
 
 Flood(start, mp, mode, tx, ty, zoc) = 0x438308 (§7.2 flood; cells discovered in order: start, then by increasing cost
-level, row-major (y, then x) over cells of the current level, each expanding its 4 neighbours in 0x4359f5 order).
+level, row-major (y, then x) over cells of the current level, each expanding its 4 neighbours in 0x4359f5 order:
+up, right, down, left — table 0x48df68). A cell at level L opens its neighbours only if it is the start, or zoc == 0,
+or it is not in an enemy zone of control (0x437d59: an opposite unit 4-adjacent; effect 33 exempts). A neighbour is
+taken if unvisited, its move cost ≠ 0xff and L + cost ≤ mp; its cost is L + cost. The mode-8/2/4 checks see only
+newly taken cells, never the start.
 Opposite-side units block (unless zoc==0 and U.flags&0x80); same-side units can be passed.
 mode bits: **4** = evaluate every reachable cell with CellScore (start first, if !(U.flags&0x80)) and also resets the
 choice and builds the usable-strategy list @0x4ac7ac (strategies 0..67 whose learn level for U's class
@@ -840,7 +879,8 @@ its own target point becomes choice.forbidden) else the target point (unit[9],[0
        the target point is reset to U.pos
 ```
 Code 4 units score cells only by GoalBonus/TerrainScore (CellScore skips atk/strategy for code 4) and never attack.
-MoveAlongPath (0x43a956): if dest ≠ 0xff and ≠ U.pos: path = StepToward(U.pos, dest, 255, 0) on the last flood's grid;
+MoveAlongPath (0x43a956 → mod 0x4d3a2d): if dest ≠ 0xff and ≠ U.pos: path = StepToward(goal U.pos, from dest, 255, 0)
+on the last flood's grid (greedy descent from dest, reversed);
 walk it step by step (0x44201b(dir) animation; camera follows when flag 0x80); then U.flags |= 4 (moved) unless 0x80.
 Arrival (0x440252): if U.target == 0xff and U.pos == target point and U.ai ∈ {0,4}: U.ai = 3 (becomes passive).
 PhysicalAttack (0x43aafb): skipped if flag 0x80, code 4, flag 2, or the person's weapon cannot attack (0x407907);
@@ -864,8 +904,10 @@ for k in (0 friend phase: ctx+0x10 = 1, units 0..34;  1 enemy phase: ctx+0x10 = 
    stop as soon as ctx+1 (battle result) ≠ 0
 ```
 Units with status 乱 (0x08) or 迷 (0x40) return immediately from AIAct, i.e. AI units under 乱/迷 lose their turn
-(§9.2's "AI-controlled" note for 乱 is wrong for AI units). Code 7 (party members on the player side) never act
-automatically.
+(§9.2's "AI-controlled" note for 乱 is wrong for AI units); they get no flags. Code 7 units never act automatically.
+A unit the player commands (0x43d544 → 0x43ee5e): under 乱 or 迷 its move range is shown and the next click on the map
+only brings up "正处于混乱状态。" (0x48dff8) / the 迷失 message (mod string 0x5556e0); it cannot act. After each player
+action the phase ends (after a prompt) when no unit 0..34 on the map with code 7, no flag 2 and no 乱 is left (0x44e0d9).
 
 ### 10.6 Battle-time script ops
 Common conventions: **person selectors** in unit tests (UnitAt 0x45b371, InRect 0x45b4a5): 0x400 = any unit,

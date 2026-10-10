@@ -264,7 +264,9 @@ func close() -> void:
 		Audio.play_bgm(prev_track)
 	var u1 := stage.unit_by_pid(pids[1])
 	if exp_award > 0 and u1 != null and u1.colour == 0:
-		await stage.actions.gain_exp(u1, mini(exp_award, 100))
+		# 0x4498e0: SetExp gets the whole award (up to 200, 400 against the boss; 0x408950 levels up per 100);
+		# only the original's EXP bar stops at 100
+		await stage.actions.gain_exp(u1, exp_award)
 	exp_award = 0
 
 

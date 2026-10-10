@@ -332,8 +332,9 @@ This is the same as the normal kill formula (rules.md §8.1) but without the equ
 5. If the side-1 unit is player army: `0x450984(unit1, unit0, 0, 0, exp=this+0x84, 0, 0, 1)` →
    `0x450036`. This is the **standard EXP popup** on the map next to the unit; it is the same one as after an
    attack. The displayed gain is capped so that exp ≤ 100. If exp = 0, nothing is shown.
-6. Then `SetExp(person, person.exp(+0x2d) + exp)` (`0x408950`: at ≥ 100 it calls the level-up routine
-   0x4d0331; no gain at level ≥ 70).
+6. Then `SetExp(person, person.exp(+0x2d) + exp)` with the **whole** award (`0x408950`: while the sum is ≥ 100 it
+   levels up once (0x4d0331 → 0x40898f → 0x4073b8) and subtracts 100, so up to 4 level-ups against a boss; no gain
+   at level ≥ 70). Only the popup's bar stops at 100.
 
 The 0x450984 call does **not** touch HP or retreat anyone. The loser's fate (retreat, death, …) is handled by
 the following script ops.

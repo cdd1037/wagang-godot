@@ -391,6 +391,12 @@ func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 			if t.active() and t.is_enemy_of(u) and usable_on(u, s, t):
 				out.append(t)
 		return out
+	if s == 66:
+		# 玄武 (0x424810): every unit on the map, of either side (0x42097a passes for strategies >= 0x14)
+		for t in st.units:
+			if t.active():
+				out.append(t)
+		return out
 	for c in strategy_area(u, s, target):
 		var t := st.unit_at(c)
 		if t == null or not t.active():
@@ -462,6 +468,8 @@ func _strat_exp(u: BUnit, t: BUnit, killed: bool, damage_strat: bool) -> int:
 
 
 func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
+	if s == 38 or s == 66:
+		return await _apply_random_strategy(u, s, t)
 	var damage_set := s in Rules.DAMAGE_STRATS or s == 21
 	var hit := Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
 	if not hit:
@@ -505,10 +513,6 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		29, 30: _buff(t, 1, false)
 		31, 32: t.status |= BUnit.ST_CONFUSION
 		37: t.status |= BUnit.ST_SEAL
-		38, 66:
-			var h := t.max_hp() - t.hp
-			t.hp = t.max_hp()
-			if not Game.autoplay: st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 		39, 40, 41, 42, 43, 67:
 			var h2 := Rules.heal_amount(u, t, s, false)
 			t.hp = mini(t.hp + h2, t.max_hp())
@@ -533,16 +537,89 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 			t.moved = false
 			t.acted = false
 		61:
-			_buff(t, 0, true)
+			_stat_code(t, 0x35)                  # 聚气: code 0xa0
 		62:
 			t.mp = mini(t.mp + t.max_mp() / 4, t.max_mp())
 		63:
-			for i in [3, 4, 0, 1]:
-				_buff(t, i, true)
+			for c in [0x31, 0x33, 0x35, 0x37]:   # 豪气: code 0xaf
+				_stat_code(t, c)
 		_:
 			pass
 	st.refresh_units()
 	return _strat_exp(u, t, false, false)
+
+
+## 八阵 (0x423edc) and 玄武 (0x424810): no hit roll; each target gets one random outcome. 八阵 draws rand(8):
+## 0 八阵 damage, 1 混乱, 2 麻痹, 3 封策, 4 毒烟 damage + 中毒, 5 爆发/士气/攻击/防御↓ (code 0x6f),
+## 6 the same ↑ (0xaf), 7 兵力 to full (0x43c548: MaxHP − HP). 玄武 draws rand(7) of 混乱, 麻痹, 封策, 中毒,
+## 0x6f, 0xaf, full 兵力. 八阵's statuses only stick if the target survives the damage (0x4224a8). EXP (0x420efb):
+## 八阵 is a damage strategy, so its kill formula applies when the stored amount is not below the target's
+## 兵力 (a heal is stored negated and compares as a huge unsigned value); 玄武 always gives the small one.
+func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
+	var k: int = Rules.rand(8) if s == 38 else Rules.rand(7) + 1
+	var amount := 0       # damage, or −heal
+	match k:
+		0, 4:
+			if s == 38:
+				var hs := 38 if k == 0 else 33
+				if Rules.chance(Rules.strat_hit(u, t, hs, view().terrain_at(t.pos), st.weather())):
+					amount = Rules.strat_damage(u, t, hs, false)
+		7:
+			amount = -(t.max_hp() - t.hp)
+	var stored := amount if amount >= 0 else 0x100000000 + amount
+	var e := _strat_exp(u, t, s == 38 and stored >= t.hp, s == 38)
+	var survives := amount < t.hp
+	match k:
+		1:
+			if survives: t.status |= BUnit.ST_CONFUSION
+		2:
+			if survives: t.status |= BUnit.ST_PARALYSIS
+		3:
+			if survives: t.status |= BUnit.ST_SEAL
+		4:
+			if survives: t.status |= BUnit.ST_POISON
+		5:
+			for c in [0x17, 0x19, 0x1b, 0x1d]:
+				_stat_code(t, c)
+		6:
+			for c in [0x31, 0x33, 0x35, 0x37]:
+				_stat_code(t, c)
+	if amount > 0:
+		var dmg := mini(amount, t.hp)
+		if not Game.autoplay:
+			st.hud.popup_number(str(dmg), t.pos)
+		_apply_damage(t, dmg)
+		if t.hp == 0:
+			await unit_defeated(t)
+	elif amount < 0:
+		t.hp -= amount
+		Audio.play_se(SE_HEAL)
+		if not Game.autoplay:
+			st.hud.popup_number("+%d" % -amount, t.pos, Color(0.4, 1, 0.4))
+	st.refresh_units()
+	return e
+
+
+## Stat change codes of 0x420cb2: 0x17 爆发↓ 0x19 士气↓ 0x1b 攻击↓ (精神 for caster families, 0x43ffed)
+## 0x1d 防御↓; 0x30 移动↑ 0x31 爆发↑ 0x33 士气↑ 0x37 防御↑; 0x35 (mod 0x4d8985): classes 24-26 and 50 raise
+## both 攻击 and 精神, others 精神 if a caster family, else 攻击.
+func _stat_code(t: BUnit, code: int) -> void:
+	var magic := t.family() in [8, 9, 10, 18]
+	match code:
+		0x17, 0x18: _buff(t, 3, false)
+		0x19, 0x1a: _buff(t, 4, false)
+		0x1b, 0x1c: _buff(t, 2 if magic else 0, false)
+		0x1d, 0x1e: _buff(t, 1, false)
+		0x30: _buff(t, 5, true)
+		0x31, 0x32: _buff(t, 3, true)
+		0x33, 0x34: _buff(t, 4, true)
+		0x35, 0x36:
+			if t.cls() == 50 or (t.cls() >= 24 and t.cls() <= 26):
+				_buff(t, 2, true)
+				_buff(t, 0, true)
+			else:
+				_buff(t, 2 if magic else 0, true)
+		0x37, 0x38: _buff(t, 1, true)
 
 
 func _buff(t: BUnit, i: int, up: bool) -> void:

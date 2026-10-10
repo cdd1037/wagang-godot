@@ -20,9 +20,10 @@ func _player_units() -> Array[BUnit]:
 	return out
 
 
+## No player unit left that can act: confused (乱) units do not count (0x44e0d9).
 func _all_done() -> bool:
 	for u in _player_units():
-		if not u.acted:
+		if not u.acted and not (u.status & BUnit.ST_CONFUSION):
 			return false
 	return true
 
@@ -50,11 +51,19 @@ func player_phase() -> void:
 			return
 		_bot.run_phase()
 	elif Game.autoplay or Game.demo:
+		var fx := OS.get_environment("WG_FXTEST")
+		if fx != "":
+			# debug: cast these strategies with autoplay (dialogue skipped) and print each target's outcome
+			if _bot == null:
+				_bot = InputBot.new(st, "")
+				st.add_child(_bot)
+			await _bot.fx_test(fx.split(","))
+			return
 		await _auto_player_phase()
 		return
+	if pu.is_empty():
+		return      # no unit to command (0x44e0d9)
 	while not end_turn and not st._battle_finished():
-		if _all_done():
-			break
 		var r := await _click()
 		if st._battle_finished():
 			break
@@ -67,8 +76,10 @@ func player_phase() -> void:
 		if u == null:
 			continue
 		if u.mode == 7 and u.slot < 35 and not u.acted:
-			await select_unit(u)
+			var did := await select_unit(u)
 			await st.checkpoint()
+			if did and _all_done():
+				break       # checked after each action only, so units all under 乱 do not end the phase
 		else:
 			await show_unit_ranges(u)
 	st.view.clear_highlights()
@@ -97,8 +108,18 @@ func show_unit_ranges(u: BUnit) -> void:
 	st.view.clear_highlights()
 
 
-func select_unit(u: BUnit) -> void:
+## Returns true when a unit finished its action.
+func select_unit(u: BUnit) -> bool:
 	Audio.play_se("se00")
+	if u.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
+		# 0x43d544 / 0x43d5f8: the range is shown and a click on the map only brings up the message
+		var reach := st.actions.reachable(u)
+		st.view.set_move_cells(reach)
+		var r := await _click()
+		st.view.clear_highlights()
+		if r[1] != MOUSE_BUTTON_RIGHT and st.view.in_bounds(r[0]):
+			await st.ui.popup("正处于混乱状态。" if u.status & BUnit.ST_CONFUSION else "正处于迷失状态。")
+		return false
 	while true:
 		var parents := {}
 		var reach := st.actions.reachable(u, parents)
@@ -112,16 +133,18 @@ func select_unit(u: BUnit) -> void:
 		var r := await _click()
 		st.view.clear_highlights()
 		if st._battle_finished():
-			return
+			return false
 		var cell: Vector2i = r[0]
 		if r[1] == MOUSE_BUTTON_RIGHT:
-			return
+			return false
 		if not reach.has(cell):
 			var other := st.unit_at(cell)
 			if other and other != u and other.mode == 7 and other.slot < 35 and not other.acted:
+				if other.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
+					return await select_unit(other)
 				u = other
 				continue
-			return
+			return false
 		var orig := u.pos
 		var orig_dir := u.dir
 		var path := Grid.path_to(parents, u.pos, cell)
@@ -133,12 +156,13 @@ func select_unit(u: BUnit) -> void:
 			if u.node:
 				u.node.greyed = true
 			st.refresh_units()
-			return
+			return true
 		# cancelled: undo the move
 		u.pos = orig
 		u.dir = orig_dir
 		u.moved = false
 		st.refresh_units()
+	return false
 
 
 ## Returns true when the unit's action is finished.

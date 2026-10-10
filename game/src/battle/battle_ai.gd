@@ -17,6 +17,10 @@ var choice_target: BUnit
 var forbidden := Vector2i(-1, -1)
 var retreat := false
 var usable_strats: Array[int] = []
+var grid: Dictionary = {}        # cell -> cost from the start of the last flood (0x4aeb38 + 0x12c0)
+
+## Neighbour order of the original's floods and walks (0x4359f5, table 0x48df68): up, right, down, left.
+const FDIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
 
 func _init(s: BattleStage) -> void:
@@ -46,13 +50,14 @@ func _compute_order(a: int, b: int) -> void:
 
 func run_phase(a: int, b: int) -> void:
 	_compute_order(a, b)
+	var skipped := {}      # units whose AIAct returned at once (乱/迷): no flags set, not picked again
 	var guard := 0
 	while guard < 200 and not st._battle_finished():
 		guard += 1
 		var pick: BUnit = null
 		for i in range(a, b):
 			var x := st.units[i]
-			if not x.active() or x.mode == 7:
+			if skipped.has(i) or not x.active() or x.mode == 7:
 				continue
 			if x.flags & (BUnit.F_MOVED | BUnit.F_ACTED):
 				continue
@@ -60,8 +65,10 @@ func run_phase(a: int, b: int) -> void:
 				pick = x
 		if pick == null:
 			break
-		await act(pick)
-		pick.flags |= BUnit.F_MOVED | BUnit.F_ACTED
+		if await act(pick):
+			pick.flags |= BUnit.F_MOVED | BUnit.F_ACTED
+		else:
+			skipped[pick.slot] = true
 		st.refresh_units()
 		await st.checkpoint()
 
@@ -75,81 +82,67 @@ static func _wounded(x: BUnit) -> bool:
 
 
 # ------------------------------------------------------------------ one unit
-func act(unit: BUnit) -> void:
+## AIAct (0x43ad1c). Returns false when the unit loses its turn: confused (乱) or lost (迷) units, and units
+## that have already acted, return at once (10.5.4).
+func act(unit: BUnit) -> bool:
 	u = unit
 	if not u.active():
-		return
-	var mv := 0 if (u.status & BUnit.ST_PARALYSIS) else u.move_points()
+		return false
+	var mv := 100 if (u.flags & BUnit.F_PASS) else u.move_points()
 	forbidden = Vector2i(-1, -1)
 	var tslot := Mem.r8(u.addr + 8)
-	if tslot != 0xff and (tslot >= 115 or not st.units[tslot].active()):
+	if tslot != 0xff and (tslot >= 115 or st.units[tslot].state != BUnit.STATE_ON_MAP):
 		Mem.w8(u.addr + 8, 0xff)
-		if u.mode in [0, 3]:
-			u.mode = 1
-	if u.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
-		await _confused_act(mv)
-		return
+		u.mode = 1
+	if (u.flags & BUnit.F_ACTED) or (u.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST)):
+		return false
 	_prepare()
-	var reach: Dictionary = {}
-	var parents := {}
-	reach = st.actions.reachable(u, parents) if mv > 0 else {u.pos: 0}
-	if retreat and u.slot != 35:
-		var leader := st.units[0] if u.is_player_side() else st.units[35]
-		if leader.active() and leader != u:
-			_step_toward_bonus(leader.pos, mv)
-		_evaluate(reach)
+	grid = {}
+	if retreat and not (u.flags & BUnit.F_PASS) and u.slot != 35:
+		# fall back toward the own leader: unit 0 for the player side, unit 35 (if on the map) for the enemy
+		var goal := Vector2i(-1, -1)
+		if u.is_player_side():
+			goal = st.units[0].pos
+		elif st.units[35].state == BUnit.STATE_ON_MAP:
+			goal = st.units[35].pos
+		if st.view.in_bounds(goal):
+			_goal_bonus(goal, 10)
+			if _flood2(goal, u.pos, true) or _flood2(goal, u.pos, false):
+				_step_toward(goal, mv, true)
+				_flood4(u.pos, mv)
+			else:
+				_active(mv)
+		else:
+			_active(mv)
 	else:
 		match u.mode:
 			0, 4:
-				_go_target(reach, mv)
+				_go_target(mv)
 			1:
-				_active(reach, mv)
+				_active(mv)
 			2:
-				reach = {u.pos: 0}
-				_evaluate(reach)
-				if dest.x < 0:
-					dest = u.pos
+				_flood4(u.pos, 0)
+				dest = u.pos
 			3:
-				if _attack_cell_reachable(reach):
-					_evaluate(reach)
+				if _flood8(u.pos, mv) != null:
+					_flood4(u.pos, mv)
 				else:
 					dest = u.pos
-			_:
-				_active(reach, mv)
-	if dest.x < 0 or not reach.has(dest):
-		dest = u.pos
-	# move
+			7:
+				_active(mv)      # player units under autoplay (WG_AUTO)
+	# MoveAlongPath (0x43a956): walk to dest on the last flood's grid
 	BUnit.move_origin = u.pos
-	if dest != u.pos:
+	if dest.x >= 0 and dest != u.pos and grid.has(dest):
 		await st.view.ensure_visible(u.pos)
-		var path := Grid.path_to(parents, u.pos, dest)
-		await st.actions.move_unit(u, path)
+		await st.actions.move_unit(u, _path_from(dest))
 	_arrival()
 	# act
-	if u.mode != 4 and u.active():
+	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
 		if choice_strategy >= 0 and choice_target != null and choice_target.active():
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
 		else:
 			await _physical_attack()
-
-
-func _confused_act(mv: int) -> void:
-	# Confused/lost units wander one step and hit anything adjacent (simplified 10.5.4).
-	var opts: Array[Vector2i] = []
-	for d in Grid.DIRS:
-		var c := u.pos + d
-		if st.view.in_bounds(c) and st.unit_at(c) == null and Rules.move_cost(u, st.view.terrain_at(c)) <= mv:
-			opts.append(c)
-	if not opts.is_empty() and Rules.chance(50):
-		var path: Array[Vector2i] = [opts[Rules.rand(opts.size())]]
-		await st.actions.move_unit(u, path)
-	var near: Array[BUnit] = []
-	for c in st.actions.attack_cells(u, u.pos):
-		var t := st.unit_at(c)
-		if t and t != u:
-			near.append(t)
-	if not near.is_empty():
-		await st.actions.attack(u, near[Rules.rand(near.size())])
+	return true
 
 
 func _prepare() -> void:
@@ -179,34 +172,84 @@ func _prepare() -> void:
 				usable_strats.append(s)
 
 
-func _attack_cell_reachable(reach: Dictionary) -> bool:
-	for c in reach:
-		if layer_a.has(c):
+# ------------------------------------------------------------------ flood (0x438308)
+## The original's flood from `start` over U's move costs: cost levels in increasing order, each level's cells
+## row by row, each opening its 4 neighbours in FDIRS order. A neighbour is taken if it is unvisited, passable,
+## within `mp` and not held by an opposite unit (unless !zoc and U may pass); with `zoc`, cells in an enemy zone
+## of control (other than the start) do not open their neighbours. `on_cell` sees each newly reached cell in that
+## order and stops the flood by returning true. Fills `grid`. Returns false if the start's terrain is impassable.
+func _flood(start: Vector2i, mp: int, zoc: bool, on_cell: Callable) -> bool:
+	grid = {start: 0}
+	if Rules.move_cost(u, st.view.terrain_at(start)) >= 255:
+		return false
+	var can_pass := (u.flags & BUnit.F_PASS) != 0
+	var buckets := {0: [start]}
+	var level := 0
+	while level < mp:
+		var cells: Array = buckets.get(level, [])
+		buckets.erase(level)
+		cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y or (a.y == b.y and a.x < b.x))
+		for c: Vector2i in cells:
+			if c != start and zoc and st.actions.in_zoc(u, c):
+				continue
+			for d in FDIRS:
+				var n := c + d
+				if not st.view.in_bounds(n) or grid.has(n):
+					continue
+				var cost := Rules.move_cost(u, st.view.terrain_at(n))
+				if cost >= 255 or level + cost > mp:
+					continue
+				var o := st.unit_at(n)
+				if o != null and o.is_enemy_of(u) and (zoc or not can_pass):
+					continue
+				grid[n] = level + cost
+				if not buckets.has(level + cost):
+					buckets[level + cost] = []
+				buckets[level + cost].append(n)
+				if on_cell.call(n):
+					return true
+		if buckets.is_empty():
+			break
+		level = buckets.keys().min()
+	return true
+
+
+## Flood mode 8: the opposite unit attackable from the first reached cell that has one (layer_a), or null.
+## The start cell itself is not looked at.
+func _flood8(start: Vector2i, mp: int) -> BUnit:
+	var hit: Array = [null]
+	_flood(start, mp, true, func(n: Vector2i) -> bool:
+		if layer_a.has(n):
+			hit[0] = layer_a[n]
 			return true
-	return false
+		return false)
+	return hit[0]
 
 
-## Cells in discovery order: start first, then by cost (mp spent), row-major.
-func _ordered(reach: Dictionary) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	for c in reach:
-		cells.append(c)
-	var start := u.pos
-	var mp := u.move_points()
-	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		if a == start: return true
-		if b == start: return false
-		var ca: int = mp - int(reach[a])
-		var cb: int = mp - int(reach[b])
-		if ca != cb: return ca < cb
-		if a.y != b.y: return a.y < b.y
-		return a.x < b.x)
-	return cells
+## Flood mode 2: is `goal` reached from `start` (ignoring the move limit)?
+func _flood2(start: Vector2i, goal: Vector2i, zoc: bool) -> bool:
+	if start == goal:
+		return false
+	var found: Array = [false]
+	_flood(start, 255, zoc, func(n: Vector2i) -> bool:
+		if n == goal:
+			found[0] = true
+			return true
+		return false)
+	return found[0]
 
 
-func _evaluate(reach: Dictionary) -> void:
-	for c in _ordered(reach):
-		_cell_score(c)
+## Flood mode 4: reset the choice and score the start (unless U may pass) and every reached cell (CellScore).
+func _flood4(start: Vector2i, mp: int) -> void:
+	best = 0
+	dest = Vector2i(-1, -1)
+	choice_strategy = -1
+	choice_target = null
+	if not (u.flags & BUnit.F_PASS):
+		_cell_score(start)
+	_flood(start, mp, true, func(n: Vector2i) -> bool:
+		_cell_score(n)
+		return false)
 
 
 func _cell_score(c: Vector2i) -> void:
@@ -407,128 +450,124 @@ func _area_adjust(s: int, center: Vector2i, v: int, side_opp: bool) -> int:
 
 
 # ------------------------------------------------------------------ movement helpers (§10.5.2)
-func _goal_bonus(cell: Vector2i, v: int, seen: Dictionary = {}) -> void:
-	if v < 9 or not st.view.in_bounds(cell) or seen.has(cell):
+## GoalBonus (0x438178): +v on `cell` if it has no score yet and is free (or U's own cell), then v−10 (v > 10) or
+## v−1 on its neighbours, down to 9; classes 15 and 16 do not spread it. (The original also requires U's
+## terrain effect on its own cell to be ≠ 0xff, which always holds.)
+func _goal_bonus(cell: Vector2i, v: int) -> void:
+	if v < 9:
 		return
-	seen[cell] = true
-	var occ := st.unit_at(cell, u)
-	if int(layer_b.get(cell, 0)) == 0 and Rules.move_cost(u, st.view.terrain_at(cell)) < 999 and occ == null:
-		layer_b[cell] = v
+	if st.view.in_bounds(cell) and int(layer_b.get(cell, 0)) == 0:
+		var occ := st.unit_at(cell)
+		if occ == null or cell == u.pos:
+			layer_b[cell] = v
 	if u.cls() in [15, 16]:
 		return
-	for d in Grid.DIRS:
-		_goal_bonus(cell + d, v - 10 if v > 10 else v - 1, seen)
+	for d in FDIRS:
+		var n := cell + d
+		if st.view.in_bounds(n):
+			_goal_bonus(n, v - 1 if v < 11 else v - 10)
 
 
-## Distance-to-goal grid (Dijkstra over U's move costs), then greedy walk from U.pos within mv.
-func _step_toward_bonus(goal: Vector2i, mv: int) -> bool:
-	var w := st.view.map_w
-	var h := st.view.map_h
-	var dist := {goal: 0}
-	var open: Array = [[0, goal]]
-	while not open.is_empty():
-		var bi := 0
-		for i in range(1, open.size()):
-			if open[i][0] < open[bi][0]:
-				bi = i
-		var cur = open[bi]
-		open.remove_at(bi)
-		var c: Vector2i = cur[1]
-		if dist.get(c, 1 << 30) < cur[0]:
+## One greedy step toward lower `grid` values: the first neighbour (FDIRS order) with the smallest value below
+## the current cell's whose move cost fits in `rem`; cells in an enemy zone of control are skipped unless they are
+## `goal` or U may pass. Returns [cell, cost], or [] when no step is possible.
+func _descend(p: Vector2i, goal: Vector2i, rem: int) -> Array:
+	var bestv: int = grid.get(p, 0xff)
+	var out: Array = []
+	for d in FDIRS:
+		var n := p + d
+		if not st.view.in_bounds(n):
 			continue
-		for d in Grid.DIRS:
-			var n := c + d
-			if n.x < 0 or n.y < 0 or n.x >= w or n.y >= h:
-				continue
-			var mc := Rules.move_cost(u, st.view.terrain_at(c))
-			if mc >= 999:
-				continue
-			var o := st.unit_at(n, u)
-			if o and o.is_enemy_of(u):
-				continue
-			var nd: int = cur[0] + mc
-			if nd < dist.get(n, 1 << 30):
-				dist[n] = nd
-				open.append([nd, n])
-	if not dist.has(u.pos):
-		return false
+		if st.actions.in_zoc(u, n) and n != goal and not (u.flags & BUnit.F_PASS):
+			continue
+		var g: int = grid.get(n, 0xff)
+		if g < bestv:
+			var cost := Rules.move_cost(u, st.view.terrain_at(n))
+			if cost <= rem:
+				bestv = g
+				out = [n, cost]
+	return out
+
+
+## StepToward (0x437e2e) on the grid of a flood from `goal`: walk from U's cell within mv; if it stops short and
+## `bonus`, GoalBonus there (20 if a unit stands on the end cell, U included, else 10).
+func _step_toward(goal: Vector2i, mv: int, bonus: bool) -> void:
 	var p := u.pos
 	var rem := mv
-	var guard := 0
-	while p != goal and guard < 200:
-		guard += 1
-		var bestn := Vector2i(-1, -1)
-		var bestd: int = dist[p]
-		for d in Grid.DIRS:
-			var n := p + d
-			if not dist.has(n):
-				continue
-			if n != goal and st.actions.in_zoc(u, n) and not (u.flags & BUnit.F_PASS):
-				continue
-			var mc := Rules.move_cost(u, st.view.terrain_at(n))
-			if dist[n] < bestd and mc <= rem:
-				bestd = dist[n]
-				bestn = n
-		if bestn.x < 0:
+	while p != goal:
+		var step := _descend(p, goal, rem)
+		if step.is_empty():
+			if bonus:
+				_goal_bonus(p, 20 if st.unit_at(p) != null else 10)
+			return
+		p = step[0]
+		rem -= int(step[1])
+
+
+## The walk to `dest` (0x4d3a2d → 0x437e2e(U, U.pos, dest, 255, 0)): descend the last flood's grid from dest to
+## U's cell, then reverse it.
+func _path_from(to: Vector2i) -> Array[Vector2i]:
+	var back: Array[Vector2i] = []
+	var p := to
+	var rem := 255
+	while p != u.pos:
+		back.append(p)
+		var step := _descend(p, u.pos, rem)
+		if step.is_empty():
 			break
-		rem -= Rules.move_cost(u, st.view.terrain_at(bestn))
-		p = bestn
-	if p != goal:
-		_goal_bonus(p, 20 if st.unit_at(p) != null else 10)
-	return true
+		p = step[0]
+		rem -= int(step[1])
+	back.reverse()
+	return back
 
 
-func _active(reach: Dictionary, mv: int) -> void:
-	if _attack_cell_reachable(reach):
-		_evaluate(reach)
+## Active (0x43a7c9, code 1): evaluate normally if an attack cell is reachable now; else head for the opposite
+## unit whose attack cell the flood reaches first (move limit ignored), if a path to it exists.
+func _active(mv: int) -> void:
+	if _flood8(u.pos, mv) != null:
+		_flood4(u.pos, mv)
 		return
-	# nearest attackable opposite unit (by straight path distance)
-	var tgt: BUnit = null
-	var bd := 1 << 30
-	for t in st.units:
-		if t.active() and t.is_enemy_of(u):
-			var dd := Grid.manhattan(t.pos, u.pos)
-			if dd < bd:
-				bd = dd
-				tgt = t
-	if tgt == null:
+	var j := _flood8(u.pos, 255)
+	if j == null:
 		dest = u.pos
 		return
-	if _step_toward_bonus(tgt.pos, mv):
-		_evaluate(reach)
-	else:
-		dest = u.pos
+	var goal := j.pos
+	if _flood2(goal, u.pos, true) or _flood2(goal, u.pos, false):
+		_step_toward(goal, mv, true)
+		_flood4(u.pos, mv)
 
 
-func _go_target(reach: Dictionary, mv: int) -> void:
+## GoTarget (0x43afd4, codes 0 and 4): the target unit's cell (if that unit itself goes for a target, its target
+## point is forbidden), else the target point.
+func _go_target(mv: int) -> void:
 	var tslot := Mem.r8(u.addr + 8)
 	var goal: Vector2i
 	if tslot != 0xff and tslot < 115:
 		var tu := st.units[tslot]
 		goal = tu.pos
-		if tu.mode in [0, 4] and Mem.r8(tu.addr + 8) == 0xff:
+		if tu.mode in [0, 4]:
 			forbidden = Vector2i(Mem.r8(tu.addr + 9), Mem.r8(tu.addr + 10))
 	else:
 		goal = Vector2i(Mem.r8(u.addr + 9), Mem.r8(u.addr + 10))
 	if u.flags & BUnit.F_PASS:
-		dest = goal if reach.has(goal) else u.pos
+		if not _flood2(u.pos, goal, true):
+			_flood2(u.pos, goal, false)
+		dest = goal
 		return
-	if tslot != 0xff and _attack_cell_reachable(reach) and _target_attackable(reach, tslot):
+	var r := _flood8(u.pos, mv)
+	if tslot != 0xff and r != null and r.slot == tslot:
 		_goal_bonus(goal, 20)
-		_evaluate(reach)
+		_flood4(u.pos, mv)
 		return
 	_goal_bonus(goal, 10)
-	if _step_toward_bonus(goal, mv):
-		_evaluate(reach)
+	if _flood2(goal, u.pos, true):
+		_step_toward(goal, mv, true)
+		_flood4(u.pos, mv)
+	elif not _flood2(goal, u.pos, false):
+		_active(mv)
 	else:
-		_active(reach, mv)
-
-
-func _target_attackable(reach: Dictionary, tslot: int) -> bool:
-	for c in reach:
-		if layer_a.get(c) == st.units[tslot]:
-			return true
-	return false
+		_step_toward(goal, mv, true)
+		_flood4(u.pos, mv)
 
 
 func _arrival() -> void:

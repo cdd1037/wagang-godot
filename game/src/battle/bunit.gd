@@ -122,6 +122,23 @@ func clear(s: int) -> void:
 		set_buff(i, 3)
 
 
+## The battle-start reset of a record (0x442613, before 0x44cc85). Only these fields: the AI target point
+## [9],[10], the order byte, buffs and the rest keep what the slot's previous unit left there.
+func reset(s: int) -> void:
+	slot = s
+	extra = {}
+	gen += 1
+	Mem.w32(addr, 0xffff)
+	Mem.w8(addr + 4, s)
+	Mem.w8(addr + 6, 0xff)
+	Mem.w8(addr + 7, 0xff)
+	Mem.w8(addr + 8, 0xff)
+	Mem.w8(addr + 0xe, 0)
+	Mem.w8(addr + 0xc, 0)
+	Mem.w8(addr + 0xd, 0)
+	Mem.w32(addr + 0x20, 1)
+
+
 func exists() -> bool:
 	return pid >= 0
 
@@ -206,13 +223,16 @@ func morale() -> int:
 	return stat(4)
 
 
+## MovePoints (0x43f74f): 0 when paralysed; move buff >= 4 → +2 (at most 255), < 3 → −2 (at least 0).
 func move_points() -> int:
+	if status & ST_PARALYSIS:
+		return 0
 	var m := person.move_points()
 	var b := buff(5)
 	if b >= 4:
-		m += 1
-	elif b <= 2:
-		m = maxi(m - 1, 1)
+		m = mini(m + 2, 255)
+	elif b < 3:
+		m = Rules.sat_sub(m, 2)
 	return m
 
 
