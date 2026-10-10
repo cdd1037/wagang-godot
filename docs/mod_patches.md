@@ -127,7 +127,15 @@ sets every slot to 1024 (nobody); later scenarios assign holders:
 
 Grouped by area, roughly in the order they should be done. "→" points to the spec in the batch reports.
 
-### 1. Script-visible battle state (story correctness; do first)
+### 1. Script-visible battle state (story correctness; do first) — done
+
+All of group 1 is ported (2026-10-11), with `t_battle` as its test; the spec moved into rules.md §9.1 and §10.6.
+Doing it turned up one more gap in original code:
+* **op 0x21 map_mark (1346 uses) sets and puts out fires.** The port treated it as "undo a terrain change".
+  * Mode 0 is really ChangeTerrain to 0x1a 火 with overlay mark 0, e.g. S_02 "烧掉西边的桥".
+  * Mode 1 undoes that change.
+  * So burnt bridges and fire-blocked cells never appeared in the port.
+* The phase start was also put into the original order: poll, then remove fallen units, then recovery and the rest.
 
 1. **EV[10] "a unit's HP reached 0".**
    * The engine sets EV[10] to 1 on every kill: physical, strategy, script, and 暗杀.
@@ -139,22 +147,28 @@ Grouped by area, roughly in the order they should be done. "→" points to the s
      * 程咬金's return.
    * The port never sets EV[10] and removes HP-0 units at once, so none of this runs.
    * Also, the pre-battle loop leaves EV[10] = 15 in the port.
-   * → B1 F9, B2 §L, B3 F1, B5 F9.
+   * → B1 F9, B2 §L, B3 F1, B5 F9. **Done:** `BattleActions.unit_fell`, `BattleStage.remove_dead`,
+     `BattleInput.after_command`.
 2. **暗杀 is a delayed defeat.**
    * A successful hit does 0 damage and marks the target.
    * Two phase-starts later the target drops to HP 1, with "%s被暗杀了！！" and EV[10] = 1.
    * The mark is cancelled if the assassin leaves the map.
    * The port defeats the target at once and gives kill EXP.
-   * → B2 §K, B3 F7, B5 F11.
+   * → B2 §K, B3 F7, B5 F11. **Done:** `BattleStage._assassination_countdown`.
+   * The usability hook 0x4dbf8a never blocks: it compares the category, not the strategy, with 0x15. B5's
+     guess that pending marks forbid a second cast was checked and is wrong.
 3. **op 0x58 with alt ≠ 0 reverts a recorded map change** (puts out fires): 344 uses, 188 of them in S_15. The port
-   does nothing. → B2 §O.
+   does nothing. → B2 §O. **Done.**
 4. **op 0x3b join is ignored in battles.** The port runs it, so e.g. 雄阔海 leaves mid-battle in S_36. → B2 §N.
+   **Done:** "in a battle" now means scene mode 3 (0x40b922: from change_scene 3 on). So S_29's joins right
+   after its change_scene 3 are ignored too.
 5. **Saving is refused while [0x4ce004] == 0**, with "目前不可存盘。". op 0x74 sets this flag 473 times. → B6 F4.
-6. **Script attr 8 = battle-unit MP**: `set_attr p 8 …` is used 11 times in S_17 and S_36. → B1 F19.
+   **Done.** A load sets the flag to 1 (0x4d0c29). The port's autosave is not gated.
+6. **Script attr 8 = battle-unit MP**: `set_attr p 8 …` is used 11 times in S_17 and S_36. → B1 F19. **Done.**
 7. **史录 write rules:**
    * no de-duplication of appended entries;
    * a category-0xff replace with no match adds nothing.
-   * → B2 §M.
+   * → B2 §M. **Done.**
 
 ### 2. Battle commands
 

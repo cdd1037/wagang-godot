@@ -337,7 +337,10 @@ func op_caption(ins: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ party / items / money
+## op 0x3b (0x4148fe): join / leave. In a battle the original handler does nothing (0x4149be).
 func op_join(ins: Dictionary) -> void:
+	if in_battle():
+		return
 	Game.join_party(arg(ins, 0) & 0xffff, arg(ins, 1) & 0xffff, arg(ins, 2) & 0xffff)
 
 

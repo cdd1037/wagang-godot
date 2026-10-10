@@ -2,7 +2,8 @@ class_name BattleAttrs
 extends RefCounted
 ## Attribute ids of EEX op 0x36 test_attr / 0x38 set_attr (0x4112e9 / 0x412006, person attr 0x406d87/0x406f54):
 ## 0-4 battle stat words (攻击 防御 精神 爆发 士气, person +0x11..), 5 base MaxHP (+0x1c), 6 base MaxMP (+0x20),
-## 7 battle-unit HP, 9 level, 10-14 raw abilities (武艺 统制 智谋 感知 胆魄), 15 stack count of item `person`.
+## 7 battle-unit HP, 8 battle-unit MP (mod 0x406f01 / 0x406fc0: settable, reads as 0), 9 level, 10-14 raw abilities
+## (武艺 统制 智谋 感知 胆魄), 15 stack count of item `person`.
 ## Person selectors 0x400..0x402 mean the current (event-triggering / acting) unit.
 
 static func _pid(st: BattleStage, pid: int) -> int:
@@ -36,6 +37,18 @@ static func get_attr(st: BattleStage, pid: int, attr: int) -> int:
 
 static func set_attr(st: BattleStage, pid: int, attr: int, op: int, v: int) -> void:
 	pid = _pid(st, pid)
+	if attr == 8:
+		# mod 0x4d67d0 / 0x406fc0: the person's battle-unit MP (no unit → nothing). Op 2 goes through SetStat
+		# with max(GetStat(8) − v, 0) = 0, GetStat(8) being 0.
+		var mu := st.unit_by_pid(pid)
+		if mu == null:
+			return
+		match op:
+			0: mu.mp = mini(v, mu.max_mp())
+			1: mu.mp = mini(mu.mp + v, mu.max_mp())
+			2: mu.mp = 0
+		st.refresh_units()
+		return
 	if attr == 7:
 		var u := st.unit_by_pid(pid)
 		if u == null:

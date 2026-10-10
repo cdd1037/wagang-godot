@@ -166,7 +166,8 @@ winner may gain experience when the duel closes.
 
 ## Saving and loading
 
-* **10 save slots**, from the story menu or the battle system menu, including mid-battle. Loading works from the
+* **10 save slots**, from the story menu or the battle system menu, including mid-battle. During some story
+  sequences the game does not allow saving and says 目前不可存盘。, as the original does. Loading works from the
   title screen or in-game.
 * Saves are stored as `save_00.json` … `save_09.json` (each with a small `save_NN.info.json` summary for the slot
   list) in the game's user folder:

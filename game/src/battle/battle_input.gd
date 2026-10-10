@@ -85,7 +85,7 @@ func player_phase() -> void:
 			continue
 		if u.mode == 7 and u.slot < 35 and not u.acted:
 			var did := await select_unit(u)
-			await st.checkpoint()
+			await after_command()
 			if did and _all_done():
 				break       # checked after each action only, so units all under 乱 do not end the phase
 		else:
@@ -100,7 +100,14 @@ func _auto_player_phase() -> void:
 			return
 		if u.active() and not u.acted:
 			await st.ai.act(u)
-			await st.checkpoint()
+			await after_command()
+
+
+## After a command (0x44e0d9): units left at HP 0 leave the map (0x44cc03), then the event scene is polled.
+func after_command() -> void:
+	await st.remove_dead()
+	if not st._battle_finished():
+		await st.checkpoint()
 
 
 func show_unit_ranges(u: BUnit) -> void:
@@ -183,6 +190,8 @@ func command_menu(u: BUnit) -> bool:
 		var en := [not targets.is_empty(), not strats.is_empty() and not (u.status & BUnit.ST_SEAL), not items.is_empty(), true]
 		var sp := st.view.cell_pos(u.pos) - st.view.camera.position + Vector2(56, -10)
 		var i := await st.ui.menu.choose(labels, sp, true, "", en, 60)
+		if i >= 0:
+			Mem.set_ev(10, 0)          # mod 0x43e16b: no unit has fallen in this command yet
 		match i:
 			-1:
 				return false

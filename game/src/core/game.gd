@@ -547,29 +547,33 @@ func load_game(slot: int) -> Variant:
 		else:
 			add_history(1, str(h))      # saves before the categories: "<number><text>"
 	Mem.restore(d["mem"])
+	Mem.w32(0x4ce004, 1)          # LoadGame (0x41adc1 → mod 0x4d0c29): saving is allowed again after a load
 	scenario = int(d["scenario"])
 	return d.get("extra", {})
 
 
 # ------------------------------------------------------------------ chronicle (史录)
 ## An entry of the mod's chronicle (op 0x16 with EV[4095] = category): the text starts with the entry
-## number. Category 0xff replaces the entry with that number (0x4d1679); otherwise a number that is
-## already there is not added again.
+## number. A category other than 0xff is appended as it is, even when that number is already there
+## (0x413adc). Category 0xff edits the first entry with that number (mod 0x4d1679): a text that is only the
+## number deletes it, any other replaces its text (the category stays); with no such entry nothing happens.
 func add_history(cat: int, text: String) -> void:
 	var n := 0
 	while n < text.length() and text[n] >= "0" and text[n] <= "9":
 		n += 1
 	var id := int(text.substr(0, n)) if n > 0 else -1
 	var e := {"id": id, "cat": cat, "text": text.substr(n)}
+	if cat != 0xff:
+		history.append(e)
+		return
 	for i in history.size():
 		if id >= 0 and int(history[i]["id"]) == id:
-			if cat == 0xff:
+			if n == text.length():
+				history.remove_at(i)
+			else:
 				e["cat"] = history[i]["cat"]
 				history[i] = e
 			return
-	if cat == 0xff:
-		e["cat"] = 1
-	history.append(e)
 
 
 # ------------------------------------------------------------------ names / text

@@ -387,6 +387,10 @@ func _slot_labels() -> Array:
 
 
 func save_menu() -> void:
+	# 保存 (0x474c90 → mod 0x4d009f): refused while the scripts forbid saving (op 0x74 → u32 [0x4ce004] = 0)
+	if Mem.r32(0x4ce004) == 0:
+		await ui.popup("目前不可存盘。")
+		return
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")
 	if i < 0:
 		return

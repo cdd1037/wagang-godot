@@ -187,7 +187,7 @@ func attack(att: BUnit, def: BUnit) -> void:
 	if att.has_effect(81) and total_damage > 0:
 		att.hp = mini(att.hp + total_damage / 2, att.max_hp())
 	if def.hp <= 0:
-		await unit_defeated(def)
+		await unit_fell(def)
 	# equipment experience
 	if att.slot < 15:
 		await _equip_exp(att, true, def, weapon_hit)
@@ -269,9 +269,13 @@ func _anim_strike(att: BUnit, def: BUnit, hit: bool, dmg: int, crit: bool) -> vo
 		def.node.set_pose(UnitSprite.Pose.STAND, def.dir)
 
 
-func unit_defeated(u: BUnit) -> void:
+## A unit's HP reached 0 in an attack or a strategy: EV[10] = 1 for the scripts (mod 0x4d67b8, called at
+## 0x405bb7 / 0x422c87). The unit stays on the map at HP 0 until the command is over: the player and AI
+## loops then remove it (BattleStage.remove_dead, 0x44cc03) and poll the event scene.
+func unit_fell(u: BUnit) -> void:
 	u.hp = 0
 	u.extra["dying"] = true
+	Mem.set_ev(10, 1)
 	if u.node and not Game.autoplay:
 		Audio.play_se(SE_DIE)
 		var n := u.node
@@ -279,9 +283,13 @@ func unit_defeated(u: BUnit) -> void:
 			n.visible = k % 2 == 0
 			await wait(0.08)
 		n.visible = true
+
+
+## A script brought a unit's HP to 0 (0x4121b0: EV[10] = 1, then RemoveUnit at once).
+func unit_defeated(u: BUnit) -> void:
+	await unit_fell(u)
 	await st.remove_unit(u, false)
 	st.unit_died.emit(u)
-	await st.checkpoint()
 
 
 # ------------------------------------------------------------------ experience (§8)
@@ -483,10 +491,15 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 			st.hud.popup_number("失败", t.pos, Color(0.7, 0.7, 0.7))
 		return _strat_exp(u, t, false, false) if not t.is_enemy_of(u) else (mini((t.level() - u.level()) * 4 + 10, 100) if u.level() < t.level() else maxi(Rules.sat_sub(10, (u.level() - t.level()) / 2), 5))
 	if s == 21:
-		# 暗杀: marks the target for instant defeat
-		Mem.w8(0x569f00 + t.slot, 2)
-		await unit_defeated(t)
-		return _strat_exp(u, t, true, true)
+		# 暗杀 (0x43c058): no damage; the target is marked (0x569f00[t] = 2, assassin 0x569f73[t]) and drops
+		# to 1 HP two phase starts later (BattleStage._assassination_countdown). The hit still counts as one
+		# (0x569fe7 toggles, 0x42322d), and the EXP is that of a strategy that kills nothing.
+		Mem.w8(BattleStage.ASSASSIN_MARK + t.slot, 2)
+		Mem.w8(BattleStage.ASSASSIN_LINK + t.slot, u.slot)
+		Mem.w8(BattleStage.ASSASSIN_HIT, Mem.r8(BattleStage.ASSASSIN_HIT) ^ 1)
+		if not Game.autoplay:
+			st.hud.popup_number("暗杀", t.pos, Color(0.8, 0.5, 1))
+		return _strat_exp(u, t, false, false)
 	if damage_set and s != 38 and s != 66:
 		var dmg := Rules.strat_damage(u, t, s, false)
 		if s == 22:
@@ -505,7 +518,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		if s == 20:   # 暗算: absorb HP
 			u.hp = mini(u.hp + dmg, u.max_hp())
 		if killed:
-			await unit_defeated(t)
+			await unit_fell(t)
 		else:
 			if s in [33, 34]:
 				t.status |= BUnit.ST_POISON
@@ -596,7 +609,7 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 			st.hud.popup_number(str(dmg), t.pos)
 		_apply_damage(t, dmg)
 		if t.hp == 0:
-			await unit_defeated(t)
+			await unit_fell(t)
 	elif amount < 0:
 		t.hp -= amount
 		Audio.play_se(SE_HEAL)

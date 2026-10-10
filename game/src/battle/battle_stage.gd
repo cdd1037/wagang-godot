@@ -10,6 +10,10 @@ signal unit_died(u: BUnit)
 const PH_PLAYER := 0
 const PH_FRIEND := 1
 const PH_ENEMY := 2
+## 暗杀 (strategy 21): per-slot countdown, per-slot assassin, and the "it hit" toggle (0x43c058).
+const ASSASSIN_MARK := 0x569f00
+const ASSASSIN_LINK := 0x569f73
+const ASSASSIN_HIT := 0x569fe7
 
 var view: BattleView
 var hud: BattleHUD
@@ -128,8 +132,10 @@ func battle_loop() -> void:
 		if _resumed:
 			_resumed = false
 		else:
-			_phase_start_effects(0, 35)
 			await checkpoint()
+			if _battle_finished(): break
+			await remove_dead()
+			await _phase_start_effects(0, 35)
 			if _battle_finished(): break
 		await input.player_phase()
 		if _battle_finished(): break
@@ -146,8 +152,10 @@ func battle_loop() -> void:
 		# ---- enemy phase
 		phase = PH_ENEMY
 		await hud.phase_banner("敌军")
-		_phase_start_effects(35, 115)
 		await checkpoint()
+		if _battle_finished(): break
+		await remove_dead()
+		await _phase_start_effects(35, 115)
 		if _battle_finished(): break
 		await ai.run_phase(35, 115)
 		if _battle_finished(): break
@@ -375,6 +383,7 @@ func open_menu() -> void:
 
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
+	Mem.w8(0x4ac63c, mode)        # scene object {mode, value}: mode 3 = the battlefield (0x40b922)
 	if mode == 3:
 		var v := arg(ins, 4)
 		if v == 0xffff:
@@ -411,6 +420,7 @@ func trimmed_mean_level() -> int:
 
 func create_battlefield(id: int) -> void:
 	map_id = id
+	Mem.set_ev(10, 0)            # mod 0x44ccc8: no unit has fallen yet
 	view.load_map(id)
 	for u in units:
 		u.reset(u.slot)
@@ -658,11 +668,15 @@ func on_field_written(_field: int, _id: int) -> void:
 	refresh_units()
 
 
+## 0x40b922: the scene object (0x4ac63c) is in mode 3, i.e. from change_scene 3 (the battlefield) on. Before it
+## (deployment) and after a later change_scene (aftermath pictures) a battle file counts as story mode.
 func in_battle() -> bool:
-	return true
+	return Mem.r8(0x4ac63c) == 3
 
 
 # ------------------------------------------------------------------ per-phase effects (§9)
+## Phase start of side a..b (0x44ed93 / 0x44e851, after the event poll): status recovery and buff decay,
+## 战备 reset, the 暗杀 countdown of the other side, poison, regeneration.
 func _phase_start_effects(a: int, b: int) -> void:
 	for i in range(a, b):
 		var u := units[i]
@@ -671,6 +685,10 @@ func _phase_start_effects(a: int, b: int) -> void:
 		_status_recovery(u)
 		_buff_decay(u)
 	Mem.fill(Rules.ZHANBEI_USED + a, b - a, 0)     # 战备 may be cast again (0x44ed93 / 0x44e851)
+	if a == 0:
+		await _assassination_countdown(35, 115)    # 0x4364c6
+	else:
+		await _assassination_countdown(0, 35)      # 0x4364b6
 	for i in range(a, b):
 		var u := units[i]
 		if u.active() and (u.status & BUnit.ST_POISON):
@@ -681,6 +699,38 @@ func _phase_start_effects(a: int, b: int) -> void:
 		if u.active():
 			_regen(u)
 	refresh_units()
+
+
+## 暗杀 countdown (0x4364d6 → 0x40937f) for the on-map units of slots a..b: a mark counts down; when it reaches
+## 0 while its assassin is still set, the unit drops to 1 HP, EV[10] = 1 and "%s被暗杀了！！" is shown. The
+## scripts' "合并所有HP0撤退" sections then make officers retreat; anyone else stays at 1 HP.
+func _assassination_countdown(a: int, b: int) -> void:
+	for i in range(a, b):
+		var u := units[i]
+		if not u.exists() or u.state != BUnit.STATE_ON_MAP:
+			continue
+		var m := Mem.r8(ASSASSIN_MARK + i)
+		if m == 0:
+			continue
+		m -= 1
+		Mem.w8(ASSASSIN_MARK + i, m)
+		if m == 0 and Mem.r8(ASSASSIN_LINK + i) != 0xff:
+			u.hp = 1
+			Mem.set_ev(10, 1)
+			refresh_units()
+			if not Game.autoplay:
+				await view.ensure_visible(u.pos)
+			await ui.popup("%s被暗杀了！！" % u.person.name)
+			Mem.w8(ASSASSIN_LINK + i, 0xff)
+
+
+## 0x44cc03: every unit still on the map at HP 0 leaves it (RemoveUnit). Run after each command and AI
+## action, and at a phase start after the event poll (also op 0x54).
+func remove_dead() -> void:
+	for u in units:
+		if u.exists() and u.state == BUnit.STATE_ON_MAP and u.hp <= 0:
+			await remove_unit(u, false)
+			unit_died.emit(u)
 
 
 func _status_recovery(u: BUnit) -> void:
@@ -891,8 +941,9 @@ func op_ui_5a(_ins: Dictionary) -> void:
 	pass
 
 
+## op 0x54 (0x415771): in a battle, units at HP 0 leave the map (0x44cc03).
 func op_ui_54(_ins: Dictionary) -> void:
-	pass
+	await remove_dead()
 
 
 func op_scroll_to(ins: Dictionary) -> void:
@@ -1193,6 +1244,12 @@ func remove_unit(u: BUnit, silent: bool) -> void:
 	u.state = 3
 	u.status = 0
 	u.extra.erase("dying")
+	# mod 0x4dbff3: the unit's own 暗杀 mark goes, and so does every mark it placed as the assassin
+	for k in 116:
+		if Mem.r8(ASSASSIN_LINK + k) == u.slot:
+			Mem.w8(ASSASSIN_LINK + k, 0xff)
+	Mem.w8(ASSASSIN_MARK + u.slot, 0)
+	Mem.w8(ASSASSIN_LINK + u.slot, 0xff)
 	if Game.is_member(u.pid):
 		var pb := u.person.base
 		Mem.w8(pb + 0x29, mini(Mem.r8(pb + 0x29) + 1, 255))
@@ -1270,7 +1327,9 @@ func op_op_5b(ins: Dictionary) -> void:
 		await view.center_on(cells[cells.size() / 2])
 
 
-## op 0x58: terrain change at (x, y) with optional 3x3 map patch (Nima.wa 2*patch-8).
+## op 0x58: alt 0 → ChangeTerrain (0x456140): terrain change at (x, y) with an overlay mark (patch < 4) or a
+## 3x3 map patch (Nima.wa 2*patch-8). alt ≠ 0 → mod 0x4d7dc5: with scroll set, terrain byte (x, y) = terrain;
+## then the recorded change (x, y, patch) is undone (0x4567c1), e.g. a fire put out.
 func op_op_58(ins: Dictionary) -> void:
 	var patch := arg(ins, 0)
 	var alt := arg(ins, 1)
@@ -1280,20 +1339,59 @@ func op_op_58(ins: Dictionary) -> void:
 	var silent := arg(ins, 6)
 	if not view.in_bounds(c):
 		return
-	if scroll != 0 and scroll != 0xffff:
-		await view.center_on(c)
+	if scroll == 0xffff:
+		scroll = 0
 	if alt == 0:
-		var old := view.terrain_at(c)
-		view.set_terrain(c, terr)
-		var node: Node = null
-		if patch >= 4 and silent != 1:
-			node = view.add_patch(2 * patch - 8, c)
-		elif patch < 4:
-			view.add_mark(patch, c)
-		if patch in [0, 2]:
-			Audio.play_se("se19")
-		terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": patch, "silent": silent == 1, "node": node})
+		await _change_terrain(c, terr, patch, scroll, silent == 1)
+	else:
+		if scroll != 0:
+			view.set_terrain(c, terr & 0xff)
+		await _revert_terrain(c, patch, scroll)
 	refresh_units()
+
+
+## ChangeTerrain (0x456140): record (x, y, new, old, patch) for saves and undo, set the terrain, show the mark or
+## the map patch; scroll → camera to the cell. Patch 0/2 (fire) plays SE 0x13.
+func _change_terrain(c: Vector2i, terr: int, patch: int, scroll: int, silent: bool) -> void:
+	if scroll != 0:
+		await view.center_on(c)
+	var old := view.terrain_at(c)
+	view.set_terrain(c, terr)
+	var node: Node = null
+	if patch >= 4 and not silent:
+		node = view.add_patch(2 * patch - 8, c)
+	elif patch < 4:
+		view.add_mark(patch, c)
+	if patch in [0, 2]:
+		Audio.play_se("se19")
+	terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": patch, "silent": silent, "node": node})
+
+
+## 0x4567c1: undo the first recorded change at (x, y) with this patch (none → nothing): scroll → camera to the
+## cell; the mark or the map patch goes, the old terrain comes back. A gate (new terrain 0x11 城门) next to
+## another gate plays SE 18.
+func _revert_terrain(c: Vector2i, patch: int, scroll: int) -> void:
+	for i in terrain_changes.size():
+		var e: Dictionary = terrain_changes[i]
+		if int(e["x"]) != c.x or int(e["y"]) != c.y or int(e["patch"]) != patch:
+			continue
+		if scroll != 0:
+			await view.center_on(c)
+		if patch < 4:
+			view.marks.erase(c)
+			view.overlay.queue_redraw()
+		else:
+			var n: Variant = e.get("node")
+			if n and is_instance_valid(n):
+				(n as Node).queue_free()
+			if int(e["new"]) == 0x11:
+				for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+					if view.in_bounds(c + d) and view.terrain_at(c + d) == 0x11:
+						Audio.play_se("se18")
+						break
+		view.set_terrain(c, int(e["old"]))
+		terrain_changes.remove_at(i)
+		return
 
 
 ## op 0x6b: effect animation at a cell.
@@ -1415,24 +1513,24 @@ func op_op_5d(ins: Dictionary) -> bool:
 	return true
 
 
-## op 0x21 map_mark: undo a recorded terrain change at (x, y): mode 0 any, mode 1 matching patch p1.
+## op 0x21 map_mark (0x413efb): x, y, mode, scroll, silent (0xffff → 0). Mode 0 sets fire: ChangeTerrain to
+## terrain 0x1a 火 with overlay mark 0; mode 1 puts it out (undo of the patch-0 change there).
 func op_map_mark(ins: Dictionary) -> void:
 	var c := Vector2i(arg(ins, 0), arg(ins, 1))
 	var mode := arg(ins, 2)
-	var patch := arg(ins, 3)
-	for i in terrain_changes.size():
-		var e: Dictionary = terrain_changes[i]
-		if int(e["x"]) == c.x and int(e["y"]) == c.y and (mode == 0 or int(e["patch"]) == patch):
-			view.set_terrain(c, int(e["old"]))
-			var n: Variant = e.get("node")
-			if n and is_instance_valid(n):
-				(n as Node).queue_free()
-			view.marks.erase(c)
-			view.overlay.queue_redraw()
-			terrain_changes.remove_at(i)
-			if mode == 0:
-				Audio.play_se("se18")
-			break
+	var scroll := arg(ins, 3)
+	var silent := arg(ins, 4)
+	if scroll == 0xffff:
+		scroll = 0
+	if silent == 0xffff:
+		silent = 0
+	if not view.in_bounds(c):
+		return
+	if mode == 0:
+		await _change_terrain(c, 0x1a, 0, scroll, silent == 1)
+	elif mode == 1:
+		await _revert_terrain(c, 0, scroll)
+	refresh_units()
 
 
 # ------------------------------------------------------------------ duel (单挑) ops 0x5f-0x68

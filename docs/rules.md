@@ -325,7 +325,7 @@ if has_effect(target, 59 减轻策略损伤): dmg -= dmg*val/100
 if not preview: r = rand(7); dmg = r > 2 ? dmg + r - 2 : sat_sub(dmg, r)
 dmg = max(dmg, 1); dmg = min(dmg, s == 22 ? target.MP : target.HP)
 ```
-暗杀 (21): no damage; on hit marks target for instant defeat ([0x569f00+idx] = 2).
+暗杀 (21): no damage; on hit marks the target ([0x569f00+idx] = 2), which drops to 1 HP two phase starts later (§9.1).
 power[s] (%): 焦热75 烈焰90 炎雷50 炼狱70 赤链100 浊流75 惊涛90 潮汐50 海啸70 狂澜100 烟尘50 飞沙75 萧瑟40 龙挂60 飓风20
 落石70 塌方100 碎岩60 地裂90 移山120 暗算70 暗鬼20 毒烟70 瘴雾50 陷阱60 濠壑40 八阵120 青龙70 朱雀100 (others 0).
 
@@ -554,14 +554,26 @@ Item value at level L: base + growth*(L-1) (≤255) (§1.2). Treasure special-ef
 ### 9.1 Phase order (0x44ed93 player phase → 0x44e851 friend & enemy phases)
 ```
 round n:
-  PLAYER PHASE (ctx[0x10]=0): turn-start events (0x44ac28(turn), 0x44c601)
+  PLAYER PHASE (ctx[0x10]=0): turn-start events (0x44ac28(turn)), script poll (0x44c601), remove HP-0 units (0x44cc03)
       for units 0..34 (player 0-14 AND friendly 15-34): StatusRecovery (0x43c7d6), BuffDecay (0x43c975)
-      Poison(side 0) (0x44df61); Regen (0x43cddd) for units 0..34
-      player input loop (0x44e0d9)
-  FRIEND PHASE (ctx[0x10]=1): events; AI-controlled units among 0..34 act (0x43ad1c)
-  ENEMY PHASE (ctx[0x10]=2): events; for units 35..114: StatusRecovery, BuffDecay; Poison(side 1); Regen;
-      enemy AI units act
+      clear 0x55af00[0..34]; 暗杀 countdown of units 35..114 (0x4364c6); Poison(side 0) (0x44df61); Regen (0x43cddd) for 0..34
+      player input loop (0x44e0d9): after each command remove HP-0 units (0x44cc03), then the script poll
+  FRIEND PHASE (ctx[0x10]=1): script poll; AI-controlled units among 0..34 act (0x43ad1c)
+  ENEMY PHASE (ctx[0x10]=2): events, script poll, remove HP-0 units; for units 35..114: StatusRecovery, BuffDecay;
+      clear 0x55af00[35..114]; 暗杀 countdown of units 0..34 (0x4364b6); Poison(side 1); Regen; enemy AI units act
 ```
+A unit whose HP reaches 0 in an attack or strategy stays on the map at HP 0 until the command or AI action is
+over; then 0x44cc03 removes it (RemoveUnit) and the event scene is polled. Script kills (0x4121b0) remove at once.
+**EV[10]** (mod 0x4d67b8) tells the scripts that a unit fell: = 1 on every kill (physical 0x405bb7, strategy
+0x422c87, script 0x4121b5, 暗杀 0x4093c3), = 0 at battle start (0x44ccc8), when the player picks a command
+(0x43e16b) and at the start of every AIAct (0x43ad2b). 27 battle scripts have a "合并所有HP0撤退" section gated by
+EV[10] ≥ 1 that gives fallen officers their lines, rewards and counters, then resets EV[10] = 0.
+**暗杀** (strategy 21, 0x43c058): a hit does no damage; it sets the target's mark 0x569f00[t] = 2 and assassin
+0x569f73[t] = caster slot and toggles 0x569fe7 (shown as a hit). The countdown 0x40937f decrements the marks of the
+other side's on-map units at each phase start; when a mark reaches 0 with the assassin still set, the unit's HP = 1,
+EV[10] = 1, "%s被暗杀了！！", assassin = 0xff. A unit leaving the map clears its own mark and cancels every mark it
+placed (0x4dbff3). EXP is that of a strategy that kills nothing. (The mod's usability hook 0x4dbf8a compares the
+category with 0x15 and never matches, so 暗杀 can always be cast.)
 AI acting order (0x44e9ce..): outer counter k = 0..114; each unit (on map, unit[0xc]==2) whose byte unit[0xb] == k,
 whose unit[0xe] != 7 and with neither flag 4 nor flag 2 in unit[0xd] (already acted) acts; after any action the scan
 restarts at k = 0. [G: unit[0xb] = action-order/AI group byte set by the scenario script].
@@ -960,7 +972,7 @@ All tests return false outside battle (screen mode 0x4ac63c ≠ 3, 0x40b922).
 | 0x1b set_retreat_line (0x413c56) | person, bool | U(person)+0x20 = (bool ≠ 0): whether the unit speaks its retreat line when it leaves (default 1, set by the unit reset). |
 | 0x55 unit_reenter (0x41591c → 0x4591a1) | mode (0xffff→0), person, slot, x, y, dir (0xffff→2) | (eex.md's "unit_move" is a misnomer.) mode 0: person; mode 1: the person of player slot `slot` < 15 whose unit is in state 3. A unit in state 3 (retreated) is re-initialised with UnitInit(person, entry flags with new dir, x, y) — full HP/MP, buffs reset — and appears with the wipe-in animation (SE 0x2a). |
 | 0x5b target_area (0x416cbb) | x1, y1, x2, y2, flag (0xffff→0) | Stores the destination area rectangle in ctx+0xc..+0xf and ctx+8 = (flag == 0), then 0x4b5df0.0x45a0ce(flag) clamps it to the map and shows it (camera to its centre, area highlighted [G]). Used with "到达指定地点" goals. |
-| 0x58 terrain_change (0x4166eb) | patch, alt, terrain, x, y, scroll (0xffff→0), silent (0xffff→0) | alt == 0 → ChangeTerrain 0x4b5df0.0x456140(x, y, terrain, patch, scroll, silent, EV[0]&0xff): record (x, y, new, old, patch) in a 250 × 5-byte table at ctx+0x19 (0x4b3d21, for saves); terrain grid (0x4aeb38+0x640)[x,y] = terrain; scroll → camera to (x,y). patch < 4: overlay mark written to layer 0x4aeb38+0x1f40 (patch 0/2 play SE 0x13 — fire [G]); patch ≥ 4: Nima.wa entry 2·patch−8 (a 3×3-cell 144×144 image) is pasted into the map bitmap centred on (x,y) (skipped when the last arg is 1); SE for new terrain 12 小河 / 15 城墙 / 17 城门; the 3×3 area is redrawn. alt ≠ 0 → mod routine 0x4d7dc5(x, y, patch, scroll) [not analysed]. |
+| 0x58 terrain_change (0x4166eb) | patch, alt, terrain, x, y, scroll (0xffff→0), silent (0xffff→0) | alt == 0 → ChangeTerrain 0x4b5df0.0x456140(x, y, terrain, patch, scroll, silent, EV[0]&0xff): record (x, y, new, old, patch) in a 250 × 5-byte table at ctx+0x19 (0x4b3d21, for saves); terrain grid (0x4aeb38+0x640)[x,y] = terrain; scroll → camera to (x,y). patch < 4: overlay mark written to layer 0x4aeb38+0x1f40 (patch 0/2 play SE 0x13 — fire [G]); patch ≥ 4: Nima.wa entry 2·patch−8 (a 3×3-cell 144×144 image) is pasted into the map bitmap centred on (x,y) (skipped when the last arg is 1); SE for new terrain 12 小河 / 15 城墙 / 17 城门; the 3×3 area is redrawn. alt ≠ 0 → mod 0x4d7dc5(x, y, patch, scroll, terrain): if scroll ≠ 0, terrain byte (x, y) = terrain; then 0x4567c1(x, y, patch, scroll) undoes the first recorded change with that x, y and patch (none → nothing): scroll → camera; patch < 4 → the overlay mark goes; else the 3×3 map image is restored from the map (a gate, new terrain 0x11, next to another gate plays SE 18); terrain = the recorded old one; the record is freed. Used to put out fires (`58 [2,1,0,x,y,1,1]`). op 0x21 map_mark sets fire (mode 0: ChangeTerrain to 0x1a 火, patch 0) and puts it out (mode 1: 0x4567c1 with patch 0). |
 | 0x6b map_effect (0x41405b) | x, y, effect, scroll | Plays an effect animation centred on cell (x,y) (camera scrolls there first if scroll): effect < 100 → Xben.wa[effect]; 100..108 → MCALL(effect−100) full-screen (0x497af8.0x4217ff); 109 → special 0x421879; only if the cell is on screen. |
 
 RemoveUnit (0x441744(silent, anim), on a unit in state 2): silent → vanish animation (0x4419b6(1)); otherwise, if

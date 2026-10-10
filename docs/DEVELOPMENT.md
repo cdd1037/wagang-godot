@@ -103,6 +103,8 @@ walking (route order and facing per step, 0x429159), `t_dialog` the message box 
 9-line 胜利条件 window), `t_info` the 武将情报 window (status line, 技能 box, strategy list, item effect texts, pages,
 上一/下一, closing, the details, a pointer right click versus Esc on the map, long presses, story-scene right
 clicks; with `OUT=file.png` and a window it also saves a screenshot of each page and of the details),
+`t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
+countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the 史录 rules),
 `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:

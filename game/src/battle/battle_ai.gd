@@ -65,12 +65,16 @@ func run_phase(a: int, b: int) -> void:
 				pick = x
 		if pick == null:
 			break
-		if await act(pick):
+		var acted := await act(pick)
+		if acted:
 			pick.flags |= BUnit.F_MOVED | BUnit.F_ACTED
 		else:
 			skipped[pick.slot] = true
 		st.refresh_units()
-		await st.checkpoint()
+		# 0x44e8e7: units left at HP 0 leave the map; the event scene is polled when the unit has acted
+		await st.remove_dead()
+		if acted and not st._battle_finished():
+			await st.checkpoint()
 
 
 static func _wounded(x: BUnit) -> bool:
@@ -86,6 +90,7 @@ static func _wounded(x: BUnit) -> bool:
 ## that have already acted, return at once (10.5.4).
 func act(unit: BUnit) -> bool:
 	u = unit
+	Mem.set_ev(10, 0)          # mod 0x43ad2b: no unit has fallen in this action yet
 	if not u.active():
 		return false
 	var mv := 100 if (u.flags & BUnit.F_PASS) else u.move_points()

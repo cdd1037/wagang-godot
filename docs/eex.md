@@ -239,19 +239,19 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 13 | 测试选择 | test_choice | 1392 | 126 | 82 | 04 | Test last choice: Reader+0x2038 == arg. | T | 411fa5 |
 | 3D | 获得物品 | get_item | 856 | 605 | 93 | 17 49 26 02 | args: item (0xFFFF or > 0x67: nothing), level (0xFFFF→0), flag, person. Level 0 for a weapon/armour = automatic from the party level L (0x40c14f: mean of the 15 highest levels of persons 0..25 in the party): normal (L mod 18)/6+1 below 48 else 3, treasures L/7+1 ≤ 10; at or above the item's maximum (3, treasures 10) the item is fully grown (exp 0xFF). Outside a battle: message "得到了…" (0x42f699(2)) then into the bag (0x40d79c / 0x40da45 for consumables); in a battle 0x45991b(item, level, flag, person, 1). Unique items (+0x18) are recorded via 0x41a1b0(item+3, 1). | 1 | 4143c2 |
 | 40 | 测试阵营 | test_side | 0 | 1443 | 58 | 48 | (not yet analysed) |  | 4116ee |
-| 21 | 地图标记 | map_mark | 0 | 1346 | 22 | 04 04 10 26 26 | (not yet analysed) |  | 413efb |
+| 21 | 地图标记 | map_mark | 0 | 1346 | 22 | 04 04 10 26 26 | Fire on a map cell (battle only): args x, y, mode, scroll (0xffff→0), silent (0xffff→0). Mode 0 sets fire: ChangeTerrain(x, y, terrain 0x1a 火, patch 0, scroll, silent) as op 0x58; mode 1 puts it out: undo of the recorded patch-0 change at (x, y) (0x4567c1, see rules.md §10.6). | 1 | 413efb |
 | 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | (not yet analysed) |  | 417315 |
 | 63 | 单挑对话2 | duel_say2 | 0 | 1248 | 41 | 26 05 26 | (not yet analysed) |  | 417701 |
 | 3A | 资源变更 | set_resource | 927 | 109 | 54 | 28 34 04 | (not yet analysed) |  | 4149f7 |
 | 41 | 测试区域部队 | test_units_in_area | 0 | 927 | 55 | 03 04 24 3f 04 04 04 04 | (not yet analysed) |  | 41149d |
-| 3B | 加入/离队 | join | 810 | 90 | 57 | 02 0e 3e | (not yet analysed) |  | 4148fe |
-| 58 | 指令58 | op_58 | 0 | 875 | 48 | 42 43 44 04 04 26 26 | (not yet analysed) |  | 4166eb |
+| 3B | 加入/离队 | join | 810 | 90 | 57 | 02 0e 3e | Join/leave (person, mode 0xffff→0xff, arg 0xffff→0) → mod 0x4d5000 (mode 1) / 0x40c28c. Does nothing in a battle (scene mode 3, 0x4149be), e.g. S_29's and S_36's leaves. | 1 | 4148fe |
+| 58 | 指令58 | op_58 | 0 | 875 | 48 | 42 43 44 04 04 26 26 | Terrain change / undo (battle): see rules.md §10.6 (0x58 terrain_change). | 1 | 4166eb |
 | 18 | 标题显示 | title_text | 789 | 0 | 58 | 05 | Show title banner text via 0x40bb48 (e.g. chapter sub-title "命运的疆陲", duel caption "枪兵  对  管毅"). | 1 | 413b09 |
 | 12 | 选择 | choice | 621 | 59 | 82 | 05 02 | Choice menu: arg0 = up to 3 options separated by "\n" (prefixed "1." "2." "3."), arg1 = (0xFFFF→0) person whose large portrait (sge 301+face) the choice window shows (0x42def9; 管毅 in 673 of 680 uses). Result index+1 stored in Reader+0x2038. | 1 | 411db9 |
 | 15 | 战场对话 | unit_say | 0 | 657 | 58 | 02 02 05 | (not yet analysed) |  | 413911 |
 | 25 | 测试武将位置 | test_unit_at | 0 | 630 | 52 | 02 04 04 | (not yet analysed) |  | 411b50 |
 | 48 | 战场装备设定 | battle_equipment | 0 | 517 | 55 | 02 3b 49 3c 49 3d | args: person, weapon code, weapon level, armour code, armour level, accessory code (0xFFFF→0). Stored in the person's ally/enemy deployment entry (slots 15..114) at +0x14/+0x18/+0x1c/+0x20/+0x21 and applied when the battle starts (0x44cc85 → 0x4429f9 per slot): code 0 = default equipment for the class and level (0x407fe7), 1 = take off, ≥ 2 = item code−2 (weapon) / code+0x24 (armour) / code+0x33 (accessory) if it is that kind of item and the class may use it (0x407dec); level 0 = automatic. | 1 | 412dd6 |
-| 74 | 设定扩展值 | set_4ce004 | 471 | 2 | 55 | 26 | Mod: u32 @0x4ce004 = arg. | 1 | 4d00c9 |
+| 74 | 设定扩展值 | set_4ce004 | 471 | 2 | 55 | 26 | Mod: u32 @0x4ce004 = arg: saving allowed (≠ 0) or not. 保存 says 目前不可存盘。 while it is 0 (0x4d009f); loading a game sets it to 1 (0x4d0c29). | 1 | 4d00c9 |
 | 1F | 镜头移动 | scroll_to | 0 | 472 | 31 | 04 04 | (not yet analysed) |  | 414257 |
 | 06 | 出场选择(战中) | battle_select_units | 462 | 0 | 53 | 2e 04 38 38 38 38 38 39 39 39 39 39 | (not yet analysed) |  | 415b45 |
 | 6B | 指令6B | op_6b | 0 | 447 | 12 | 04 04 4b 26 | (not yet analysed) |  | 41405b |
@@ -307,7 +307,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 35 | 武将状态 | actor_state | 0 | 0 | 0 | 02 13 | (not yet analysed) |  | 4135de |
 | 39 | 指令39 | op_39 | 0 | 0 | 0 | 02 04 | (not yet analysed) |  | 414b62 |
 | 3C | 指令3C | op_3c | 0 | 0 | 0 | 02 0e 3a | (not yet analysed) |  | 415cbf |
-| 54 | 界面54 | ui_54 | 0 | 0 | 0 | — | (not yet analysed) |  | 415771 |
+| 54 | 界面54 | ui_54 | 0 | 0 | 0 | — | In a battle: units at HP 0 leave the map (0x44cc03). Unused by the scripts. | 1 | 415771 |
 | 56 | 指令56 | op_56 | 0 | 0 | 0 | 47 | (not yet analysed) |  | 414f03 |
 | 57 | 指令57 | op_57 | 0 | 0 | 0 | 22 | (not yet analysed) |  | 414ec4 |
 | 5E | 扩展5E | mod_5e | 0 | 0 | 0 | 04 | (not yet analysed) |  | 4d0000 |
