@@ -62,12 +62,14 @@ func run() -> void:
 
 func _data_tests() -> void:
 	var p0 := Game.person(0)
-	# 技能 box (0x4d3bd3): the mod's list EV[898..927] is checked before the static table; scripts never fill it,
-	# so as in the original its zero entries match person 0
-	var s := InfoWindow.skill_info(p0)
-	_check(s[0] == "【术】连理" and s[1] == Game.text(450 + 0x27), "pid 0 with the empty list: %s" % [s])
+	# 技能 box (0x4d3bd3): the mod's list EV[3970..3999] is checked before the static table. R_00 fills it with
+	# 1024 (nobody); in zeroed memory its entries would match person 0
 	for i in 30:
-		Mem.w32(0x55ee08 + 4 * i, 0xffff)
+		Mem.w32(0x55ee08 + 4 * i, 0)
+	var s := InfoWindow.skill_info(p0)
+	_check(s[0] == "【术】连理" and s[1] == Game.text(450 + 0x27), "pid 0 with a zeroed list: %s" % [s])
+	for i in 30:
+		Mem.w32(0x55ee08 + 4 * i, 1024)
 	Mem.w8(0x4dc100, 3)
 	s = InfoWindow.skill_info(p0)
 	_check(s[0] == "【招】苍龙过阵枪" and s[1] == Game.text(453), "pid 0 from the static table: %s" % [s])

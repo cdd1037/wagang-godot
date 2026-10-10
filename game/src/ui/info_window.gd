@@ -140,7 +140,7 @@ static func skill_info(p: Person) -> Array:
 		for a in range(codes, codes + 0x400):           # 0x4d5509: codes ≥ 0x36 → 0xff
 			if Mem.r8(a) >= 0x36 and Mem.r8(a) != 0xff:
 				Mem.w8(a, 0xff)
-		for i in 30:                                    # 0x4d54d2: dynamic list EV[898..927]
+		for i in 30:                                    # 0x4d54d2: dynamic list EV[3970..3999]
 			if pid == Mem.r32(0x55ee08 + 4 * i):
 				Mem.w8(codes + pid, 0x27 + i)
 				cap = Mem.str_at(0x5559a0 + 32 * i)

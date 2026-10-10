@@ -216,7 +216,8 @@ Conventions:
 
 * Findings go into `docs/` with the addresses they come from: `rules.md` for formulas and AI, `eex.md` for
   opcodes, `engine_notes.md` for op semantics and engine behaviour, `gfx.md` for formats, `duel.md` for the duel
-  screen. Code comments cite the same addresses.
+  screen. Code comments cite the same addresses. `mod_patches.md` lists every patch the mod makes to the engine
+  and whether the port has it; update its status when a missing feature is implemented.
 * **Adding an opcode:** implement `op_<name>(ins)` in `ScriptHost`, or in `StoryStage` / `BattleStage` if it only
   makes sense there. Read arguments with `arg(ins, i)` (resolves `{"var": n}`) or `sarg()`; test ops return a bool.
   An unimplemented op prints `EEX unimplemented op …` once.

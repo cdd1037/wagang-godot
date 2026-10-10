@@ -33,7 +33,7 @@ shops, names, texts.
 | 0x0D | u16 | +0x04 (dword) | face/portrait id |
 | 0x0F | 1 | +0x02 | map sprite id (R/S 形象) [G: graphics agent] |
 | 0x10 | 1 | +0x26 | unknown (0..0x19) — raw |
-| 0x11 | 1 | +0x2a | growth-fixed flag: 0 → random growth jitter (0x448b09) & HP/MP catch-up penalty; all persons have 0xff (no jitter) [C 0x4d039b] |
+| 0x11 | 1 | +0x2a | party-membership byte (0 = member, 0x41a190; all persons start with 0xff). Members get the random growth jitter (0x448b09) and the HP/MP catch-up penalty on level-up (see docs/mod_patches.md B2 §E) [C 0x4d039b] |
 | 0x12..0x16 | 5x1 | words +0x11,+0x13,+0x15,+0x17,+0x19 **and** bytes +0x21..+0x25 | 武艺/统制/智谋/感知/胆魄. The *word* is the battle stat (攻击/防御/精神/反应(爆发)/士气) and grows on level-up; the *byte* is the raw ability (≤100, used for growth grade) |
 | 0x17 | u16 | +0x1c dword | base max HP (clamped ≤500 at load; grows ≤9999) |
 | 0x19 | 1 | +0x20 | base max MP (clamped ≤250; grows ≤255; value 1 = "no MP" unit, never grows) |
@@ -249,7 +249,7 @@ if has_effect(def, 53 辅助攻击防御 shield): h = sat_sub(h, val)
 if has_effect(def, 55 辅助全防御):        h = sat_sub(h, val)
 if [0x55ac54]==1 (one-shot mod flag): h = h > 26 ? h-26 : 1
 ```
-(Mod: special duel mode [0x4cf314]: hit 100 except person 1 → 50 + weapon bonus.)
+(Mod: while a 绝招 runs ([0x4cf314], set by 0x4d3007): hit 100 except person 1 → 50 + weapon bonus; see docs/mod_patches.md.)
 
 ### 4.3 Critical hit (rate 0x405d69, applied 0x405ef8) [C]
 ```
@@ -274,7 +274,8 @@ for strike in 0..1:
 Counter (0x40639a)
 ```
 DoubleCheck: only after the first strike; `chance(DoubleRate)` (or forced by mod flags [0x55ac68]/[0x55ac54]==2).
-DoubleRate (0x405ce6): `a = Agi(att), d = Agi(def)`; effect 84 主动连击 → 100; during a counterattack → 0;
+DoubleRate (0x405ce6): `a = Agi(att), d = Agi(def)`; effect 84 主动连击 → 100 (the mod also lets it double in a
+counterattack: 0x40761e skips DoubleCheck's counter test); during a counterattack → 0;
 `a >= 3d → 100; a >= 2d → (a-2d)*80/d + 20; a >= d → (a-d)*18/d + 2; else 1`.
 Counter (0x40639a), depth = [0x492e04]:
 ```
@@ -468,8 +469,8 @@ ally-targeting strategies, 0x45540d). Exported as `shapes.json["range"]`.
 | 13 | manhattan 1..4 (40) |
 | 14 | (±3, -1..1) and (-1..1, ±3) (12) |
 | 15 | chebyshev-3 ring minus the 4 corners (20) |
-Unit attack-range overrides (0x43f8be): status bit 0x20 → 11 (cannot attack); duel mode [0x4cf314]: persons 5,14,19,26 → 0,
-person 8 → 6; person 0xcc → 12; person 25 with class 41 → 4; effect 42 远距攻击 → code = effect value
+Unit attack-range overrides (0x43f8be): status bit 0x20 → 11 (cannot attack); while a 绝招 runs ([0x4cf314]): persons
+5,14,19,26 → 0, person 8 → 6; otherwise person 0xcc → 12 and person 25 with class 41 → 4; effect 42 远距攻击 → code = effect value
 (金纂提炉枪 → 6, 铉铁枪头 → 1); effect 21 强化间谍 with class 15/16/17 → 7/8/8; else class.attack_range.
 
 ### 6.2 Area codes (strategy byte 0x0e → ctx+0x2ca; 0x435d6c switch 0x436388). Origin = target (always affected).
@@ -1004,15 +1005,17 @@ there. The port's window is modal; a right click on an empty cell, Esc and 菜�
   Fhua[922+pid] (pid < 210). "出阵数 %2d  撤退数 %2d" = P+0x27, P+0x29 for party members.
 * 技能 caption (mod chain 0x4d3bd3), first match: pid == [0x55ac04] 【招】三板斧 (0x555700), [0x55ac40] 【术】天魔,
   [0x55ac48] 【术】波若, [0x55ac44] 【术】魔功, [0x55ac60] 【术】锻造; else every code ≥ 0x36 in the per-person code
-  table 0x4dc100[1024] becomes 0xff (0x4d5509); pid in the list 0x55ee08[30] (= EV[898..927]) → code[pid] = 0x27+i,
+  table 0x4dc100[1024] becomes 0xff (0x4d5509); pid in the list 0x55ee08[30] (= EV[3970..3999]) → code[pid] = 0x27+i,
   name 0x5559a0+32i; pid 25 with class 41 → code 0x24, 【术】飞将军, else code[25] = 0xff; pid 24 with byte
   [0x55e25c] ≥ 3 → code 0xf, 【术】贯石, else code[24] = 0xff; pid in the word table 0x4d3c4c (36 pids) → name
-  pointer 0x4d8260[k] (pid 0 → 【招】苍龙过阵枪); else 无 (0x555791). **No script or code writes EV[898..927]**, so its
-  zero entries match pid 0: 管毅 shows 【术】连理 and its text (code 0x27), as in the original.
+  pointer 0x4d8260[k] (pid 0 → 【招】苍龙过阵枪); else 无 (0x555791). R_00 fills EV[3970..3999] with 1024 (nobody)
+  at the start of a new game; later scenarios assign pids (e.g. R_02 EV[3980] = 13 → 王伯当 【术】舍命, R_17
+  EV[3972] = 2 → 王君珂 【术】并蒂, R_06 EV[3983] = 19 → 罗成 【术】智将).
 * 技能 text: Fhua[450+code[pid]] when active (0x4dc5c5: code < 0xae; code 0 needs [0x55ac04] == 1, 1 needs
   [0x55ac60] == 16, 2 needs [0x55ac48] == 15, 0x24 needs class 41), else Fhua[598] (empty); pid < 210 only.
-* Button 100 技能说明 (mod 0x4dc720: toggles page 284's text to the biography) lies outside the client area
-  (template rect 300,252,54,10 in a 313×256 dialog); the port leaves it out.
+* Button 100 技能说明 (mod 0x4dc720: toggles page 284's text to the biography) lies mostly outside the client area
+  (template rect 300,252,54,10 in a 313×256 dialog: only a 13×4 DLU corner shows, but it is clickable); the port
+  leaves it out (spec: docs/mod_patches.md B6 F7).
 
 **Pages** (0x478f7b; labels 0x48ec4c; the selected page 0x48e9a8 is kept between openings; SE 0 on a change):
 * 能力 (178, bars 0x476b85): 攻击 防御 精神 反应 士气 = person stats with equipment (0x407126..), bar scale 800.

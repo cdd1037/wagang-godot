@@ -23,6 +23,7 @@ fact comes from. They are the reference the code is written against.
 | [rules.md](rules.md) | Data tables (persons, classes, items, strategies, terrain), growth, battle units, damage/hit/critical/double-attack formulas, strategies, ranges and areas, movement, experience and equipment levels, turn structure, status effects, battle script ops and the enemy AI |
 | [engine_notes.md](engine_notes.md) | Opcodes whose parser names are misleading, other op semantics (audio, video, sortie, duel, join, special functions), the endgame structure and ending conditions, story-scene projection, sound ids |
 | [duel.md](duel.md) | The 单挑 duel screen: ops, data layout, screen layout, every action/blow/special animation with timings and sounds, result and EXP, image filters |
+| [mod_patches.md](mod_patches.md) | Audit of every patch the mod makes to the engine (316 sites), what each changes and whether the port has it; the feature-parity to-do list with a spec per missing feature, and who owns which character skill |
 
 Addresses are virtual addresses in `wagan.wa` (image base 0x400000). Tags used in the specs: **[C]** read from
 code, **[I]** inferred, **[G]** guessed or approximated.

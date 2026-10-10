@@ -247,7 +247,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 3B | 加入/离队 | join | 810 | 90 | 57 | 02 0e 3e | (not yet analysed) |  | 4148fe |
 | 58 | 指令58 | op_58 | 0 | 875 | 48 | 42 43 44 04 04 26 26 | (not yet analysed) |  | 4166eb |
 | 18 | 标题显示 | title_text | 789 | 0 | 58 | 05 | Show title banner text via 0x40bb48 (e.g. chapter sub-title "命运的疆陲", duel caption "枪兵  对  管毅"). | 1 | 413b09 |
-| 12 | 选择 | choice | 621 | 59 | 82 | 05 02 | Choice menu: arg0 = up to 3 options separated by "\n" (prefixed "1." "2." "3."), arg1 = (0xFFFF→0) cancel/default option. Result index+1 stored in Reader+0x2038. | 1 | 411db9 |
+| 12 | 选择 | choice | 621 | 59 | 82 | 05 02 | Choice menu: arg0 = up to 3 options separated by "\n" (prefixed "1." "2." "3."), arg1 = (0xFFFF→0) person whose large portrait (sge 301+face) the choice window shows (0x42def9; 管毅 in 673 of 680 uses). Result index+1 stored in Reader+0x2038. | 1 | 411db9 |
 | 15 | 战场对话 | unit_say | 0 | 657 | 58 | 02 02 05 | (not yet analysed) |  | 413911 |
 | 25 | 测试武将位置 | test_unit_at | 0 | 630 | 52 | 02 04 04 | (not yet analysed) |  | 411b50 |
 | 48 | 战场装备设定 | battle_equipment | 0 | 517 | 55 | 02 3b 49 3c 49 3d | args: person, weapon code, weapon level, armour code, armour level, accessory code (0xFFFF→0). Stored in the person's ally/enemy deployment entry (slots 15..114) at +0x14/+0x18/+0x1c/+0x20/+0x21 and applied when the battle starts (0x44cc85 → 0x4429f9 per slot): code 0 = default equipment for the class and level (0x407fe7), 1 = take off, ≥ 2 = item code−2 (weapon) / code+0x24 (armour) / code+0x33 (accessory) if it is that kind of item and the class may use it (0x407dec); level 0 = automatic. | 1 | 412dd6 |
