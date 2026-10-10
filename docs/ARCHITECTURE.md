@@ -28,7 +28,7 @@ are ported from the decompiled executable.
                          GameUI (dialog, menus, popups, fades, video)
 ```
 
-On iOS the main scene is `touch/touch_shell.tscn` instead. It runs `main.tscn` inside a 640×480 `SubViewport` with
+On iOS and Android the main scene is `touch/touch_shell.tscn` instead. It runs `main.tscn` inside a 640×480 `SubViewport` with
 touch buttons beside it (see "Touch controls" in [DEVELOPMENT.md](DEVELOPMENT.md)). Code reaches the Main node
 through `Game.main`, never `/root/Main`.
 

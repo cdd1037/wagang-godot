@@ -8,7 +8,8 @@ copy of the game.
 ## Exporting the apps
 
 Requirements: [Godot 4.7](https://godotengine.org) (`brew install --cask godot`) with the export templates
-installed (Godot → Editor → Manage Export Templates → Download; the full download has macOS, Windows and iOS).
+installed (Godot → Editor → Manage Export Templates → Download; the full download has macOS, Windows, iOS and
+Android).
 
 ### macOS
 
@@ -74,15 +75,58 @@ tools/build_ios.sh --sim                   # native arm64 build, installed and s
   the Files app. The icon is `game/export/ios_icon.png`, cut from the title art. On iOS the project runs
   `res://src/touch/touch_shell.tscn` instead of `main.tscn` (`run/main_scene.mobile`).
 
+### Android
+
+Requirements: Godot's Android export template (`android_release.apk` in
+`~/Library/Application Support/Godot/export_templates/4.7.2.stable/`; it is in the full template download, or
+extract `templates/android_release.apk` from the `.tpz`), a JDK 17 and the Android SDK with platform-tools and
+build-tools (Android Studio installs them) entered in Godot's editor settings (*Editor Settings → Export → Android*:
+Java SDK Path, Android SDK Path), the HD graphics pack in `game/assets_hd`, and the release key (below).
+
+```sh
+godot --headless --path game --import      # first time
+tools/build_android.sh                     # build/WaGang.apk, signed with the release key
+tools/build_android.sh --install           # ... then install and start it on the connected phone or emulator (adb)
+```
+
+* The **Android** preset fills Godot's prebuilt APK template (no Gradle build): 64-bit ARM only, Android 7.0+
+  (API 24), package `com.seedds.wagang`, landscape, immersive full screen, HD art only like iOS. The APK is about
+  1.1 GB. Export log: `build/android_export.log`; the game's output: `adb logcat -s godot`.
+* **Renderer:** the preset starts the game with the Compatibility renderer (OpenGL ES 3, through
+  `command_line/extra_args`) instead of Godot's Vulkan-based Mobile renderer. It runs on more phones, and it is the
+  configuration that was tested (in the Android emulator Godot's Vulkan renderer stalls on a black screen). iOS keeps
+  the Mobile renderer (Metal).
+* **Launcher icon:** `game/export/ios_icon.png` (legacy icon) and, for Android 8+ adaptive icons, the same picture at
+  two-thirds size (`android_icon_fg.png`) over a blurred copy (`android_icon_bg.png`), because launchers show only
+  the middle of an adaptive icon.
+* The back button or gesture does what 返回 / 菜单 do; it does not quit the app. Saves stay in the app's private
+  storage: kept when a newer build is installed over it, deleted when the app is uninstalled.
+* **Signing:** every build must be signed with the same key, or Android refuses to install it over the previous one
+  (players would have to uninstall first, which deletes their saves). The release key is
+  `~/.android/wagang-release.keystore` (alias `wagang`, PKCS12, RSA 4096, valid until 2054) with its password in
+  the login keychain (item `wagang-android-keystore`; `security find-generic-password -s wagang-android-keystore -w`
+  prints it). `GODOT_ANDROID_KEYSTORE_RELEASE_PATH` / `_USER` / `_PASSWORD` select another key. **Keep a backup of
+  the keystore and its password**: without them no new build can update an installed one.
+* The release workflow gets the key from the repository secrets `ANDROID_KEYSTORE_BASE64` and
+  `ANDROID_KEYSTORE_PASSWORD`, and checks the APK's certificate against `ANDROID_CERT_SHA256` in the workflow
+  (`a07c41ea…e667`). To set the secrets again, or for a fork with its own key (made with
+  `keytool -genkeypair -keystore … -storetype PKCS12 -alias wagang -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=WaGang"`;
+  then put its certificate's SHA-256 from `keytool -list -v` into `ANDROID_CERT_SHA256`):
+  ```sh
+  base64 -i ~/.android/wagang-release.keystore | gh secret set ANDROID_KEYSTORE_BASE64
+  security find-generic-password -s wagang-android-keystore -w | tr -d '\n' | gh secret set ANDROID_KEYSTORE_PASSWORD
+  ```
+
 ## Automatic releases (GitHub Actions)
 
-`.github/workflows/release.yml` builds and publishes all three platforms on every push to `main` that changes the game
+`.github/workflows/release.yml` builds and publishes all four platforms on every push to `main` that changes the game
 (pushes touching only `docs/`, Markdown files, `tools/` or `.gitignore` are skipped). It can also be started by
 hand from the repository's **Actions** tab (*Release builds → Run workflow*); runs from other branches do nothing.
 
 * **Build number:** the workflow's run number *N*, which increases with every run. The release is tagged
   `build-N` and titled *Build N*; the game's version is `1.0.N`. The version is written into
-  `application/config/version`, shown in the title screen's corner, and into the macOS and iOS bundle versions. The
+  `application/config/version`, shown in the title screen's corner, into the macOS and iOS bundle versions and
+  into the Android version name, with *N* as the Android version code (it must grow for an update to install). The
   repository itself keeps no version, so local builds show none.
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
   between runs; the downloads are checked against pinned SHA-256 sums), imports the project, exports
@@ -91,8 +135,13 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*); 
   to commit SHAs.
 * **iPhone:** a second job (`ios`, on a macOS runner, after the release exists) installs the macOS Godot editor
   and the iOS template, runs `tools/build_ios.sh --unsigned` and uploads `WaGang-iOS-build-N.ipa` to the same
-  release. Each release is about 3.3 GB (macOS 1.09 GB, Windows 1.07 GB, iPhone 1.1 GB; HD art only). The HD-pack
-  and version-stamp steps both jobs share are `.github/scripts/add_hd_pack.sh` and `stamp_version.sh`.
+  release.
+* **Android:** a third job (`android`, on an Ubuntu runner, after the release exists) installs Godot and the
+  Android template (`android_release.apk`), exports the **Android** preset signed with the release key from the
+  repository secrets (see [Android](#android)), checks the signing certificate and the package contents, and uploads
+  `WaGang-Android-build-N.apk`. The runner's JDK 17 and Android SDK are used. Each release is about 4.4 GB (macOS
+  1.09 GB, Windows 1.07 GB, iPhone 1.1 GB, Android 1.13 GB; HD art only). The HD-pack and version-stamp steps the
+  jobs share are `.github/scripts/add_hd_pack.sh` and `stamp_version.sh`.
 * **Latest, re-runs and clean-up:** a build becomes the repository's *Latest* release only if its commit is still
   the newest on `main`, so re-running an old build does not replace a newer one. Re-running a build that was
   already published replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N`

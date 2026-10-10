@@ -263,7 +263,7 @@ func _title_screen() -> void:
 		if _autosave_enabled() and not Game.save_info(Game.AUTO_SLOT).is_empty():
 			items.push_front("继续游戏")
 		if not OS.has_feature("mobile"):
-			items.append("结束游戏")      # iOS apps don't quit themselves
+			items.append("结束游戏")      # phone apps don't quit themselves
 		# the bottom row stays where the original's three-item menu ends, inside the title picture
 		var i := await ui.menu.choose(items, Vector2(250, 330 - 24 * (items.size() - 3)), false, "", [], 140)
 		match items[i]:

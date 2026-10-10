@@ -7,6 +7,7 @@ config/name="兴唐传·瓦岗山异闻录"
 run/main_scene="res://src/main.tscn"
 run/main_scene.mobile="res://src/touch/touch_shell.tscn"
 config/features=PackedStringArray("4.7")
+config/quit_on_go_back=false
 
 [autoload]
 

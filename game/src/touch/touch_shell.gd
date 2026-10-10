@@ -1,6 +1,7 @@
 class_name TouchShell
 extends Control
-## Mobile front end (the main scene on iOS; run res://src/touch/touch_shell.tscn to try it on a desktop).
+## Mobile front end (the main scene on iOS and Android; run res://src/touch/touch_shell.tscn to try it on a
+## desktop).
 ## The game, still a 640x480 world, runs in a SubViewport scaled to the screen height at 4:3 in the middle of the
 ## landscape screen; the side bars hold touch buttons for what needs a right button or a key with a mouse. The
 ## original's right click does two jobs, which get a button each here:
@@ -189,6 +190,13 @@ func _send_cancel() -> void:
 		k.physical_keycode = KEY_ESCAPE
 		k.pressed = pressed
 		Input.parse_input_event(k)
+
+
+## Android's back button / gesture does what a right click does: 返回, or 菜单 at the top level (it does not quit
+## the app: application/config/quit_on_go_back is off).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_activate(MENU if _menu_ready else BACK)
 
 
 func _process(_d: float) -> void:

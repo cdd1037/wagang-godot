@@ -42,7 +42,9 @@ static func play_se_id(id: int, mode: int) -> void:
 			var w := (s as AudioStreamWAV).duplicate() as AudioStreamWAV
 			w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 			w.loop_begin = 0
-			w.loop_end = int(w.get_length() * w.mix_rate)
+			# the mixer plays the frame at loop_end too: the last one (one past it is outside the sample data, a read
+			# that crashed the Android build when the loop came round)
+			w.loop_end = roundi(w.get_length() * w.mix_rate) - 1
 			s = w
 		_loop_player.stream = s
 		_loop_player.play()

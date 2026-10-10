@@ -130,7 +130,7 @@ Tips:
 * A hung run at 100 % CPU is a script loop; at ~0 % it is an `await` that never completes. `WG_TRACE_OPS=1` shows
   where.
 
-## Touch controls and the iPhone build
+## Touch controls and the phone builds
 
 On mobile, `project.godot` runs `res://src/touch/touch_shell.tscn` (`run/main_scene.mobile`) instead of
 `main.tscn`. `TouchShell`:
@@ -144,6 +144,8 @@ On mobile, `project.godot` runs `res://src/touch/touch_shell.tscn` (`run/main_sc
     true: a story scene waiting (`_waiting_click`), or the battle player phase at its top level (`BattleInput.idle`).
   * **返回** sends Esc; every cancel path also takes `ui_cancel`. It is dimmed while 菜单 is enabled.
   * **快进** toggles `Game.fast_toggle`, which `Game.skip_held()` treats like holding Ctrl.
+  * Android's back button or gesture (`NOTIFICATION_WM_GO_BACK_REQUEST`) activates 返回, or 菜单 where 返回 is
+    dimmed. `application/config/quit_on_go_back` is off, so it never quits the app.
 
 Game-side switches:
 
@@ -170,8 +172,9 @@ WG_START=1 WG_ACCEPT_SPAM=1 WG_NOVIDEO=1 WG_INPUTBOT=/tmp/bot WG_BOTMODE=touchca
 ```
 
 Building and installing on a phone: `tools/build_ios.sh --device`; in the Xcode Simulator (native arm64, after
-`tools/build_ios_sim_lib.sh` once): `tools/build_ios.sh --sim` (see [BUILDING.md](BUILDING.md)). Debug variables
-reach the app through `IOS_ENV`. For example,
+`tools/build_ios_sim_lib.sh` once): `tools/build_ios.sh --sim` (see [BUILDING.md](BUILDING.md)). Android:
+`tools/build_android.sh --install` builds the APK and installs it on the connected phone or a running emulator; the
+game's output is in `adb logcat -s godot`. Debug variables reach the iOS app through `IOS_ENV`. For example,
 `IOS_ENV='{"WG_SHELLSHOT":"user://shots"}' tools/build_ios.sh --device` saves screenshots in the app's Documents
 folder. Fetch them from a phone with
 `xcrun devicectl device copy from --device UDID --domain-type appDataContainer --domain-identifier com.seedds.wagang --source Documents/shots --destination DIR`;
@@ -183,7 +186,7 @@ example, this plays one battle turn through the touch path with screenshots:
 
 * `tools/get_hd_pack.sh` downloads the HD graphics pack into `game/assets_hd/`. `tools/upscale_assets.py`
   rebuilds it, and `tools/upscale.py` upscales single images for trying models. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
-* Every push to `main` that changes the game builds and publishes *Build N* for macOS, Windows and iPhone; see
+* Every push to `main` that changes the game builds and publishes *Build N* for macOS, Windows, iPhone and Android; see
   "Automatic releases" in [BUILDING.md](BUILDING.md). Check a run with `gh run list --workflow release.yml`.
 
 ## Reverse-engineering workflow

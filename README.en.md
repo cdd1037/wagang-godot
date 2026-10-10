@@ -4,7 +4,7 @@
 
 A reverse-engineered reimplementation of **兴唐传·瓦岗山异闻录** (*Xing Tang Zhuan: Wagang Mountain Chronicles*), a
 Sui–Tang story mod built on Koei's 1998 *三国志曹操传* (Cao Cao Zhuan) engine, rewritten in **Godot 4.7** so it runs
-natively on macOS, Windows and iPhone.
+natively on macOS, Windows, iPhone and Android.
 
 The original Windows executable was decompiled (Ghidra) and its formats, script language, battle formulas and AI
 were documented, then re-implemented. The game's own data is used unchanged in converted form: all 117 story and
@@ -38,7 +38,7 @@ All 117 scripts have been run end to end by an automated play-through harness wi
 
 ## Download
 
-Ready-to-play builds for **macOS** (Apple Silicon and Intel), **Windows** (64-bit) and **iPhone** are on the
+Ready-to-play builds for **macOS** (Apple Silicon and Intel), **Windows** (64-bit), **iPhone** and **Android** are on the
 [Releases page](https://github.com/seedds/wagang-godot/releases). Every change to the game publishes a new
 numbered build automatically; the build number is shown in the corner of the title screen. The builds contain the
 HD art only; each platform's zip is about 1.1 GB.
@@ -52,6 +52,9 @@ HD art only; each platform's zip is about 1.1 GB.
   is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID (with a free Apple ID it has
   to be re-signed every 7 days). With an Apple developer account and a Mac you can also build and install it with
   `tools/build_ios.sh --device` (see [docs/BUILDING.md](docs/BUILDING.md)).
+* **Android** (Android 7.0+, 64-bit ARM): `WaGang-Android-build-N.apk`, also uploaded a few minutes after the
+  others. Download it on the phone, open it and allow the browser or file manager to install apps when asked. Later
+  builds install over it and keep the saves.
 
 ## Quick start (from source)
 
@@ -96,7 +99,7 @@ Settings → Privacy & Security → Open Anyway** (macOS 15+; right-click → **
 | ⌘F / F11 / Alt+Enter | toggle full screen |
 | Drag the window edge | resize; the window snaps back to 4:3 when you let go |
 
-On iPhone the game plays in landscape with the 4:3 picture in the middle and touch buttons beside it:
+On iPhone and Android the game plays in landscape with the 4:3 picture in the middle and touch buttons beside it:
 
 | Touch | Action |
 |---|---|
@@ -107,6 +110,7 @@ On iPhone the game plays in landscape with the 4:3 picture in the middle and tou
 | **菜单** (top left) | the system menu (story: 菜单; battle: end turn, save, load …); only when nothing is selected |
 | **返回** (left) | cancel / go back, like Esc; dimmed when 菜单 is available |
 | **快进** (right) | fast-forward on/off (like holding Ctrl); lit while on |
+| Android back button / gesture | like **返回**; opens the system menu where 返回 is dimmed (it does not quit the game) |
 
 The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 
@@ -115,7 +119,7 @@ The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 | Document | Contents |
 |---|---|
 | [docs/PLAYING.md](docs/PLAYING.md) | Player guide: story scenes, battles, duels, menus, saving, troubleshooting |
-| [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the macOS / Windows / iPhone apps |
+| [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the macOS / Windows / iPhone / Android apps |
 | [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The 4× AI-upscaled graphics pack: how it works, building and publishing it, model choice |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the reimplementation works: emulated memory, script VM, stages, UI |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, reverse-engineering workflow |
@@ -127,8 +131,8 @@ The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
 |---|---|
 | `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime), `assets_hd/` = HD graphics pack (downloaded or generated, not in git) |
 | `docs/` | Guides and reverse-engineering specifications |
-| `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts, `build_ios.sh` |
-| `.github/` | GitHub Actions workflow (and its scripts) that builds and publishes the macOS / Windows / iPhone releases |
+| `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts, `build_ios.sh`, `build_android.sh` |
+| `.github/` | GitHub Actions workflow (and its scripts) that builds and publishes the macOS / Windows / iPhone / Android releases |
 | `run_game.sh` | Runs the game from source |
 
 Not in the repository (see `.gitignore`): the original game (`wg2025/`), build output (`build/`), scratch data
