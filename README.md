@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-本项目通过逆向工程，用 **Godot 4.7** 重新实现了 **《兴唐传·瓦岗山异闻录》**，使其可以在 **macOS** 和 **Windows** 上原生运行。
+本项目通过逆向工程，用 **Godot 4.7** 重新实现了 **《兴唐传·瓦岗山异闻录》**，使其可以在 **macOS**、**Windows** 和 **iPhone** 上原生运行。
 原作是基于光荣 1998 年《三国志曹操传》引擎制作的隋唐题材 MOD。
 
 原版 Windows 程序经 Ghidra 反编译，其文件格式、剧本脚本语言、战斗公式和敌军 AI 都整理成了文档，再据此重新实现。
@@ -37,7 +37,7 @@
 
 ## 下载
 
-可直接游玩的 **macOS**（Apple 芯片与 Intel）和 **Windows**（64 位）版本发布在
+可直接游玩的 **macOS**（Apple 芯片与 Intel）、**Windows**（64 位）和 **iPhone** 版本发布在
 [Releases 页面](https://github.com/seedds/wagang-godot/releases)。游戏代码每次更新，都会自动构建并发布新版本，
 构建号自动递增（Build 1、Build 2……），标题画面右下角会显示版本号（例如“版本 1.0.3”）。发布版本只包含高清画面，
 每个平台的压缩包约 1.1 GB。
@@ -47,6 +47,10 @@
   也可以在终端执行 `xattr -dr com.apple.quarantine <应用路径>`。
 * **Windows**：解压后运行 `WaGang.exe`，`WaGang.pck` 要放在同一目录。如果 SmartScreen 提示“未知发布者”，
   请点击“更多信息”→“仍要运行”。
+* **iPhone**（iOS 15 及以上，iPhone XS 及更新机型）：`WaGang-iOS-build-N.ipa` 比其他平台晚几分钟上传。安装包未签名，
+  请用 AltStore 或 Sideloadly 安装，它们会用你的 Apple ID 签名（免费 Apple ID 每 7 天需要重新签名一次）。
+  有 Apple 开发者账号和 Mac 的话，也可以用 `tools/build_ios.sh --device` 自己构建并安装，见
+  [docs/BUILDING.md](docs/BUILDING.md)。
 
 ## 从源码运行
 
@@ -90,6 +94,16 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 | ⌘F / F11 / Alt+回车 | 切换全屏 |
 | 拖动窗口边缘 | 调整窗口大小，松开后窗口自动恢复 4:3 比例 |
 
+iPhone 上横屏游玩，4:3 画面居中，两侧是触控按钮：
+
+| 触控 | 作用 |
+|---|---|
+| 点按 | 等同鼠标左键：选择、确认、推进对话；在战场上点一下还会显示该格的部队或地形信息 |
+| 在战场上拖动 | 滚动地图 |
+| 在长列表上上下拖动 | 滚动列表；手指在列表上滑到想要的项再松开即可选中 |
+| 左侧“返回”按钮 | 等同鼠标右键 / Esc：取消；没有可取消的操作时打开菜单（战斗中可结束回合、存档、读档） |
+| 右侧“快进”按钮 | 开关快进（等同按住 Ctrl） |
+
 完整的游戏说明见 **[docs/PLAYING.md](docs/PLAYING.md)**（英文）。
 
 ## 文档
@@ -99,7 +113,7 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 | 文档 | 内容 |
 |---|---|
 | [docs/PLAYING.md](docs/PLAYING.md) | 游戏说明：剧情、战斗、单挑、菜单、存档、常见问题 |
-| [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows 版本；自动发布流程 |
+| [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows / iPhone 版本；自动发布流程 |
 | [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 4 倍 AI 高清画面包：原理、生成、发布和模型选择 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 重制版的实现原理：模拟内存、脚本虚拟机、场景、界面 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、逆向工作流程 |
@@ -112,7 +126,7 @@ Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出�
 | `game/` | Godot 项目。`src/` 为 GDScript 源码，`assets/` 为转换后的游戏数据（运行时加载），`assets_hd/` 为高清画面包（下载或生成，不在 git 中） |
 | `docs/` | 使用说明与逆向分析规格文档 |
 | `tools/` | Python 转换工具、分析辅助脚本、Ghidra 无界面反编译脚本、测试脚本、AI 放大工具 |
-| `.github/workflows/` | 自动构建并发布 macOS / Windows 版本的 GitHub Actions 工作流 |
+| `.github/` | 自动构建并发布 macOS / Windows / iPhone 版本的 GitHub Actions 工作流及其脚本 |
 | `run_game.sh` | 从源码启动游戏 |
 
 以下内容不在仓库中（见 `.gitignore`）：原版游戏（`wg2025/`）、构建输出（`build/`）、临时数据（`extract/`）、

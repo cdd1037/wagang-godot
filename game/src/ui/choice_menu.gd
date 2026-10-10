@@ -8,6 +8,7 @@ signal chosen(index: int)
 
 const ROW_H := 24
 const PAD := 10
+const TAP_SLOP := 10.0       # finger travel (px) before a touch on a long list scrolls it instead of picking
 
 var items: PackedStringArray = []
 var enabled: Array = []
@@ -19,6 +20,10 @@ var _active := false
 var _min_width := 0.0
 var _top := 0                # first visible row
 var _rows := 0               # rows that fit on the screen
+var _touch_down := false     # touch: a press on this open menu, not yet released
+var _touch_y := 0.0          # touch: finger y where the list last scrolled by a row
+var _touch_from := Vector2.ZERO
+var _touch_scrolled := false
 
 
 func _init() -> void:
@@ -57,6 +62,7 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	_rect = Rect2(pos, Vector2(w + PAD * 2 + 16, h))
 	visible = true
 	_active = true
+	_touch_down = false
 	queue_redraw()
 	if Game.autoplay or Game.demo:
 		if Game.demo:
@@ -141,8 +147,62 @@ func _move(d: int) -> void:
 	queue_redraw()
 
 
+## Index of the enabled visible row at p, or -1.
+func _row_at(p: Vector2) -> int:
+	for i in items.size():
+		if _visible(i) and _row_rect(i).has_point(p) and _is_enabled(i):
+			return i
+	return -1
+
+
+## Touch: a press highlights the row under the finger and the release picks it, so a finger can slide onto the
+## right row first. A vertical drag on a list longer than the screen scrolls it instead (and picks nothing).
+func _touch_input(ev: InputEventMouse) -> void:
+	if ev is InputEventMouseMotion:
+		if not _touch_down:
+			return
+		var p := ev.position
+		if items.size() > _rows and (_touch_scrolled or absf(p.y - _touch_from.y) > TAP_SLOP):
+			if not _touch_scrolled:
+				_touch_scrolled = true
+				_touch_y = p.y
+			var n := int((p.y - _touch_y) / ROW_H)       # finger down = earlier rows come into view
+			if n != 0:
+				_touch_y += n * ROW_H
+				_top = clampi(_top - n, 0, maxi(items.size() - _rows, 0))
+				queue_redraw()
+		elif not _touch_scrolled:
+			var i := _row_at(p)
+			if i >= 0 and i != sel:
+				sel = i
+				queue_redraw()
+		return
+	var mb := ev as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if mb.pressed:
+		_touch_down = true
+		_touch_scrolled = false
+		_touch_from = mb.position
+		var i := _row_at(mb.position)
+		if i >= 0 and i != sel:
+			sel = i
+			queue_redraw()
+	elif _touch_down:
+		_touch_down = false
+		if not _touch_scrolled:
+			var i := _row_at(mb.position)
+			if i >= 0:
+				sel = i
+				_finish(i)
+
+
 func _gui_input(ev: InputEvent) -> void:
 	if not _active:
+		return
+	if Game.touch and ev is InputEventMouse and (ev is InputEventMouseMotion or ev.button_index == MOUSE_BUTTON_LEFT):
+		_touch_input(ev)
+		accept_event()
 		return
 	if ev is InputEventMouseMotion:
 		for i in items.size():

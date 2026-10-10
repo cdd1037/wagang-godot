@@ -45,6 +45,10 @@ var chapter_title := ""
 var play_time := 0.0
 var loaded := false
 var clicks := 0                  # count of click / confirm presses; waits compare it to see a new press
+var main = null                  # the Main node (src/main.gd); inside the touch shell it is not /root/Main
+var shell = null                 # TouchShell when the game runs in it (mobile), else null
+var touch := false               # touch controls: tap on release, drag pans the map / scrolls lists
+var fast_toggle := false         # the touch shell's 快进 button: acts like holding Ctrl
 
 
 func _ready() -> void:
@@ -53,10 +57,17 @@ func _ready() -> void:
 
 func _input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton:
+		if shell and not shell.over_game(ev.position):
+			return       # a touch-shell button beside the picture, not a click in the game
 		if ev.pressed and ev.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			clicks += 1
 	elif ev.is_action_pressed("ui_accept") or ev.is_action_pressed("ui_cancel"):
 		clicks += 1
+
+
+## Ctrl held (or the touch shell's 快进 on): type text fast and skip waits.
+func skip_held() -> bool:
+	return fast_toggle or Input.is_key_pressed(KEY_CTRL)
 
 
 func load_data() -> void:

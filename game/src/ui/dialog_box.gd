@@ -103,13 +103,13 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	if _typing:
-		_shown += delta * CHARS_PER_SEC * (8.0 if fast_forward or Input.is_key_pressed(KEY_CTRL) else 1.0)
+		_shown += delta * CHARS_PER_SEC * (8.0 if fast_forward or Game.skip_held() else 1.0)
 		_label.visible_characters = int(_shown)
 		if _label.visible_characters >= _label.get_total_character_count():
 			_label.visible_characters = -1
 			_typing = false
 			_waiting = true
-	elif _waiting and Input.is_key_pressed(KEY_CTRL):
+	elif _waiting and Game.skip_held():
 		_waiting = false
 		advanced.emit()
 	queue_redraw()

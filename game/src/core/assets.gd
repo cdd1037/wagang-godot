@@ -7,7 +7,8 @@ const ROOT := "res://assets/"
 ## original's logical size (ImageTexture size override), so no drawing code changes. Release builds ship only
 ## the HD pack; without it (a source checkout that has not fetched it) the original PNGs are used.
 const HD_ROOT := "res://assets_hd/"
-const HD_BUDGET := 1024 * 1024 * 1024    # bytes of HD textures the cache keeps alive (LRU)
+## Bytes of HD textures the cache keeps alive (LRU); less on a phone.
+var hd_budget := (384 if OS.has_feature("mobile") else 1024) * 1024 * 1024
 
 var hd := true                           # debug: WG_HD=0 shows the original art
 var hd_pack := false                     # the pack is installed
@@ -18,6 +19,7 @@ var _hd_bytes := 0
 var _json_cache: Dictionary = {}
 var _audio_cache: Dictionary = {}
 var _font: Font
+var _view: Viewport                      # where the game draws: the window, or the touch shell's SubViewport
 
 
 func path(rel: String) -> String:
@@ -32,8 +34,15 @@ func exists(rel: String) -> bool:
 func _ready() -> void:
 	hd_pack = DirAccess.dir_exists_absolute(HD_ROOT + "gfx")
 	hd = OS.get_environment("WG_HD") != "0"
+	set_view(get_tree().root)
+
+
+func set_view(v: Viewport) -> void:
+	if _view and _view.size_changed.is_connected(_apply_filter):
+		_view.size_changed.disconnect(_apply_filter)
+	_view = v
 	_apply_filter()
-	get_tree().root.size_changed.connect(_apply_filter)
+	_view.size_changed.connect(_apply_filter)
 
 
 func hd_active() -> bool:
@@ -43,7 +52,7 @@ func hd_active() -> bool:
 ## Pixel art is drawn with nearest-neighbour scaling; HD art is smooth, so filter it bilinearly. Shown
 ## below about 2.5x the original size the 4x art is shrunk enough to shimmer, so then use its mipmaps.
 func _apply_filter() -> void:
-	var r := get_tree().root
+	var r := _view
 	if not hd_active():
 		r.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	elif r.size.x >= 640 * 2.5:
@@ -92,6 +101,10 @@ func _hd_tex(rel: String) -> Texture2D:
 	if size == Vector2i.ZERO:
 		size = img.get_size() / 4
 	# some GPUs take at most 8192 px (one map is 8448 wide); the size override keeps the drawn size
+	if OS.has_feature("mobile"):
+		# a phone shows the 640x480 screen at about 2.7x: halve the big maps and backgrounds (memory, upload time)
+		while maxi(img.get_width(), img.get_height()) > 4096:
+			img.shrink_x2()
 	var k := 8192.0 / maxi(img.get_width(), img.get_height())
 	if k < 1.0:
 		img.resize(int(img.get_width() * k), int(img.get_height() * k), Image.INTERPOLATE_CUBIC)
@@ -111,7 +124,7 @@ func _png_size(p: String) -> Vector2i:
 	return Vector2i(f.get_32(), f.get_32())
 
 
-## Keep recently used HD textures alive up to HD_BUDGET bytes; older ones live only while something uses them.
+## Keep recently used HD textures alive up to hd_budget bytes; older ones live only while something uses them.
 func _hd_touch(rel: String, t: Texture2D) -> void:
 	for i in range(_hd_lru.size() - 1, -1, -1):
 		if _hd_lru[i][0] == rel:
@@ -120,7 +133,7 @@ func _hd_touch(rel: String, t: Texture2D) -> void:
 	var bytes := int(t.get_width()) * t.get_height() * 85    # 4x4 texels per logical pixel, 4 bytes each, +1/3 mipmaps
 	_hd_lru.append([rel, t, bytes])
 	_hd_bytes += bytes
-	while _hd_bytes > HD_BUDGET and _hd_lru.size() > 1:
+	while _hd_bytes > hd_budget and _hd_lru.size() > 1:
 		_hd_bytes -= int(_hd_lru.pop_front()[2])
 
 
@@ -181,7 +194,7 @@ func video(rel: String) -> VideoStream:
 	return v
 
 
-## CJK-capable UI font (system Song/Hei fonts on macOS).
+## CJK-capable UI font (system Song/Hei fonts on macOS and Windows; a bundled Song font on mobile).
 func font() -> Font:
 	if _font == null:
 		var f := SystemFont.new()
@@ -198,6 +211,15 @@ func font() -> Font:
 			fb.append(g)
 		f.fallbacks = fb
 		_font = f
+		if OS.has_feature("mobile") or OS.get_environment("WG_BUNDLED_FONT") != "":
+			# iOS has no Song face (only PingFang): use the bundled Noto Serif SC cut to the game's characters
+			# (tools/subset_font.py), the system fonts above as its fallback
+			var nf := FontFile.new()
+			if nf.load_dynamic_font(ROOT + "fonts/NotoSerifSC-game.otf") == OK:
+				nf.antialiasing = f.antialiasing
+				nf.hinting = f.hinting
+				nf.fallbacks = [f] as Array[Font]
+				_font = nf
 	return _font
 
 

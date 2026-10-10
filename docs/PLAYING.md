@@ -6,13 +6,16 @@ How to start the game and play it: story scenes, battles, duels, menus and savin
 ## Starting the game
 
 * **Download (recommended):** the [Releases page](https://github.com/seedds/wagang-godot/releases) has a ready
-  build for macOS and Windows for every update; take the newest *Build N*.
+  build for macOS, Windows and iPhone for every update; take the newest *Build N*.
   * **macOS** (11+ on Apple Silicon, 10.13+ on Intel): unzip and open the app. It is not notarized, so macOS
     blocks it the first time. On macOS 15 and later open **System Settings → Privacy & Security**, scroll down
     and click **Open Anyway**; on older versions right-click the app → **Open**. Or run
     `xattr -dr com.apple.quarantine <app>`.
   * **Windows** (64-bit): unzip and run `WaGang.exe`; keep `WaGang.pck` in the same folder. If SmartScreen warns
     about an unknown publisher, choose **More info → Run anyway**.
+  * **iPhone** (iOS 15+, iPhone XS or newer): `WaGang-iOS-build-N.ipa` is unsigned; install it with AltStore or
+    Sideloadly, which sign it with your Apple ID (a free Apple ID needs re-signing every 7 days). With a developer
+    account and a Mac, `tools/build_ios.sh --device` builds and installs it ([BUILDING.md](BUILDING.md)).
 * **From source:** `./run_game.sh` in the repository root (needs Godot 4.7). The first run downloads the HD
   graphics pack (about 720 MB) and imports the project. See [BUILDING.md](BUILDING.md) to export an app yourself.
 
@@ -20,7 +23,10 @@ The window opens at the largest of 3×, 2.5×, 2×, 1.5× or 1× the original 64
 resize it freely; when you let go, it snaps to the game's 4:3 shape so the picture fills it. Toggle full screen with
 **⌘F**, **F11** or **Alt+Enter**.
 
-The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit). After an ending has
+On iPhone the game runs in landscape: the 4:3 picture fills the screen height, with touch buttons on both sides (see
+[Touch controls](#touch-controls-iphone)).
+
+The title screen offers **开始新游戏** (new game), **读取进度** (load) and **结束游戏** (quit; not on iPhone). After an ending has
 been reached once, the title picture changes. Downloaded builds show their version (版本 1.0.N) in the bottom-right
 corner.
 
@@ -35,6 +41,18 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | Arrow keys / mouse wheel / Page Up, Page Down | move through menus (long lists scroll) |
 | Hold **Space** or **Ctrl** | fast-forward animations and text (×4 game speed) |
 | Click / Enter / Esc during a video | skip the cutscene |
+
+### Touch controls (iPhone)
+
+| Touch | Action |
+|---|---|
+| Tap | a left click: confirm, select, advance dialogue, skip a video |
+| Tap a battle cell | also shows its unit or terrain panel (what hovering does with a mouse) |
+| Drag on the battle map | scroll the map; a drag never counts as a click |
+| Drag up/down on a long list | scroll the list (history, unit list, items …) |
+| Slide on a menu, lift | the entry under the finger is highlighted and picked when you lift it, so you can correct a near-miss before lifting |
+| **返回** (left of the picture) | a right click / Esc: cancel or go back; with nothing to cancel it opens the menu (in battle: end turn, unit list, save, load) |
+| **快进** (right of the picture) | fast-forward on/off: ×4 speed and text skips ahead, like holding Ctrl |
 
 Dialogue boxes show the speaker's portrait and name. Text types out; a click shows the rest, the next click
 continues.
@@ -99,10 +117,11 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 * Click an enemy or ally to show its movement and attack ranges.
 * Turn number, turn limit and weather are shown top right.
 
-**System menu** (right click / Esc on the map): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
+**System menu** (right click / Esc on the map; **返回** on iPhone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
 (objectives), **存储进度 / 读取进度** (save / load), **回到标题** (title).
 
 **Moving around the map:** arrow keys move the cursor; the mouse at a screen edge or a middle-button drag scrolls.
+On iPhone drag the map with a finger; tapping a cell shows its unit or terrain panel.
 
 Units that run out of troops retreat; some characters have scripted retreat lines. Experience comes from fighting
 and casting; at 100 EXP a unit levels up. From level 20 (and again from 40) a promotion item raises the unit to
@@ -127,9 +146,11 @@ winner may gain experience when the duel closes.
   list) in the game's user folder:
   * macOS: `~/Library/Application Support/Godot/app_userdata/兴唐传·瓦岗山异闻录/`
   * Windows: `%APPDATA%\Godot\app_userdata\兴唐传·瓦岗山异闻录\`
+  * iPhone: the app's own folder, visible in the **Files** app under **On My iPhone → 兴唐传·瓦岗山异闻录**
+    (or in Finder's iPhone *Files* tab), so saves can be copied to and from a computer
 
   The file `niuniu.bin` there records reached endings, as the original's `Niuniu.wa` did. Saves can be copied
-  between the macOS and Windows versions. A save is written to a temporary file first, so a crash while saving
+  between the macOS, Windows and iPhone versions. A save is written to a temporary file first, so a crash while saving
   leaves the old save intact; a damaged save, or one from a newer version of the game, is refused instead of
   loaded.
 * A defeat (game over) returns to the title screen, so save often.
@@ -142,5 +163,5 @@ winner may gain experience when the duel closes.
 | Windows: SmartScreen "Windows protected your PC" | **More info → Run anyway** (the build is not code-signed) |
 | Windows: the game starts with an error about a missing pack | Keep `WaGang.pck` next to `WaGang.exe` (unzip the whole folder) |
 | Window too small or large | Drag the window's edge or corner (it snaps to 4:3), or toggle full screen (⌘F) |
-| Missing characters (▯) in text | The game uses system Chinese fonts: Songti SC, Hiragino Sans GB and Heiti SC on macOS (make sure they are not disabled in Font Book); SimSun, Microsoft YaHei and SimHei on Windows (install the Chinese supplemental fonts if your Windows lacks them) |
+| Missing characters (▯) in text | The game uses system Chinese fonts: Songti SC, Hiragino Sans GB and Heiti SC on macOS (make sure they are not disabled in Font Book); SimSun, Microsoft YaHei and SimHei on Windows (install the Chinese supplemental fonts if your Windows lacks them). The iPhone version brings its own (Noto Serif SC) |
 | A town scene "does nothing" | It is waiting for you: find the character or place that continues the story, or check the menu for **出征** |

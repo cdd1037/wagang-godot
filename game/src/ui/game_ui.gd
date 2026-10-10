@@ -111,7 +111,7 @@ func _wait_click() -> void:
 	# a new press (counted by Game._input), so the click that closed the previous box is not reused
 	# and a tap shorter than a frame is not missed; holding Ctrl skips
 	var n := Game.clicks
-	while Game.clicks == n and not Input.is_key_pressed(KEY_CTRL):
+	while Game.clicks == n and not Game.skip_held():
 		await get_tree().process_frame
 
 

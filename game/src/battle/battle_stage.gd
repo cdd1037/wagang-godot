@@ -870,7 +870,7 @@ func op_ui_0e(_ins: Dictionary) -> void:
 	battle_over = true
 	if OS.get_environment("WG_TRACE_BATTLE") != "":
 		print("GAME OVER at turn %d" % turn)
-	await get_tree().root.get_node("Main").game_over()
+	await Game.main.game_over()
 	vm.abort = true
 	vm.active = false
 

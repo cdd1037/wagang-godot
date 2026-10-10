@@ -1,6 +1,7 @@
-# Builds the game for macOS and Windows on every push to main and publishes them as a GitHub release.
+# Builds the game for macOS, Windows and iPhone on every push to main and publishes them as a GitHub release.
 # The build number is the workflow's run number, so it increases with every build: tag build-N, version 1.0.N.
-# Only the newest KEEP_BUILDS builds are kept (each is about 2.2 GB).
+# The iPhone .ipa is built on a macOS runner and added to the release after the others.
+# Only the newest KEEP_BUILDS builds are kept (each is about 3.3 GB).
 name: Release builds
 
 on:
@@ -24,6 +25,7 @@ env:
   GODOT_VERSION: 4.7.2
   # SHA-256 of the Godot downloads (as listed on the godot-builds release)
   GODOT_SHA256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+  GODOT_MACOS_SHA256: c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e
   TEMPLATES_SHA256: f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011
   KEEP_BUILDS: 5
 
@@ -70,39 +72,13 @@ jobs:
           rm /tmp/templates.tpz /tmp/godot.zip
 
       - name: Add the HD graphics pack
-        # Releases ship the HD art only. The pack (the contents of game/assets_hd, built locally with
-        # tools/upscale_assets.py) is the asset assets_hd.zip of the release tagged hd-pack.
+        # releases ship the HD art only (see the script)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download hd-pack -p "assets_hd.zip" -D /tmp/hd
-          # GitHub's SHA-256 of the asset catches a truncated or replaced-while-downloading pack
-          want=$(gh release view hd-pack --json assets --jq '.assets[] | select(.name=="assets_hd.zip") | .digest')
-          echo "${want#sha256:}  /tmp/hd/assets_hd.zip" | sha256sum -c -
-          unzip -q /tmp/hd/assets_hd.zip -d game/assets_hd
-          rm -r /tmp/hd
-          n=$(find game/assets_hd -name '*.webp' | wc -l)
-          echo "HD pack: $n images"
-          test "$n" -ge 3400
-          # leave the original pictures out of the builds: every texture the game draws has an HD version
-          # (palettes, index files and the terrain-patch index images stay)
-          exclude="assets/gfx/backgrounds/*.png,assets/gfx/maps/*.png,assets/gfx/units/*.png,assets/gfx/rpg_sprites/*.png"
-          exclude="$exclude,assets/gfx/portraits/*.png,assets/gfx/screens/*.png,assets/gfx/effects/xben/*.png"
-          exclude="$exclude,assets/gfx/effects/mcall/*.png,assets/gfx/effects/kao/*.png,assets/gfx/effects/qusi/*.png"
-          exclude="$exclude,assets/gfx/effects/items32/*.png,assets/gfx/effects/ranges/*.png,assets/gfx/effects/weather/*.png"
-          exclude="$exclude,assets/gfx/icons/*.png,assets/gfx/terrain/*.png,assets/gfx/ui/*.png"
-          sed -i "s#^exclude_filter=\"\"#exclude_filter=\"$exclude\"#" game/export_presets.cfg
-          test "$(grep -c "^exclude_filter=\"assets/gfx" game/export_presets.cfg)" -eq 2   # both presets
+        run: .github/scripts/add_hd_pack.sh
 
       - name: Stamp the version
-        run: |
-          # title screen (application/config/version) and the macOS bundle version
-          sed -i '/^config\/version=/d' game/project.godot
-          sed -i "/^config\/name=/a config/version=\"${VERSION}\"" game/project.godot
-          sed -i "s/^application\/short_version=.*/application\/short_version=\"${VERSION}\"/; s/^application\/version=.*/application\/version=\"${BUILD}\"/" game/export_presets.cfg
-          test "$(grep -c "^config/version=\"${VERSION}\"" game/project.godot)" -eq 1
-          grep -q "^application/short_version=\"${VERSION}\"" game/export_presets.cfg
-          grep -q "^application/version=\"${BUILD}\"" game/export_presets.cfg
+        run: .github/scripts/stamp_version.sh "${VERSION}" "${BUILD}"
 
       - name: Import the project
         run: ~/godot/godot --headless --path game --import
@@ -144,6 +120,11 @@ jobs:
 
           **Windows** (64-bit): unzip \`WaGang-Windows-build-${BUILD}.zip\` and run \`WaGang.exe\` (keep \`WaGang.pck\`
           next to it). If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
+
+          **iPhone** (iOS 15+, iPhone XS or newer): \`WaGang-iOS-build-${BUILD}.ipa\` is added a few minutes after the
+          others. It is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID (with a free
+          Apple ID the app has to be re-signed every 7 days). Touch controls: tap = click, drag = scroll the map or a
+          list, **返回** = right click (cancel / menu), **快进** = fast forward.
           EOF
           files=("build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip")
           # only the build of main's newest commit becomes "Latest" (not a re-run of an older one)
@@ -168,3 +149,68 @@ jobs:
               echo "deleting $tag"
               gh release delete "$tag" --cleanup-tag --yes
             done
+
+  ios:
+    # the iPhone build: an unsigned .ipa (for sideloading) added to the release the build job published
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Build number
+        run: |
+          echo "BUILD=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and the iOS export template
+        id: cache-godot
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: |
+            ~/godot
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-macos-ios
+
+      - name: Install Godot and the iOS export template
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          templates="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p ~/godot "$templates"
+          curl -sSL --fail -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          echo "${GODOT_MACOS_SHA256}  /tmp/godot.zip" | shasum -a 256 -c -
+          unzip -q /tmp/godot.zip -d ~/godot
+          curl -sSL --fail -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          echo "${TEMPLATES_SHA256}  /tmp/templates.tpz" | shasum -a 256 -c -
+          unzip -q -j /tmp/templates.tpz templates/version.txt templates/ios.zip -d "$templates"
+          rm /tmp/templates.tpz /tmp/godot.zip
+
+      - name: Add the HD graphics pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/add_hd_pack.sh
+
+      - name: Stamp the version
+        run: .github/scripts/stamp_version.sh "${VERSION}" "${BUILD}"
+
+      - name: Build the iPhone app
+        run: |
+          godot=~/godot/Godot.app/Contents/MacOS/Godot
+          "$godot" --headless --path game --import
+          xcodebuild -version
+          GODOT="$godot" tools/build_ios.sh --unsigned
+          mv build/WaGang-iOS.ipa "build/WaGang-iOS-build-${BUILD}.ipa"
+          # the app, the engine and the game data must all be in the package
+          unzip -l "build/WaGang-iOS-build-${BUILD}.ipa" > /tmp/ipa.txt
+          grep -q "Payload/WaGang.app/WaGang$" /tmp/ipa.txt
+          grep -q "Payload/WaGang.app/WaGang.pck$" /tmp/ipa.txt
+          ls -la build
+
+      - name: Add it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "build-${BUILD}" "build/WaGang-iOS-build-${BUILD}.ipa" --clobber

@@ -314,7 +314,7 @@ func unit_list() -> void:
 
 func system_menu() -> void:
 	var i := await st.ui.menu.choose(["回合结束", "部队一览", "胜利条件", "存储进度", "读取进度", "回到标题"], Vector2(-1, -1), true)
-	var main := st.get_tree().root.get_node("Main")
+	var main: Node = Game.main
 	match i:
 		0:
 			end_turn = true

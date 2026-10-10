@@ -3,13 +3,14 @@ extends Node
 func run() -> void:
 	Game.new_game_state()
 	var ui := GameUI.new()
-	# stand-in for main.gd (ScriptHost reads Main.ui)
+	# stand-in for main.gd (ScriptHost reads Game.main.ui)
 	var gs := GDScript.new()
 	gs.source_code = "extends Node\nvar ui\n"
 	gs.reload()
 	var m := Node.new()
 	m.set_script(gs)
 	m.name = "Main"
+	Game.main = m
 	get_tree().root.add_child.call_deferred(m)
 	await get_tree().process_frame
 	m.set("ui", ui)

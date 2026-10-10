@@ -28,11 +28,15 @@ are ported from the decompiled executable.
                          GameUI (dialog, menus, popups, fades, video)
 ```
 
+On iOS the main scene is `touch/touch_shell.tscn` instead. It runs `main.tscn` inside a 640×480 `SubViewport` with
+touch buttons beside it (see "Touch controls" in [DEVELOPMENT.md](DEVELOPMENT.md)). Code reaches the Main node
+through `Game.main`, never `/root/Main`.
+
 ## Autoloads
 
 | Singleton | File | Role |
 |---|---|---|
-| `Assets` | `core/assets.gd` | Loads converted data at run time: textures from PNG bytes, JSON, MP3/WAV, OGV video, fonts (system Chinese fonts with fallbacks). Everything under `res://assets` is imported with `importer="keep"`, so files are read raw. With the HD pack active, `tex()` substitutes the 4× `.webp` from `res://assets_hd` at the original's logical size (see [HD_GRAPHICS.md](HD_GRAPHICS.md)). |
+| `Assets` | `core/assets.gd` | Loads converted data at run time: textures from PNG bytes, JSON, MP3/WAV, OGV video, fonts (system Chinese fonts with fallbacks; on mobile a bundled Noto Serif SC subset, `tools/subset_font.py`). Everything under `res://assets` is imported with `importer="keep"`, so files are read raw. With the HD pack active, `tex()` substitutes the 4× `.webp` from `res://assets_hd` at the original's logical size (see [HD_GRAPHICS.md](HD_GRAPHICS.md)). |
 | `Audio` | `core/audio.gd` | BGM player (the original CD tracks as `audio/bgm/NN.mp3`) and a small pool of sound-effect players. |
 | `Mem` | `core/mem.gd` | The emulated memory (below). |
 | `Game` | `core/game.gd` | Static data tables (persons, classes, items, strategies, terrain …), the party and bag, scenario number, gold, and save/load. |

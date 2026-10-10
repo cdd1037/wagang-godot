@@ -14,8 +14,14 @@ var _pending_load: Dictionary = {}
 var _retries: Dictionary = {}
 
 
+func _enter_tree() -> void:
+	Game.main = self
+
+
 func _unhandled_key_input(ev: InputEvent) -> void:
 	# Cmd+F / F11 / Alt+Enter toggles full screen
+	if Game.shell:
+		return
 	if ev is InputEventKey and ev.pressed and (ev.keycode == KEY_F11 or (ev.keycode == KEY_F and ev.meta_pressed) or (ev.keycode == KEY_ENTER and ev.alt_pressed)):
 		var w := get_window()
 		w.mode = Window.MODE_WINDOWED if w.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
@@ -23,8 +29,8 @@ func _unhandled_key_input(ev: InputEvent) -> void:
 
 
 func _process(_d: float) -> void:
-	# hold Space / Ctrl to fast-forward animations (like the original patch's Space fast-click)
-	var fast := (Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_CTRL)) and not ui.video.visible
+	# hold Space / Ctrl (touch: the 快进 toggle) to fast-forward animations (like the original patch's Space fast-click)
+	var fast := (Input.is_key_pressed(KEY_SPACE) or Game.skip_held()) and not ui.video.visible
 	Engine.time_scale = 4.0 if fast else 1.0
 	_debug_shots()
 
@@ -47,7 +53,7 @@ func _debug_shots() -> void:
 
 
 func _fit_window() -> void:
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" or Game.shell:
 		return
 	var w := get_window()
 	if w.mode != Window.MODE_WINDOWED:
@@ -109,7 +115,8 @@ func _ready() -> void:
 	_snap_timer.wait_time = 0.3
 	_snap_timer.timeout.connect(_snap_aspect)
 	add_child(_snap_timer)
-	get_window().size_changed.connect(_on_window_resized)
+	if not Game.shell:        # the touch shell lays out the window itself
+		get_window().size_changed.connect(_on_window_resized)
 	_fit_window.call_deferred()
 	ui = GameUI.new()
 	add_child(ui)
@@ -242,8 +249,10 @@ func _title_screen() -> void:
 	_title_bg.visible = true
 	_show_version()
 	ui.set_black(false)
+	# iOS apps don't quit themselves: no 结束游戏 there
+	var items: Array = ["开始新游戏", "读取进度"] if OS.has_feature("mobile") else ["开始新游戏", "读取进度", "结束游戏"]
 	while true:
-		var i := await ui.menu.choose(["开始新游戏", "读取进度", "结束游戏"], Vector2(250, 330), false, "", [], 140)
+		var i := await ui.menu.choose(items, Vector2(250, 330), false, "", [], 140)
 		if i == 0:
 			_title_bg.visible = false
 			Game.new_game_state()

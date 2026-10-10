@@ -223,17 +223,17 @@ func _system_menu() -> void:
 		6:
 			await _show_history()
 		0:
-			await get_tree().root.get_node("Main").show_party_status()
+			await Game.main.show_party_status()
 		1:
 			await PartyMenu.equip_menu(ui)
 		2:
 			await PartyMenu.item_menu(ui)
 		3:
-			await get_tree().root.get_node("Main").save_menu()
+			await Game.main.save_menu()
 		4:
-			await get_tree().root.get_node("Main").load_menu()
+			await Game.main.load_menu()
 		5:
-			get_tree().root.get_node("Main").to_title()
+			Game.main.to_title()
 	_waiting_click = true
 
 
@@ -436,7 +436,7 @@ func do_sortie() -> bool:
 func op_op_6a(_ins: Dictionary) -> void:
 	Audio.stop_bgm()
 	SoundMap.stop_loop()
-	await get_tree().root.get_node("Main").game_over()
+	await Game.main.game_over()
 	vm.abort = true
 	vm.active = false
 

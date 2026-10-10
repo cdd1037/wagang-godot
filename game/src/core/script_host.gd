@@ -13,7 +13,7 @@ var fast := false
 
 
 func _ready() -> void:
-	ui = get_tree().root.get_node("Main").ui
+	ui = Game.main.ui
 
 
 # ------------------------------------------------------------------ argument helpers
@@ -529,7 +529,7 @@ func op_screen_mode(ins: Dictionary) -> void:
 	if vm:
 		vm.abort = true
 		vm.active = false
-	get_tree().root.get_node("Main").to_title()
+	Game.main.to_title()
 
 
 ## op 0x22 (0x42f754): play cutscene video n (name table 0x555060: 0 LOG.avi, 1 OPE.avi, 2 END.wmv,

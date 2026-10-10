@@ -194,8 +194,11 @@ func run_phase() -> void:
 				await _key("ui_down")
 			await _key("ui_accept")
 			await _wait(0.4)
-	# end turn via system menu
-	await _click_cell(st.units[0].pos if st.units[0].active() else Vector2i(0, 0), MOUSE_BUTTON_RIGHT)
+	# end turn via system menu (opened by a right click, or in the touch shell by its 返回 button)
+	if Game.shell:
+		Game.shell._activate(0)
+	else:
+		await _click_cell(st.units[0].pos if st.units[0].active() else Vector2i(0, 0), MOUSE_BUTTON_RIGHT)
 	await _wait(0.5)
 	await shot("sysmenu")
 	await _key("ui_accept")

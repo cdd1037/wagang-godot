@@ -8,7 +8,7 @@ copy of the game.
 ## Exporting the apps
 
 Requirements: [Godot 4.7](https://godotengine.org) (`brew install --cask godot`) with the export templates
-installed (Godot → Editor → Manage Export Templates → Download; the full download has macOS and Windows).
+installed (Godot → Editor → Manage Export Templates → Download; the full download has macOS, Windows and iOS).
 
 ### macOS
 
@@ -38,21 +38,55 @@ The preset exports `WaGang.exe` plus `WaGang.pck` (x86-64, no code signing; icon
 modified, so no `rcedit` is needed). The `.pck` is the same on every platform, so it can be checked on a Mac:
 `godot --headless --main-pack build/windows/WaGang.pck` with the smoke-test variables above.
 
+### iPhone
+
+Requirements: a Mac with Xcode, Godot's iOS export template (`ios.zip` in
+`~/Library/Application Support/Godot/export_templates/4.7.2.stable/`; it is in the full template download, or
+extract `templates/ios.zip` from `Godot_v4.7.2-stable_export_templates.tpz`) and the HD graphics pack in
+`game/assets_hd` (the iOS preset ships the HD art only, like the releases).
+
+```sh
+godot --headless --path game --import      # first time
+tools/build_ios.sh --device                # build, install and start it on the connected iPhone
+tools/build_ios.sh                         # build a signed app only (build/ios_sym/Release-iphoneos/WaGang.app)
+tools/build_ios.sh --unsigned              # unsigned build/WaGang-iOS.ipa for sideloading (what the releases ship)
+```
+
+* The script exports the **iOS** preset as an Xcode project (`build/ios/`), then builds it with `xcodebuild`.
+  Logs: `build/ios_export.log`, `build/ios_build.log`.
+* **Signing** is automatic (`-allowProvisioningUpdates`) with the team in the preset
+  (`application/app_store_team_id`; `TEAM=…` overrides it) and an *Apple Development* certificate. Xcode must be
+  signed in to that team's Apple account; building for a device registers it with the team if needed. Change
+  `application/bundle_identifier` (`com.seedds.wagang`) and the team for your own account.
+* **Device:** `--device` picks the first paired, reachable iPhone with Developer Mode on (or pass its UDID; list
+  them with `xcrun devicectl list devices`). It must be unlocked. `IOS_ENV='{"WG_START":"1"}'` passes debug
+  variables to the app.
+* **Simulator:** not supported with the official template. Its simulator library is x86-64 only, and current
+  iOS simulators on Apple Silicon do not run x86-64 apps. Test on a device, or test the touch layer on the desktop
+  (see [DEVELOPMENT.md](DEVELOPMENT.md)).
+* The preset targets iPhone (iOS 15+, A12 or newer), landscape only. File sharing is on, so the saves show up in
+  the Files app. The icon is `game/export/ios_icon.png`, cut from the title art. On iOS the project runs
+  `res://src/touch/touch_shell.tscn` instead of `main.tscn` (`run/main_scene.mobile`).
+
 ## Automatic releases (GitHub Actions)
 
-`.github/workflows/release.yml` builds and publishes both platforms on every push to `main` that changes the game
+`.github/workflows/release.yml` builds and publishes all three platforms on every push to `main` that changes the game
 (pushes touching only `docs/`, Markdown files, `tools/` or `.gitignore` are skipped). It can also be started by
 hand from the repository's **Actions** tab (*Release builds → Run workflow*); runs from other branches do nothing.
 
 * **Build number:** the workflow's run number *N*, which increases with every run. The release is tagged
   `build-N` and titled *Build N*; the game's version is `1.0.N`. The version is written into
-  `application/config/version`, shown in the title screen's corner, and into the macOS bundle version. The
+  `application/config/version`, shown in the title screen's corner, and into the macOS and iOS bundle versions. The
   repository itself keeps no version, so local builds show none.
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
   between runs; the downloads are checked against pinned SHA-256 sums), imports the project, exports
   `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's built-in signer) and `WaGang-Windows-build-N.zip`,
-  then creates the release with both files and install notes. A run takes about 5 minutes; each release is about
-  2.2 GB (macOS 1.09 GB, Windows 1.07 GB, HD art only). The actions are pinned to commit SHAs.
+  then creates the release with both files and install notes. A run takes about 5 minutes. The actions are pinned
+  to commit SHAs.
+* **iPhone:** a second job (`ios`, on a macOS runner, after the release exists) installs the macOS Godot editor
+  and the iOS template, runs `tools/build_ios.sh --unsigned` and uploads `WaGang-iOS-build-N.ipa` to the same
+  release. Each release is about 3.3 GB (macOS 1.09 GB, Windows 1.07 GB, iPhone 1.1 GB; HD art only). The HD-pack
+  and version-stamp steps both jobs share are `.github/scripts/add_hd_pack.sh` and `stamp_version.sh`.
 * **Latest, re-runs and clean-up:** a build becomes the repository's *Latest* release only if its commit is still
   the newest on `main`, so re-running an old build does not replace a newer one. Re-running a build that was
   already published replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N`

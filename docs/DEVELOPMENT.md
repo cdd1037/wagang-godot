@@ -65,6 +65,8 @@ All options are environment variables read at start-up, for example
 | `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=18` to check the restore |
 | `WG_ACCEPT_SPAM=1` | Press Enter every 0.6 s |
 | `WG_SHOTS=dir` | Save a screenshot to *dir* every `WG_SHOT_EVERY` seconds (default 3) |
+| `WG_SHELLSHOT=dir` | Touch shell only: the same for the whole screen, side buttons included (`user://…` works on a phone) |
+| `WG_SHELLSIZE=WxH` | Touch shell on a desktop: open the window at this size, e.g. `1734x800` (iPhone shape) or `1334x750` (16:9) |
 
 Example: watch the first battle play itself:
 `WG_START=1 WG_DEMO=1 WG_NOVIDEO=1 ./run_game.sh`
@@ -88,7 +90,9 @@ player's own saves. Run several ranges in parallel with bash, for example
 write `niuniu.bin` (the endings record).
 
 Headless unit checks (`tools/gtest.sh NAME`): `t_parse` loads every script (catches parse errors anywhere),
-`t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9), `t_person` prints person stats.
+`t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
+`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling), `t_person` prints
+person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 
@@ -119,11 +123,48 @@ Tips:
 * A hung run at 100 % CPU is a script loop; at ~0 % it is an `await` that never completes. `WG_TRACE_OPS=1` shows
   where.
 
+## Touch controls and the iPhone build
+
+On mobile, `project.godot` runs `res://src/touch/touch_shell.tscn` (`run/main_scene.mobile`) instead of
+`main.tscn`. `TouchShell`:
+
+* Lays out in window pixels. The window has no content scaling there (`window/stretch/mode.mobile="disabled"`).
+* Runs `main.tscn` inside a `SubViewport` with `size_2d_override` 640×480. The game still sees an exact 640×480
+  screen, and it is drawn at the display's resolution, so HD art and text stay sharp.
+* Puts the 4:3 picture in the middle and the **返回** / **快进** buttons in the side bars, clear of the notch.
+  **返回** sends Esc; every cancel path also takes `ui_cancel`. **快进** toggles `Game.fast_toggle`, which
+  `Game.skip_held()` treats like holding Ctrl.
+
+Game-side switches:
+
+* `Game.touch` (set by the shell) makes `BattleView` click a cell on release and pan on drag, and show the tapped
+  cell's info panel.
+* It also makes `ChoiceMenu` pick on release and scroll long lists by dragging. Desktop input is unchanged.
+* `Game.main` replaces `/root/Main`, which does not exist inside the shell.
+* `Game._input` ignores presses on the side bars.
+* On mobile, `Assets` halves HD textures over 4096 px and keeps a smaller HD cache.
+
+Try it on the desktop; the mouse acts as a finger, and right click still works:
+
+```sh
+cd game
+WG_SHELLSIZE=1734x800 godot --path . res://src/touch/touch_shell.tscn
+# the input bot through the shell (taps on release, 返回 for the system menu):
+WG_START=1 WG_ACCEPT_SPAM=1 WG_NOVIDEO=1 WG_INPUTBOT=/tmp/bot WG_BOTTURNS=2 WG_SHELLSIZE=1734x800 \
+  godot --path . res://src/touch/touch_shell.tscn
+```
+
+Building and installing on a phone: `tools/build_ios.sh --device` (see [BUILDING.md](BUILDING.md)). Debug variables
+reach the app through `IOS_ENV`. For example,
+`IOS_ENV='{"WG_SHELLSHOT":"user://shots"}' tools/build_ios.sh --device` saves screenshots in the app's Documents
+folder. Fetch them with
+`xcrun devicectl device copy from --device UDID --domain-type appDataContainer --domain-identifier com.seedds.wagang --source Documents/shots --destination DIR`.
+
 ## HD graphics and releases
 
 * `tools/get_hd_pack.sh` downloads the HD graphics pack into `game/assets_hd/`. `tools/upscale_assets.py`
   rebuilds it, and `tools/upscale.py` upscales single images for trying models. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
-* Every push to `main` that changes the game builds and publishes *Build N* for macOS and Windows; see
+* Every push to `main` that changes the game builds and publishes *Build N* for macOS, Windows and iPhone; see
   "Automatic releases" in [BUILDING.md](BUILDING.md). Check a run with `gh run list --workflow release.yml`.
 
 ## Reverse-engineering workflow

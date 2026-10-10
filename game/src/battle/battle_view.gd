@@ -31,6 +31,8 @@ var patch_layer: Node2D
 var marks: Dictionary = {}
 var _drag_from := Vector2.ZERO
 var _dragging := false
+var _touch_down := false         # touch: a press this view saw, not yet released
+var _touch_panned := false       # touch: that press became a drag (pans the map, no click)
 var _cam_target := Vector2.ZERO
 var _cam_tween: Tween
 
@@ -284,8 +286,8 @@ const EDGE_SCROLL_SPEED := 720.0
 
 
 func _edge_scroll(delta: float) -> void:
-	if not input_enabled or not get_window().has_focus():
-		return
+	if Game.touch or not input_enabled or not get_window().has_focus():
+		return     # (a touch screen leaves the pointer where the last tap was)
 	var vs := view_size()
 	var m := get_viewport().get_mouse_position()
 	if m.x < 0 or m.y < 0 or m.x > vs.x or m.y > vs.y:
@@ -313,8 +315,51 @@ func _world_of(ev: InputEventMouse) -> Vector2:
 	return get_canvas_transform().affine_inverse() * ev.position
 
 
+## Finger travel (viewport px) before a touch counts as a drag instead of a tap.
+const TAP_SLOP := 10.0
+
+
+## Touch: a tap clicks a cell on release (and shows its unit / terrain, as hovering does with a mouse); dragging
+## pans the map. A release whose press this view didn't get (it closed a dialog or menu) is ignored.
+func _touch_input(ev: InputEventMouse) -> void:
+	if ev is InputEventMouseMotion:
+		if not _touch_down or not (ev.button_mask & MOUSE_BUTTON_MASK_LEFT):
+			return
+		var mm := ev as InputEventMouseMotion
+		if _touch_panned:
+			scroll_by(-mm.relative)
+		elif mm.position.distance_to(_drag_from) > TAP_SLOP:
+			_touch_panned = true
+			if _cam_tween:
+				_cam_tween.kill()
+			scroll_by(_drag_from - mm.position)     # include the slop, so the map stays under the finger
+		return
+	var mb := ev as InputEventMouseButton
+	if mb.button_index == MOUSE_BUTTON_LEFT:
+		if mb.pressed:
+			_touch_down = true
+			_touch_panned = false
+			_drag_from = mb.position
+		elif _touch_down:
+			_touch_down = false
+			if not _touch_panned:
+				var c := cell_at(_world_of(mb))
+				if in_bounds(c):
+					cursor_cell = c
+					cell_hovered.emit(c)
+				cell_clicked.emit(c, MOUSE_BUTTON_LEFT)
+		get_viewport().set_input_as_handled()
+	elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+		cell_clicked.emit(cursor_cell, MOUSE_BUTTON_RIGHT)
+		get_viewport().set_input_as_handled()
+
+
 func _unhandled_input(ev: InputEvent) -> void:
 	if not input_enabled:
+		_touch_down = false
+		return
+	if Game.touch and ev is InputEventMouse:
+		_touch_input(ev)
 		return
 	if ev is InputEventMouseMotion:
 		if _dragging:
