@@ -194,6 +194,21 @@ func touch_cancel_test() -> void:
 	st.get_tree().quit()
 
 
+## WG_BOTMODE=victory: open the system menu, pick 胜利条件 and screenshot the window.
+func victory_test() -> void:
+	Game.set_meta("bot_owns_input", true)      # stops WG_ACCEPT_SPAM
+	await _wait(1.0)
+	await _click_cell(st.view.cursor_cell, MOUSE_BUTTON_RIGHT)
+	await _wait(0.4)
+	for k in 2:
+		await _key("ui_down")
+	await _key("ui_accept")
+	await _wait(2.0)                           # let the text type out
+	await shot("victory")
+	print("== bot: victory window shown")
+	st.get_tree().quit()
+
+
 ## WG_BOTMODE=duel: run a scripted 单挑 between the first player unit and the first enemy, with screenshots.
 func duel_test() -> void:
 	await _wait(0.6)
@@ -251,6 +266,9 @@ func run_phase() -> void:
 		return
 	if OS.get_environment("WG_BOTMODE") == "touchcancel":
 		await touch_cancel_test()
+		return
+	if OS.get_environment("WG_BOTMODE") == "victory":
+		await victory_test()
 		return
 	await _wait(0.6)
 	for u in st.input._player_units():

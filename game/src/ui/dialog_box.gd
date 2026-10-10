@@ -24,6 +24,10 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_label = UIStyle.label("", UIStyle.FONT_SIZE)
 	_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	# lay out the whole text even while the typewriter hides part of it: the box height comes from the line count
+	# (by default the hidden characters are cut before layout, so a fresh text measured as one line), and the
+	# lines don't re-wrap as characters appear
+	_label.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING
 	_label.add_theme_constant_override("line_spacing", 4)
 	add_child(_label)
 	_name_label = UIStyle.label("", UIStyle.FONT_SIZE, UIStyle.NAME_COLOR)

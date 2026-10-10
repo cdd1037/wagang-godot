@@ -61,6 +61,7 @@ All options are environment variables read at start-up, for example
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
+| `WG_BOTMODE=victory` | Input-bot variant: open the system menu, pick 胜利条件 and screenshot the window |
 | `WG_BOTMODE=touchcancel` | Input-bot variant for the touch shell: checks that taps on empty spots cancel and that 菜单 opens the system menu; prints `TOUCHCANCEL: PASS` and writes `touchcancel.txt` to the bot folder |
 | `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids from the first player unit at the first enemy and screenshot their animations. With `WG_AUTO=1` instead of the bot (no screenshots) it prints each target's HP, status and buffs before and after, e.g. `WG_START=1 WG_AUTO=1 WG_GOD=1 WG_FXTEST=38,66` |
 | `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=18` to check the restore |
@@ -93,7 +94,8 @@ write `niuniu.bin` (the endings record).
 Headless unit checks (`tools/gtest.sh NAME`): `t_parse` loads every script (catches parse errors anywhere),
 `t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
 `t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling), `t_rpgwalk` story
-walking (route order and facing per step, 0x429159), `t_person` prints person stats.
+walking (route order and facing per step, 0x429159), `t_dialog` the message box growing to fit long texts (the
+9-line 胜利条件 window), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 
