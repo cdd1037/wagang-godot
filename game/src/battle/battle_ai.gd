@@ -136,7 +136,6 @@ func act(unit: BUnit) -> bool:
 			7:
 				_active(mv)      # player units under autoplay (WG_AUTO)
 	# MoveAlongPath (0x43a956): walk to dest on the last flood's grid
-	BUnit.move_origin = u.pos
 	if dest.x >= 0 and dest != u.pos and grid.has(dest):
 		await st.view.ensure_visible(u.pos)
 		await st.actions.move_unit(u, _path_from(dest))
@@ -145,6 +144,7 @@ func act(unit: BUnit) -> bool:
 	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
 		if choice_strategy >= 0 and choice_target != null and choice_target.active():
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
+			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
 		else:
 			await _physical_attack()
 	return true
@@ -594,6 +594,13 @@ func _physical_attack() -> void:
 			if x and x.active() and x.is_enemy_of(u):
 				t = x
 	if t == null:
+		return
+	# 围攻 (mod 0x43ac3f → 0x4d6b80): with helpers next to the target, the attacker within the 3×3 around it and
+	# not a ranged unit (range codes 2-4), the AI besieges instead
+	var hs := st.commands.helpers(u, t)
+	if not hs.is_empty() and absi(u.pos.x - t.pos.x) <= 1 and absi(u.pos.y - t.pos.y) <= 1 \
+			and not (st.actions.attack_range_code(u) in [2, 3, 4]):
+		await st.commands.siege(u, t, hs)
 		return
 	await st.actions.attack(u, t)
 	if not t.active() and u.active() and u.has_effect(46):

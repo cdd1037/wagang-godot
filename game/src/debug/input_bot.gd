@@ -343,6 +343,50 @@ func duel_test() -> void:
 	st.get_tree().quit()
 
 
+## WG_BOTMODE=special: 管毅, with a full MP bar, walks next to an enemy and uses his 绝招 from the command menu
+## (screenshots of the menu, the banner over the darkened field and the result). Prints "SPECIALBOT: PASS".
+func special_test() -> void:
+	Game.set_meta("bot_owns_input", true)      # stops WG_ACCEPT_SPAM
+	await _wait(1.0)
+	var u := st.unit_by_pid(0)
+	u.mp = u.max_mp()
+	var reach := st.actions.reachable(u)
+	var dest := Vector2i(-1, -1)
+	var target: BUnit = null
+	for e in st.units:
+		if e.active() and e.is_enemy_of(u):
+			for d in Grid.DIRS:
+				if reach.has(e.pos + d) and dest.x < 0:
+					dest = e.pos + d
+					target = e
+	if target == null:
+		print("SPECIALBOT: FAIL no enemy in reach")
+		st.get_tree().quit()
+		return
+	var hp0 := target.hp
+	await _click_cell(u.pos)
+	await _wait(0.4)
+	await _click_cell(dest)
+	await _wait(0.9)
+	await shot("menu")
+	await _key("ui_down")                      # 攻击 → 绝招
+	await _key("ui_accept")
+	await _wait(0.4)
+	await shot("pick")
+	await _click_cell(target.pos)
+	for k in 8:
+		await _wait(0.2)
+		await shot("special_%d" % k)
+	while not u.acted:
+		await _wait(0.3)
+		await _key("ui_accept")                # click through the shout
+	await _wait(0.5)
+	await shot("after")
+	var ok := u.mp == 0 and target.hp < hp0 and u.buff(0) == 6
+	print("SPECIALBOT: %s (MP %d, target HP %d → %d, 攻击 buff %d)" % ["PASS" if ok else "FAIL", u.mp, hp0, target.hp, u.buff(0)])
+	st.get_tree().quit()
+
+
 ## WG_BOTMODE=load: open the system menu, pick 读取进度 and load slot WG_BOTSLOT (default 9),
 ## exercising an in-game load from inside the running battle.
 func load_test() -> void:
@@ -381,6 +425,9 @@ func run_phase() -> void:
 		return
 	if OS.get_environment("WG_BOTMODE") == "info":
 		await info_test()
+		return
+	if OS.get_environment("WG_BOTMODE") == "special":
+		await special_test()
 		return
 	await _wait(0.6)
 	for u in st.input._player_units():
@@ -421,9 +468,8 @@ func run_phase() -> void:
 			await _wait(4.0)
 			await shot("attacked_%s" % u.person.name)
 		else:
-			# menu starts on the first enabled item; move to 待命 (last)
-			for k in 4:
-				await _key("ui_down")
+			# menu starts on the first enabled item; one step up wraps to 待命 (last)
+			await _key("ui_up")
 			await _key("ui_accept")
 			await _wait(0.4)
 	# end turn via system menu (opened by Esc, or in the touch shell by its 菜单 button)

@@ -28,7 +28,6 @@ const STATE_ON_MAP := 2
 var slot := 0
 var node: UnitSprite
 static var gen := 0     # bumped whenever who stands where may have changed (BattleStage.unit_at's cache)
-static var move_origin := Vector2i.ZERO   # [0x4cfc00]: where the acting unit started its move (冲锋 effect 89)
 var grudge := 0
 var extra: Dictionary = {}
 

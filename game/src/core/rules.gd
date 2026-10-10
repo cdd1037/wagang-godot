@@ -73,6 +73,16 @@ static func is_ranged(fam: int) -> bool:
 
 
 static func hit_rate(att: BUnit, def: BUnit) -> int:
+	if special_running():
+		# 绝招 (0x4d2f90): sure hits, except 程咬金's 三板斧: 50 %, plus 2 per weapon level with 八卦宣花斧 once
+		# EV[3185] ≥ 1 (4 per level from 3); a confused target is always hit
+		if att.pid != 1 or (def.status & BUnit.ST_CONFUSION):
+			return 100
+		var p1 := Game.person(1)
+		var h1 := 50
+		if p1.weapon == 25 and Mem.r8(0x55e1c4) >= 1:
+			h1 += p1.weapon_lvl * (4 if Mem.r8(0x55e1c4) >= 3 else 2)
+		return h1
 	if is_ranged(att.family()) and def.has_effect(56):
 		return 0
 	if def.status & BUnit.ST_CONFUSION:
@@ -87,7 +97,14 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 	return clampi(h, 0, 100)
 
 
+## A 绝招 is running ([0x4cf314], set by 0x4d3007).
+static func special_running() -> bool:
+	return Mem.r32(BattleStage.SPECIAL_RUNNING) == 1
+
+
 static func crit_rate(att: BUnit, def: BUnit) -> int:
+	if special_running():
+		return 0 if att.pid in [7, 26] else 100    # 0x4d34c9: 伍天锡 and 雄阔海 never, the others always
 	if att.has_effect(41):
 		return 100
 	var m := att.morale()
@@ -153,6 +170,8 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 	var td := terrain_effect(def, t_def)
 	var A := att.atk() * ta / 10
 	var D := def.def() * td / 10
+	if special_running() and att.pid == 17:
+		D = 0       # 裴元庆's 尽命三锤 ignores defence (0x4d3501)
 	var dmg: int
 	if att.has_effect(85):
 		dmg = att.effect_value(85)
@@ -171,8 +190,10 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 			dmg += dmg * att.effect_value(45) / 100
 		elif not (df in CAVALRY_FAMILIES) and not (df in VEHICLE_FAMILIES) and att.has_effect(88):
 			dmg += dmg * att.effect_value(88) / 100
-		if att.has_effect(89):
-			var d := maxi(absi(att.pos.x - BUnit.move_origin.x), absi(att.pos.y - BUnit.move_origin.y))
+		if att.has_effect(89) and Mem.r8(BattleStage.PATH_LEN) != 0:
+			# 冲锋 (0x4d8d95): +10 % per cell from where the player's last move started
+			var w := Mem.r16(BattleStage.PATH)
+			var d := maxi(absi(att.pos.x - (w & 0xff)), absi(att.pos.y - (w >> 8)))
 			for k in d:
 				dmg = dmg * 110 / 100
 		if mode == 0:

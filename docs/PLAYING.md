@@ -57,7 +57,7 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | Drag up/down on a long list | scroll the list (history, unit list, items …) |
 | Slide on a menu, lift | the entry under the finger is highlighted and picked when you lift it, so you can correct a near-miss before lifting |
 | Hold a finger on a unit (½ s) | **武将情报**, like a right click on it; also on a party member in a story scene and on a name in 出场选择 |
-| Tap an empty spot | cancel, like a right click: a tap outside a list closes it (outside the 攻击/策略/道具/待命 list it takes the move back, as a right click does); outside the highlighted range while picking a target stops picking; outside the blue range drops the selected unit |
+| Tap an empty spot | cancel, like a right click: a tap outside a list closes it (outside the command list it takes the move back, as a right click does); outside the highlighted range while picking a target stops picking; outside the blue range drops the selected unit |
 | **菜单** (top left) | the menu: in battle the system menu (end turn, unit list, objectives, save, load), in a story scene the scene menu. Only available when nothing is selected or open |
 | **返回** (left of the picture) | cancel or go back, like Esc (also advances text and skips a video). Dimmed when 菜单 is available |
 | **快进** (right of the picture) | fast-forward on/off: ×4 speed and text skips ahead, like holding Ctrl; the button is lit while on |
@@ -114,10 +114,19 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 1. Click one of your units. **Blue** cells show where it can move, **red** cells what it could attack from there.
 2. Click a blue cell to move (click the unit's own cell to stay).
 3. Pick a command:
-   * **攻击** – attack; click a target inside the red range.
+   * **攻击** – attack; click a target inside the red range. Spear and some cavalry classes also hit the unit
+     behind the target, 无影剑 the units around it.
+   * **绝招** – a character's special move (管毅, 程咬金 once he has learned 三板斧, 伍云召, 雄阔海, 秦琼, 伍天锡,
+     罗成, 裴元庆, 尉迟恭). It needs a full MP bar and uses all of it; every move is different (e.g. 罗成's
+     回马枪 needs a move first, 伍天锡's hits everyone around him).
+   * **围攻** – siege: the target is attacked by the unit and then by every ally next to it that has not acted yet
+     (they lose their turn); the target counters once. Enemies do this too.
    * **策略** – cast a strategy (uses MP); pick it, then the target or area. The menu shows the hit chance.
+   * **交给** – give the unit's accessory to a neighbour (樊虎 hands out accessories from the warehouse).
    * **道具** – use an item on the unit or a neighbour.
    * **待命** – wait. Right-clicking in the command menu takes the move back.
+   * Items: 六军镜·形势 gives a second attack, 六军镜·权谋 a second strategy at double MP, 六军镜·阴阳 another move
+     after acting, 六军镜·技巧 绝招 without a full MP bar.
 4. Once every unit has acted the phase ends, or end it early from the system menu.
 
 **Information**

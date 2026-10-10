@@ -285,6 +285,34 @@ counter if def.HP > 0 and not (def.status & 8 confused) and not has_effect(att, 
            and att.pos in attack_range(def)        # 0x436586 with def's class range code (0x43f8be)
 then depth += 1; Attack(def, att)                    # damage mode has counter bit → ×3/4, no double
 ```
+Per strike (0x405e03 → 0x405744 → 0x405889): every target gets its own hit roll inside CalcDamage; the first
+target, if its HP > 0, then rolls the critical whether or not it was hit; the others crit with it. A critical is
+preceded by the attacker's shout (0x405821): chance(25) is rolled; while a 绝招 runs 程咬金 never shouts and everyone
+else always. Line: persons of table 0x48b230 (0,1,2,5,7,8,9,13,14,15,16,17,19,22,24,32,33,34,67,86,116) at index k
+say text 700 + k, the others text 721 + 3·g + rand(3), g = person +0x26; shown like battle dialogue (0x45965d).
+
+### 4.5 Area and piercing attacks (target setup 0x4061fc → 0x435d6c kind 0) [C]
+AreaAttackCode(att) (0x407818, mod 0x4dbebb / 0x4d8901): [0x55ac20] == 1 (凤舞九天) → 2; else a = table
+0x409191[class] (classes 6, 7, 8, 10, 11 → 4; 17 → 1; 49 → 5); [0x55ac2c] == 1 (横推八马倒) → 10, else
+[0x55ac64] == 1 (踏破连营) → 12; pid 178 (文士弘) → 6; a < 4 with effect 21: class 15/16 → 1, 17 → 2; else effect 43
+→ its value. The other targets are the units of the other side on the code's cells around the target (§6.2), in
+this order: the 4 neighbours up, right, down, left, then the diagonals (1: the 4; 2, 3, 7: all 8, the neighbour
+table having only 8 valid entries); lines (4/5/6/12: 1/5/2/39 cells) away from the attacker, code 12 stopping at the
+first cell without such a unit; squares (8, 9) row by row; the sweep (10) two cells beside both; 11 the attacker's
+own neighbours. Damage mode for them (mod 0x4d93e5): +2 (½, min 1) only for codes 1–3 and 12 (宇文成都: code 1
+only); the others take full damage. 吸血攻击 counts the first target only.
+
+### 4.6 Player commands (0x43dde3) [C]
+Menu (dialog 279): 攻击 绝招 围攻 策略 交给 道具 待命 (results 1, 5, 7, 2, 6, 3, 4). Before a command EV[10] = 0.
+After a command that finished the unit: 再移动 (effect 82, 0x4d27a0: clear the flags, move UI again, finish), then
+the kill rewards (0x4dcb09). A command that does not finish (a cancelled picker, "MP未满") returns to the menu; a
+cancelled menu undoes the move. The move UI (0x43d538) records the unit's pid in [0x4cf310] and its walk in
+0x4cfc00 / [0x4cfbfc] (path[0] = start … path[n] = end), cleared after each command (0x43e21c).
+* 攻击 (0x43dada): with 连续攻击 (effect 90), once: if the attacker stands and is not 乱/怯/迷, poll the event scene
+  and remove the fallen (0x4d2ab2), then pick another target; a cancel ends the action.
+* 策略 (0x43dc21): under 穷计 SE 2 and "正处于穷计状态。". With 连续策略 (effect 83, 0x4d0d71) the first cast sets
+  [0x4d0d61], the list reopens and costs double (0x425ad0); a cancel then ends the action.
+* 绝招, 围攻, 交给: docs/mod_patches.md B5 F1–F3 (as ported, with the corrections in its group 2 section).
 
 ---------------------------------------------------------------------------------------------------
 ## 5. Strategies (策略)

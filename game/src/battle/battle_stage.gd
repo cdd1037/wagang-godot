@@ -14,6 +14,16 @@ const PH_ENEMY := 2
 const ASSASSIN_MARK := 0x569f00
 const ASSASSIN_LINK := 0x569f73
 const ASSASSIN_HIT := 0x569fe7
+## The unit the player commands: its pid, set each time its move UI opens (mod 0x4d2865 in 0x43d538).
+const CMD_PID := 0x4cf310
+## 1 while a 绝招 runs (0x4d3007).
+const SPECIAL_RUNNING := 0x4cf314
+## The player's last move (0x43da45 → 0x4d8f1f, 0x409120): the step count, and the cells as x | y << 8,
+## path[0] = start … path[n] = end, then 0xffff. The count is cleared after each command (0x43e21c).
+const PATH_LEN := 0x4cfbfc
+const PATH := 0x4cfc00
+## 连续策略: set after a first cast by a unit with effect 83; strategies then cost double (0x4d0d71, 0x425ad0).
+const SECOND_CAST := 0x4d0d61
 
 var view: BattleView
 var hud: BattleHUD
@@ -37,9 +47,11 @@ var goal_text := ""
 var actions: BattleActions
 var ai: BattleAI
 var input: BattleInput
+var commands: BattleCommands
 var _restore: Dictionary = {}
 var _in_checkpoint := false
 var current_unit: BUnit
+var range_unit: BUnit        # [0x4dc7dd]: the unit whose move range the player opened last (0x43d5f3)
 var terrain_changes: Array = []
 var _occ: Dictionary = {}    # cell → unit, see unit_at
 var _occ_gen := -1
@@ -65,6 +77,7 @@ func _ready() -> void:
 	actions = BattleActions.new(self)
 	ai = BattleAI.new(self)
 	input = BattleInput.new(self)
+	commands = BattleCommands.new(self)
 	for s in 115:
 		var u := BUnit.at(s)
 		units.append(u)
@@ -601,6 +614,14 @@ func unit_at(c: Vector2i, exclude: BUnit = null) -> BUnit:
 	return null
 
 
+## The unit in the occupancy grid at c (0x435884): on the map, fallen ones too until they are removed.
+func unit_on(c: Vector2i) -> BUnit:
+	for u in units:
+		if u.exists() and u.state == BUnit.STATE_ON_MAP and u.pos == c:
+			return u
+	return null
+
+
 func unit_by_pid(pid: int) -> BUnit:
 	for u in units:
 		if u.exists() and u.pid == pid:
@@ -672,6 +693,28 @@ func on_field_written(_field: int, _id: int) -> void:
 ## (deployment) and after a later change_scene (aftermath pictures) a battle file counts as story mode.
 func in_battle() -> bool:
 	return Mem.r8(0x4ac63c) == 3
+
+
+## Record the player's move (start cell, then each step) as the original does while walking.
+func record_path(start: Vector2i, steps: Array[Vector2i]) -> void:
+	var cells: Array[Vector2i] = [start]
+	cells.append_array(steps)
+	for i in cells.size():
+		Mem.w16(PATH + 2 * i, cells[i].x | (cells[i].y << 8))
+	Mem.w16(PATH + 2 * cells.size(), 0xffff)
+	Mem.w8(PATH_LEN, steps.size())
+
+
+## The recorded move, start first; empty when the count is 0.
+func move_path() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var n := Mem.r8(PATH_LEN)
+	if n == 0:
+		return out
+	for i in n + 1:
+		var w := Mem.r16(PATH + 2 * i)
+		out.append(Vector2i(w & 0xff, w >> 8))
+	return out
 
 
 # ------------------------------------------------------------------ per-phase effects (§9)
@@ -962,6 +1005,22 @@ func on_speaker(pid: int) -> void:
 	var u := unit_by_pid(pid)
 	if u and u.active():
 		await view.ensure_visible(u.pos)
+
+
+## op 0x69 (0x4335d0): a "|name" banner is shown over the darkened field (0x4d64ea … 0x4d6576).
+func op_popup(ins: Dictionary) -> void:
+	if sarg(ins, 0).begins_with("|") and field_ready:
+		await view.set_dim(true)
+		await super(ins)
+		await view.set_dim(false)
+		return
+	await super(ins)
+
+
+## A unit's line in a portrait window (0x45965d / 0x459777), as the scripts' battle dialogue shows it.
+func unit_say(pid: int, text: String) -> void:
+	await on_speaker(pid)
+	await ui.dialog.talk(speaker_face(pid), Game.person(pid).name, text, _dialog_top(pid))
 
 
 # ------------------------------------------------------------------ save / restore

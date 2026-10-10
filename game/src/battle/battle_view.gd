@@ -14,6 +14,7 @@ var map_sprite: Sprite2D
 var overlay: Node2D
 var units_layer: Node2D
 var fx_layer: Node2D
+var dim_rect: ColorRect
 var camera: Camera2D
 var cursor_cell := Vector2i.ZERO
 var show_cursor := true
@@ -56,6 +57,12 @@ func _init() -> void:
 	units_layer = Node2D.new()
 	units_layer.y_sort_enabled = true
 	add_child(units_layer)
+	dim_rect = ColorRect.new()
+	dim_rect.color = Color(0, 0, 0, 0.5)
+	dim_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim_rect.z_index = 4
+	dim_rect.visible = false
+	add_child(dim_rect)
 	fx_layer = Node2D.new()
 	fx_layer.z_index = 5
 	add_child(fx_layer)
@@ -198,6 +205,24 @@ func add_patch(entry: int, c: Vector2i) -> Node:
 		sp.texture = ImageTexture.create_from_image(img)
 	patch_layer.add_child(sp)
 	return sp
+
+
+## The map darkened while a 绝招 runs (0x4d64ea lays a half-tone shadow over the field, column by column;
+## 0x4d6576 redraws it plainly). Here a fade.
+func set_dim(on: bool) -> void:
+	if dim_rect.visible == on:
+		return
+	dim_rect.position = Vector2.ZERO
+	dim_rect.size = Vector2(map_w * CELL, map_h * CELL)
+	if Game.autoplay:
+		dim_rect.visible = on
+		return
+	dim_rect.visible = true
+	dim_rect.color.a = 0.0 if on else 0.5
+	var tw := create_tween()
+	tw.tween_property(dim_rect, "color:a", 0.5 if on else 0.0, 0.25)
+	await tw.finished
+	dim_rect.visible = on
 
 
 ## Small overlay marks (patch < 4): 0/2 fire, 1/3 other.

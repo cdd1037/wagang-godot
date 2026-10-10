@@ -63,6 +63,7 @@ All options are environment variables read at start-up, for example
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
 | `WG_BOTMODE=victory` | Input-bot variant: open the system menu, pick 胜利条件 and screenshot the window |
 | `WG_BOTMODE=info` | Input-bot variant: right-click (in the touch shell: long-press) an own unit and an enemy, check that 武将情报 opens with that side's list, switch pages by taps, close with Esc; Esc and a right click on an empty cell open the system menu. Prints `INFOBOT: PASS`, also `infobot.txt` in the bot folder |
+| `WG_BOTMODE=special` | Input-bot variant: 管毅 with a full MP bar walks next to an enemy and uses 绝招 from the command menu (screenshots of the menu, the banner and the result); prints `SPECIALBOT: PASS` |
 | `WG_BOTMODE=touchcancel` | Input-bot variant for the touch shell: checks that taps on empty spots cancel and that 菜单 opens the system menu; prints `TOUCHCANCEL: PASS` and writes `touchcancel.txt` to the bot folder |
 | `WG_FXTEST=3,5` | Input-bot variant: cast these strategy ids from the first player unit at the first enemy and screenshot their animations. With `WG_AUTO=1` instead of the bot (no screenshots) it prints each target's HP, status and buffs before and after, e.g. `WG_START=1 WG_AUTO=1 WG_GOD=1 WG_FXTEST=38,66` |
 | `WG_SAVETEST=1` | Save at battle turn 2 and quit; run again with `WG_LOADSLOT=18` to check the restore |
@@ -105,7 +106,8 @@ walking (route order and facing per step, 0x429159), `t_dialog` the message box 
 clicks; with `OUT=file.png` and a window it also saves a screenshot of each page and of the details),
 `t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
 countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the 史录 rules),
-`t_person` prints person stats.
+`t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
+连续策略, the move record), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 

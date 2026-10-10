@@ -111,14 +111,7 @@ func after_command() -> void:
 
 
 func show_unit_ranges(u: BUnit) -> void:
-	var reach := st.actions.reachable(u)
-	st.view.set_move_cells(reach)
-	var atk: Array[Vector2i] = []
-	for c in reach:
-		for a in st.actions.attack_cells(u, c):
-			if not reach.has(a) and not atk.has(a):
-				atk.append(a)
-	st.view.set_attack_cells(atk)
+	_show_ranges(u, st.actions.reachable(u))
 	await _click()
 	st.view.clear_highlights()
 
@@ -126,25 +119,16 @@ func show_unit_ranges(u: BUnit) -> void:
 ## Returns true when a unit finished its action.
 func select_unit(u: BUnit) -> bool:
 	Audio.play_se("se00")
+	Mem.w32(BattleStage.CMD_PID, u.pid)      # mod 0x4d2865: the unit being commanded
 	if u.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
-		# 0x43d544 / 0x43d5f8: the range is shown and a click on the map only brings up the message
-		var reach := st.actions.reachable(u)
-		st.view.set_move_cells(reach)
-		var r := await _click()
-		st.view.clear_highlights()
-		if r[1] != MOUSE_BUTTON_RIGHT and st.view.in_bounds(r[0]):
-			await st.ui.popup("正处于混乱状态。" if u.status & BUnit.ST_CONFUSION else "正处于迷失状态。")
+		await _confused_move_ui(u)
 		return false
 	while true:
+		Mem.w32(BattleStage.CMD_PID, u.pid)
+		st.range_unit = u                     # [0x4dc7dd] (0x43d5f3)
 		var parents := {}
 		var reach := st.actions.reachable(u, parents)
-		st.view.set_move_cells(reach)
-		var atk: Array[Vector2i] = []
-		for c in reach:
-			for a in st.actions.attack_cells(u, c):
-				if not reach.has(a) and not atk.has(a):
-					atk.append(a)
-		st.view.set_attack_cells(atk)
+		_show_ranges(u, reach)
 		var r := await _click()
 		st.view.clear_highlights()
 		if st._battle_finished():
@@ -162,14 +146,10 @@ func select_unit(u: BUnit) -> bool:
 			return false
 		var orig := u.pos
 		var orig_dir := u.dir
-		var path := Grid.path_to(parents, u.pos, cell)
-		await st.actions.move_unit(u, path)
+		await _walk(u, Grid.path_to(parents, u.pos, cell))
 		var done := await command_menu(u)
+		Mem.w8(BattleStage.PATH_LEN, 0)       # 0x43e21c
 		if done:
-			u.moved = true
-			u.acted = true
-			if u.node:
-				u.node.greyed = true
 			st.refresh_units()
 			return true
 		# cancelled: undo the move
@@ -180,33 +160,92 @@ func select_unit(u: BUnit) -> bool:
 	return false
 
 
-## Returns true when the unit's action is finished.
+func _show_ranges(u: BUnit, reach: Dictionary) -> void:
+	st.view.set_move_cells(reach)
+	var atk: Array[Vector2i] = []
+	for c in reach:
+		for a in st.actions.attack_cells(u, c):
+			if not reach.has(a) and not atk.has(a):
+				atk.append(a)
+	st.view.set_attack_cells(atk)
+
+
+## 0x43d544 / 0x43d5f8: a confused or lost unit's range is shown, and a click on the map only brings up the
+## message.
+func _confused_move_ui(u: BUnit) -> void:
+	st.view.set_move_cells(st.actions.reachable(u))
+	var r := await _click()
+	st.view.clear_highlights()
+	if r[1] != MOUSE_BUTTON_RIGHT and st.view.in_bounds(r[0]):
+		await st.ui.popup("正处于混乱状态。" if u.status & BUnit.ST_CONFUSION else "正处于迷失状态。")
+
+
+## The walk of the move UI, recorded as the original does (0x43da45; a click on the unit's own cell records
+## nothing).
+func _walk(u: BUnit, path: Array[Vector2i]) -> void:
+	if not path.is_empty():
+		st.record_path(u.pos, path)
+	await st.actions.move_unit(u, path)
+
+
+const COMMANDS := ["攻击", "绝招", "围攻", "策略", "交给", "道具", "待命"]
+
+
+## The command menu (dialog 279, 0x43dde3), until the unit has finished: 攻击 绝招 围攻 策略 交给 道具 待命.
+## After each command that ends the action, 再移动 (0x4d27a0). Returns false when the menu is cancelled (the
+## caller undoes the move).
 func command_menu(u: BUnit) -> bool:
-	while true:
+	while not u.acted:
 		var targets := st.actions.attackable_targets(u, u.pos)
 		var strats := st.actions.known_strategies(u)
 		var items := st.actions.usable_items()
-		var labels := ["攻击", "策略", "道具", "待命"]
-		var en := [not targets.is_empty(), not strats.is_empty() and not (u.status & BUnit.ST_SEAL), not items.is_empty(), true]
+		var en := [not targets.is_empty(), st.commands.special_enabled(), st.commands.siege_enabled(u),
+				not strats.is_empty(), st.commands.give_enabled(u), not items.is_empty(), true]
 		var sp := st.view.cell_pos(u.pos) - st.view.camera.position + Vector2(56, -10)
-		var i := await st.ui.menu.choose(labels, sp, true, "", en, 60)
-		if i >= 0:
-			Mem.set_ev(10, 0)          # mod 0x43e16b: no unit has fallen in this command yet
+		var i := await st.ui.menu.choose(COMMANDS, sp, true, "", en, 60)
+		if i < 0:
+			return false
+		Mem.set_ev(10, 0)          # mod 0x43e16b: no unit has fallen in this command yet
+		var done := false
 		match i:
-			-1:
-				return false
-			0:
-				if await _do_attack(u, targets):
-					return true
-			1:
-				if await _do_strategy(u, strats):
-					return true
-			2:
-				if await _do_item(u, items):
-					return true
-			3:
-				return true
-	return false
+			0: done = await _do_attack(u)
+			1: done = await st.commands.special(u)
+			2: done = await st.commands.siege_command(u)
+			3: done = await _do_strategy(u, strats)
+			4: done = await st.commands.give_command(u)
+			5: done = await _do_item(u, items)
+			6: done = true
+		if done:
+			st.actions.end_action(u)
+			await _move_again(u)
+	return true
+
+
+## 再移动 (effect 82, 0x4d27a0): after an action the unit may move once more, from where it stands; then its action
+## ends again. (The original also offers it to a unit that fell in its own attack; the port does not.)
+func _move_again(u: BUnit) -> void:
+	if not (u.moved and u.acted and u.has_effect(82)) or not u.active():
+		return
+	u.flags = u.flags & ~6
+	st.refresh_units()
+	Mem.w32(BattleStage.CMD_PID, u.pid)
+	if u.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
+		await _confused_move_ui(u)
+	else:
+		st.range_unit = u
+		var parents := {}
+		var reach := st.actions.reachable(u, parents)
+		while true:
+			_show_ranges(u, reach)
+			var r := await _click()
+			st.view.clear_highlights()
+			var cell: Vector2i = r[0]
+			if r[1] == MOUSE_BUTTON_RIGHT or cell == u.pos:
+				break
+			if reach.has(cell):
+				await _walk(u, Grid.path_to(parents, u.pos, cell))
+				break
+	st.actions.end_action(u)
 
 
 ## Picking a target: a right click cancels; with touch controls so does a tap outside the highlighted cells
@@ -215,23 +254,49 @@ func _cancels(r: Array, cells: Array) -> bool:
 	return r[1] == MOUSE_BUTTON_RIGHT or (Game.touch and not cells.has(r[0]))
 
 
-func _do_attack(u: BUnit, targets: Array[BUnit]) -> bool:
-	var cells := st.actions.attack_cells(u, u.pos)
+## The unit picker (0x45533d): highlights `cells` and returns the unit clicked on them that `ok` accepts, or
+## null on a cancel.
+func pick_unit(cells: Array[Vector2i], ok: Callable) -> BUnit:
 	st.view.set_attack_cells(cells)
 	while true:
 		var r := await _click()
 		if _cancels(r, cells):
 			st.view.clear_highlights()
-			return false
+			return null
 		var t := st.unit_at(r[0])
-		if t and targets.has(t):
+		if t and cells.has(t.pos) and ok.call(t):
 			st.view.clear_highlights()
-			await st.actions.attack(u, t)
+			return t
+	return null
+
+
+## 攻击 (0x43dada). 连续攻击 (effect 90): after the first attack, if the attacker stands and is not 乱, 怯 or 迷,
+## the event scene is polled and the fallen removed (0x4d2ab2), and one more target may be picked; cancelling it
+## ends the action.
+func _do_attack(u: BUnit) -> bool:
+	var again := false
+	while true:
+		var t := await pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active())
+		if t == null:
+			return again
+		await st.actions.attack(u, t)
+		if again or not u.has_effect(90) or not u.active() or (u.status & (BUnit.ST_CONFUSION | BUnit.ST_FEAR | BUnit.ST_LOST)):
 			return true
-	return false
+		await st.checkpoint()
+		await st.remove_dead()
+		if st._battle_finished():
+			return true
+		again = true
+	return true
 
 
+## 策略 (0x43dc21). Under 穷计 only the message. 连续策略 (effect 83): after a first cast the list opens again and
+## strategies cost double; cancelling it ends the action (0x4d0d71).
 func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
+	if u.status & BUnit.ST_SEAL:
+		Audio.play_se("se02")
+		await st.ui.popup("正处于穷计状态。")
+		return false
 	while true:
 		var labels := []
 		var en := []
@@ -241,6 +306,9 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			en.append(st.actions.can_cast(u, s))
 		var i := await st.ui.menu.choose(labels, Vector2(-1, -1), true, "策略　（策略值 %d）" % u.mp, en, 160)
 		if i < 0:
+			if Mem.r8(BattleStage.SECOND_CAST) == 1:
+				Mem.w8(BattleStage.SECOND_CAST, 0)
+				return true
 			return false
 		var s: int = strats[i]
 		var why := st.actions.cast_refusal(u, s)
@@ -280,7 +348,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 				chosen = true
 				break
 		st.view.clear_highlights()
-		if chosen:
+		if chosen and not st.actions.second_cast(u):
 			return true
 	return false
 

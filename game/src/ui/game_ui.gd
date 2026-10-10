@@ -207,7 +207,6 @@ func skill_banner(text: String) -> void:
 	l.size = Vector2(vsize().x, 56)
 	l.position = Vector2(vsize().x, vsize().y * 0.4 - 28)
 	add_child(l)
-	Audio.play_se("se37")
 	var tw := create_tween()
 	tw.tween_property(bg, "color:a", 0.7, 0.08)
 	tw.tween_property(bg, "color:a", 0.0, 0.2)

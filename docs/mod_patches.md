@@ -53,8 +53,7 @@ dormant in the shipped game or left out on purpose; those are marked.
 
 **Answer to "has the port reached feature parity?": no.** The story scripts, the map, the base CCZ battle rules
 and most of the mod's formula changes are ported. Missing:
-* the mod's character-skill system: the 绝招/围攻/交给 commands and most 【技】/【术】 effects;
-* the script-visible "a unit fell" signal that 27 battle scripts rely on;
+* the mod's character-skill system: most 【技】/【术】 effects (the 绝招/围攻/交给 commands are now in, group 2);
 * several mod rule changes;
 * shops, and a few information windows and settings.
 
@@ -170,26 +169,54 @@ Doing it turned up one more gap in original code:
    * a category-0xff replace with no match adds nothing.
    * → B2 §M. **Done.**
 
-### 2. Battle commands
+### 2. Battle commands — done
+
+All of group 2 is ported (2026-10-11), with `t_commands` as its test, in `battle/battle_commands.gd` (绝招, 围攻, 交给,
+ChangeUnit) and `battle/battle_input.gd` (menu, 连续攻击, 连续策略, 再移动, the move record). Done with it, because
+the 绝招 moves need them:
+* **multi-target physical attacks** (item 28): `BattleActions.area_code` / `secondary_targets`;
+* **critical shouts** (item 33);
+* the **张善相 / 张公瑾 attack ranges** of item 23 (their terrain costs are still open).
+
+Corrections to the batch reports, found while porting:
+* **再移动** (B5 F6) is offered after *every* finished command, not only after a move: each command ends with
+  0x442718(6), which sets the "moved" flag too. The port skips it for a unit that fell in its own attack (the
+  original would let it move).
+* **围攻 siege break** (B5 F2): only 定彦平, 东方伯 and 姜松 (0x4d7b90 ≠ 0) strike first. A defender with 先手攻击 but
+  another pid lets the siege run and only loses the final counter ([0x4d002c] stays 1).
+* **踏破连营's charge** tests only x against the map width (the y test reads a byte of the return address). The port
+  stops at every edge.
+* **The critical roll does not wait for a hit:** CalcDamage (0x43bc4b) makes the hit roll itself, and 0x405e03 then
+  rolls the first target's critical whenever its HP > 0, so a miss can come with a critical (and its shout). The port
+  rolled only on a hit.
+* **冲锋** (0x43bee8 row) reads the player's recorded move, which is cleared after each command. The port's
+  `move_origin` also gave AI moves and counters the bonus.
+* **The 绝招 / op 0x69 banner** (0x4d6366) plays no sound and is shown over the darkened field (0x4d64ea … 0x4d6576).
+  The port's banner played SE 37 and did not darken.
 
 8. **绝招**, the mod's signature command. It needs a full MP bar and spends it all.
    * Users: 管毅, 程咬金 (三板斧, once learned), 伍云召, 雄阔海, 秦琼 (also 回旋杀手锏), 伍天锡, 罗成, 裴元庆,
      尉迟恭 (夺面鞭).
    * Each has its own moves, targets and rules: 100 % hit, forced crit, no double, no counter.
    * The battle also shows a name banner, critical shouts and longer strike animations.
-   * → B5 F1, B4 §B, B1 F2/F14, B3 F12/F13.
+   * → B5 F1, B4 §B, B1 F2/F14, B3 F12/F13. **Done**, except the extra wind-up frames of 管毅's and 张善相's
+     ordinary attacks (B3 F13, cosmetic).
 9. **围攻** (player command and AI behaviour): adjacent melee allies join the attack and lose their turn; the
    defender counters once. Defenders with 先手攻击, 双雷引 or 抽屉枪 break the siege; 并蒂 always crits in 管毅's
-   siege. → B5 F2, B3 F11, B1 F12.
+   siege. → B5 F2, B3 F11, B1 F12. **Done.** The technique flags it sets for 双雷引 / 抽屉枪 ([0x55ac24],
+   [0x55ac68]) have no effect until group 3's 【技】 techniques are in.
 10. **交给**: hand your accessory to an adjacent ally. 樊虎's 行囊 hands out accessories from the warehouse instead.
-    → B5 F3, B6 F6.
-11. **Command-menu layout:** 攻击 绝招 围攻 策略 交给 道具 待命, with the enable tests and icons. → B5 F4.
+    → B5 F3, B6 F6. **Done.**
+11. **Command-menu layout:** 攻击 绝招 围攻 策略 交给 道具 待命, with the enable tests and icons. → B5 F4. **Done**
+    (the port's menu has no icons). 策略 is now enabled under 穷计 and answers "正处于穷计状态。", as in the
+    original (0x43dc21).
 12. **Extra actions from item effects:**
     * 连续攻击 (effect 90): one extra attack;
     * 连续策略 (effect 83): a second cast at double MP;
     * 再移动 (effect 82): move again after acting.
-    * → B5 F5/F6, B1 F18, B3 F8.
+    * → B5 F5/F6, B1 F18, B3 F8. **Done.**
 13. **Full move-path record.** 回马枪, 锻造 and 波若 need it; the port keeps only the start cell. → B5 PARTIAL details.
+    **Done** (`BattleStage.record_path` / `move_path`, in memory at [0x4cfbfc] / 0x4cfc00).
 
 ### 3. Character skills
 
@@ -236,9 +263,9 @@ Doing it turned up one more gap in original code:
     * → B1 F6/F7/F8, B2 §A.
 23. **Terrain and range rules per character:**
     * 单雄信 + 板角墨麒麟: all terrain costs 1;
-    * 飞将军 (张公瑾): cost −1 and range 4;
+    * 飞将军 (张公瑾): cost −1 and range 4 (the range is done);
     * 水军 (丁天庆): water costs 1 and gives 110 %;
-    * 枪母子 (张善相): range 12.
+    * 枪母子 (张善相): range 12 (done).
     * → B5 F10.
 24. **Other skills and items:**
     * 相马 (贾润甫): mounts +1 move → B2 §D;
@@ -263,7 +290,7 @@ Doing it turned up one more gap in original code:
     * Area/penetrating weapons apply to classes 6–8, 10, 11, 17, effect 43, and the skill overrides including 文士弘 长缨奔破.
     * Secondary targets take ½ damage for area codes 1–3 and 12, and full damage for line codes.
     * The port only ever hits one target.
-    * → B1 F13, B2 §H.
+    * → B1 F13, B2 §H. **Done with group 2.** The AI does not yet weigh the extra targets when it picks one.
 29. **反应/士气 equipment bonus is a percentage of the stat, not a flat add.** This affects hit, double and crit
     rates. → B2 §C.
 30. **组阵 formation bonuses:** +15 % per adjacent same-family ally. Attack for classes 46/47, defence for 39/46,
@@ -282,7 +309,7 @@ Doing it turned up one more gap in original code:
     * "学会了策略「…」！" messages.
     * → B2 §E/§F.
 33. **Original-code gaps found on the way:**
-    * critical-hit shouts → B1 F2;
+    * critical-hit shouts → B1 F2 (**done with group 2**);
     * 引导攻击 (effect 46) for player attacks → B5 row 0x43db51;
     * 策略模仿 (effect 51) → B6 F5;
     * 狂澜 against the army leader keeps applying modifiers, and no caller passes `leader_slot` → B4 extra notes;
@@ -1473,7 +1500,8 @@ After every executed player command (0x43e1b9 → 0x4d27a0):
 * Clear both flags (0x406690(6)) and run the move UI again (0x43d538: range from the new cell, pick a destination,
   walk; a right click keeps U in place).
 * Then end the action (6) regardless.
-* Units that did not move before acting get no second move.
+* (Corrected while porting: every finished command ends with 0x442718(6), which sets flag 4 as well, so a unit that
+  did not move before acting gets the second move too.)
 
 ##### B5 F7. 锻造 / 波若 path skills (0x44272c → 0x4d90bf) — [C]
 Trigger: U's action ends with flags 6, U.pid == commanded pid [0x4cf310], path count n = [0x4cfbfc] ≥ 2. Visit the

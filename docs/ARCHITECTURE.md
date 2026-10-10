@@ -18,7 +18,7 @@ are ported from the decompiled executable.
              └──────┬──────────────────┬───────┘
          even n: R_xx.json      odd n: S_xx.json
                     ▼                  ▼
-            StoryStage            BattleStage ── BattleActions · BattleAI · BattleInput
+            StoryStage            BattleStage ── BattleActions · BattleCommands · BattleAI · BattleInput
                     └──── extends ScriptHost ──┘         BattleView · BattleHUD · DuelLayer
                                │ op_<name>()
                             EexVM  (scenes → sections → bodies)
@@ -135,7 +135,8 @@ through EV variables.
 |---|---|
 | `BattleView` | map rendering, highlight overlays, cursor, camera and scrolling |
 | `BattleInput` | player phase: select → move range → move → command menu; a right click on a unit → 武将情报 (only a pointer right click, `BattleView.right_from_pointer`; Esc / 菜单 / a right click elsewhere → system menu) |
-| `BattleActions` | movement with zones of control, attacks, counters, criticals, strategies, items, EXP, level-ups, retreats (formulas in `core/rules.gd`, spec in `docs/rules.md`) |
+| `BattleActions` | movement with zones of control, attacks (with area and piercing targets), counters, criticals, strategies, items, EXP, level-ups, retreats (formulas in `core/rules.gd`, spec in `docs/rules.md`) |
+| `BattleCommands` | the mod's commands 绝招, 围攻 and 交给, and ChangeUnit (spec in `docs/mod_patches.md` B5 F1–F3) |
 | `BattleAI` | enemy and ally decision making, a port of the original AIAct scoring |
 | `BattleHUD` | hovered-unit panel, turn and weather, phase banners, damage numbers |
 | `EffectPlayer` | strategy and effect animations (Xben / MCALL animation sets) |
@@ -183,6 +184,6 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
 | `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
-| `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
+| `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `party_menu`, `ui_style`, `video_layer` |
 | `debug/` | `test_runner`, `input_bot`, small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |
