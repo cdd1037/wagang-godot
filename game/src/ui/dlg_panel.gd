@@ -23,9 +23,38 @@ const BAR_TILES := {1: [0x80, -1], 2: [0x140, -1], 3: [0x40, -1], 4: [0x140, -1]
 var dlu := Vector2(100, 100)          # the template's client size
 var dlu_scale := Vector2(1.98, 1.8)   # pixels per dialog unit
 var origin := Vector2.ZERO
+var skin := -1                        # 对话框花色 to draw with (-1: the setting)
 var _hits: Array = []                 # [Rect2, key]
 var _hover: Variant = null
 var _done := false
+var _lists: Array = []                # the ListViews drawn this frame (for the wheel)
+
+
+## A report-style list view (SysListView32): a header, rows of cells and a selection. A row is
+## {"cells": [String…], "icon": Texture2D (before the first cell, optional), "color": Color (optional),
+## "colors": [Color…] per cell (optional), "data": anything}.
+class ListView:
+	extends RefCounted
+	var columns: Array = []       # [header, width weight, alignment]: the widths share out the list's width
+	var rows: Array = []
+	var top := 0
+	var sel := -1
+	var page := 1                 # rows that fit (set when drawn)
+	var rect := Rect2()
+	var sortable := false         # header cells are hits [key, -100 - column]
+	var header := true            # false: no header row
+
+	func scroll(d: int) -> void:
+		top = clampi(top + d, 0, maxi(rows.size() - page, 0))
+
+	## Select row i and scroll it into view.
+	func select(i: int) -> void:
+		sel = clampi(i, -1, rows.size() - 1)
+		if sel >= 0:
+			if sel < top:
+				top = sel
+			elif sel >= top + page:
+				top = sel - page + 1
 
 
 static func run(ui: CanvasLayer, panel: DlgPanel) -> void:
@@ -57,7 +86,8 @@ func close() -> void:
 
 func _draw() -> void:
 	_hits.clear()
-	UIStyle.draw_panel(self, Rect2(origin, dlu * dlu_scale).grow(6))
+	_lists.clear()
+	UIStyle.draw_dialog(self, Rect2(origin, dlu * dlu_scale).grow(6), skin if skin >= 0 else Settings.skin())
 	_draw_dialog()
 
 
@@ -133,12 +163,12 @@ func group(rect: Rect2, caption := "", caption_color := CAPTION) -> void:
 		text(Rect2(cx0 + 3, rect.position.y, cw, 8 * dlu_scale.y), caption, HORIZONTAL_ALIGNMENT_LEFT, caption_color)
 
 
-func button(rect: Rect2, label: String, key: Variant, enabled := true) -> void:
+func button(rect: Rect2, label: String, key: Variant, enabled := true, size := TEXT_SIZE) -> void:
 	draw_rect(rect, Color(0.12, 0.18, 0.36, 0.9) if enabled else Color(0.1, 0.1, 0.16, 0.7))
 	if enabled and hovered(key):
 		draw_rect(rect, HOVER)
 	draw_rect(rect, UIStyle.BORDER_IN if enabled else DIM, false, 1.0)
-	text(rect, label, HORIZONTAL_ALIGNMENT_CENTER, UIStyle.TEXT_COLOR if enabled else DIM)
+	text(rect, label, HORIZONTAL_ALIGNMENT_CENTER, UIStyle.TEXT_COLOR if enabled else DIM, size)
 	if enabled:
 		hit(rect, key)
 
@@ -202,22 +232,76 @@ func _gui_input(ev: InputEvent) -> void:
 		var k: Variant = _hit_at(ev.position)
 		if typeof(k) != typeof(_hover) or k != _hover:
 			_hover = k
+			_on_hover(k)
+			queue_redraw()
+		if _press_at != null and (ev.position - _press_at).length() > 10:
+			_press_at = null           # a drag, not a tap or a long press
+	elif ev is InputEventMouseButton and Game.touch and ev.button_index == MOUSE_BUTTON_LEFT:
+		# touch: a tap acts on release; holding 0.5 s acts as a right click
+		if ev.pressed:
+			_press_at = ev.position
+			_press_gen += 1
+			_long_press(_press_gen, ev.position)
+		elif _press_at != null:
+			_press_at = null
+			var k: Variant = _hit_at(ev.position)
+			if k != null:
+				_on_tap(k)
 			queue_redraw()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_RIGHT:
-			close()
+			if not _on_right(_hit_at(ev.position)):
+				close()
+			queue_redraw()
 		elif ev.button_index == MOUSE_BUTTON_LEFT:
 			var k: Variant = _hit_at(ev.position)
 			if k != null:
-				_on_hit(k)
+				if not (ev.double_click and _on_double(k)):
+					_on_hit(k)
 				queue_redraw()
 		elif ev.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 			_on_wheel(-1 if ev.button_index == MOUSE_BUTTON_WHEEL_UP else 1, ev.position)
 	accept_event()
 
 
-func _on_wheel(_d: int, _p: Vector2) -> void:
+var _press_at: Variant = null         # touch: where the finger went down (null once it moved or acted)
+var _press_gen := 0
+
+
+func _long_press(gen: int, at: Vector2) -> void:
+	await get_tree().create_timer(0.5).timeout
+	if gen != _press_gen or _press_at == null or _done:
+		return
+	_press_at = null
+	_on_right(_hit_at(at))
+	queue_redraw()
+
+
+## The pointer moved onto `key` (null: off every hit).
+func _on_hover(_key: Variant) -> void:
 	pass
+
+
+## Touch: a tap on `key`; by default the same as a click.
+func _on_tap(key: Variant) -> void:
+	_on_hit(key)
+
+
+func _on_wheel(d: int, p: Vector2) -> void:
+	for lv in _lists:
+		if (lv as ListView).rect.has_point(p):
+			(lv as ListView).scroll(d)
+			queue_redraw()
+
+
+## A right click on `key` (null: none); return true when handled, else the window closes.
+func _on_right(_key: Variant) -> bool:
+	return false
+
+
+## The second press of a double click on `key`; return true when handled, else it counts as a click.
+func _on_double(_key: Variant) -> bool:
+	return false
 
 
 ## Keys go to the window on top only (the menu or map underneath must not move).
@@ -231,3 +315,103 @@ func _unhandled_input(ev: InputEvent) -> void:
 		close()
 	elif _on_key(ev):
 		queue_redraw()
+
+
+# ------------------------------------------------------------------ list view and tab control
+## Draw lv into rect with rows of rh pixels. Hits: [key, i] for row i, [key, -1] / [key, -2] for the scroll buttons
+## (scroll them with ListView.scroll); the wheel scrolls the list under the pointer.
+func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) -> void:
+	if rh <= 0:
+		rh = 11 * dlu_scale.y
+	lv.rect = rect
+	_lists.append(lv)
+	draw_rect(rect, Color(0, 0, 0.05, 0.35))
+	draw_rect(rect, Color(0, 0, 0, 0.55), false, 1.0)
+	var hh := rh if lv.header else 0.0
+	lv.page = maxi(int((rect.size.y - hh) / rh), 1)
+	lv.top = clampi(lv.top, 0, maxi(lv.rows.size() - lv.page, 0))
+	var sb := 16.0 if lv.rows.size() > lv.page else 0.0
+	var head := Rect2(rect.position, Vector2(rect.size.x, hh))
+	if lv.header:
+		draw_rect(head, Color(0.16, 0.24, 0.46, 0.9))
+	var xs: Array[float] = []
+	var x := rect.position.x
+	var total := 0.0
+	for c in lv.columns:
+		total += float(c[1])
+	var avail := rect.size.x - sb
+	for c in lv.columns:
+		xs.append(x)
+		x += float(c[1]) * avail / maxf(total, 1.0)
+	xs.append(rect.end.x - sb)
+	for ci in lv.columns.size() if lv.header else 0:
+		var c: Array = lv.columns[ci]
+		var cr := Rect2(xs[ci] + 3, head.position.y, minf(xs[ci + 1], rect.end.x - sb) - xs[ci] - 6, rh)
+		text(cr, str(c[0]), int(c[2]) if c.size() > 2 else HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
+		if lv.sortable:
+			var hr := Rect2(xs[ci], head.position.y, xs[ci + 1] - xs[ci], rh)
+			if hovered([key, -100 - ci]):
+				draw_rect(hr, HOVER)
+			hit(hr, [key, -100 - ci])
+		if ci > 0:
+			draw_line(Vector2(xs[ci], head.position.y + 2), Vector2(xs[ci], head.end.y - 2), Color(0, 0, 0, 0.5))
+	for k in range(lv.top, mini(lv.top + lv.page, lv.rows.size())):
+		var row: Dictionary = lv.rows[k]
+		var rr := Rect2(rect.position.x, rect.position.y + hh + rh * (k - lv.top), rect.size.x - sb, rh)
+		if k == lv.sel:
+			draw_rect(rr, UIStyle.HILITE)
+		if hovered([key, k]):
+			draw_rect(rr, HOVER)
+		var cells: Array = row.get("cells", [])
+		var colors: Array = row.get("colors", [])
+		var base: Color = row.get("color", UIStyle.TEXT_COLOR)
+		for ci in mini(cells.size(), lv.columns.size()):
+			var x0 := xs[ci] + 3
+			if ci == 0 and row.get("icon") != null:
+				icon(Rect2(Vector2(x0, rr.position.y + 1), Vector2(rh - 2, rh - 2)), row["icon"])
+				x0 += rh
+			var cr := Rect2(x0, rr.position.y, minf(xs[ci + 1], rr.end.x) - x0 - 3, rh)
+			var col: Color = colors[ci] if ci < colors.size() and colors[ci] != null else base
+			var al: int = int(lv.columns[ci][2]) if (lv.columns[ci] as Array).size() > 2 else HORIZONTAL_ALIGNMENT_LEFT
+			text(cr, str(cells[ci]), al, col, size)
+		hit(rr, [key, k])
+	if sb > 0:
+		button(Rect2(rect.end.x - sb, head.end.y, sb, rh * 2), "▲", [key, -1], lv.top > 0)
+		button(Rect2(rect.end.x - sb, rect.end.y - rh * 2, sb, rh * 2), "▼", [key, -2], lv.top + lv.page < lv.rows.size())
+
+
+## The column of a list view's header hit, or -1.
+static func header_hit(key: Variant, name: String) -> int:
+	if key is Array and (key as Array).size() == 2 and key[0] == name and int(key[1]) <= -100:
+		return -100 - int(key[1])
+	return -1
+
+
+## Handle a list view's scroll-button hit; true when `key` was one.
+func list_scroll_hit(key: Variant, lv: ListView, name: String) -> bool:
+	if key is Array and (key as Array).size() == 2 and key[0] == name and int(key[1]) in [-1, -2]:
+		lv.scroll(-1 if int(key[1]) == -1 else 1)
+		return true
+	return false
+
+
+## A tab control (SysTabControl32): the labels along the top of rect; returns the page area under them.
+## Hits: [key, i].
+func tabs(rect: Rect2, labels: Array, cur: int, key := "tab") -> Rect2:
+	var th := 13 * dlu_scale.y
+	var body := Rect2(rect.position + Vector2(0, th), rect.size - Vector2(0, th))
+	draw_rect(body, Color(0, 0, 0.08, 0.25))
+	draw_rect(body, FRAME, false, 1.0)
+	var f := Assets.font()
+	var x := rect.position.x
+	for i in labels.size():
+		var tw := f.get_string_size(str(labels[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x + 20
+		var tr := Rect2(x, rect.position.y + (0.0 if i == cur else 2.0), tw, th - (0.0 if i == cur else 2.0))
+		draw_rect(tr, Color(0.16, 0.24, 0.46, 0.95) if i == cur else Color(0.08, 0.1, 0.2, 0.85))
+		if i != cur and hovered([key, i]):
+			draw_rect(tr, HOVER)
+		draw_rect(tr, FRAME, false, 1.0)
+		text(tr, str(labels[i]), HORIZONTAL_ALIGNMENT_CENTER, UIStyle.NAME_COLOR if i == cur else UIStyle.TEXT_COLOR)
+		hit(tr, [key, i])
+		x += tw
+	return body

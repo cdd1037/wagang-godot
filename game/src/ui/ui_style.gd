@@ -50,6 +50,19 @@ static func draw_panel(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_rect(r.grow(-3), BORDER_IN, false, 1.0)
 
 
+## A window that is a Win32 dialog in the original: its background is the 对话框花色 pattern (0x40ad27: GHAI.WA
+## 8 + skin, a 48×48 tile), here tinted into the panel colour; 无 (4) is the plain colour.
+static func draw_dialog(ci: CanvasItem, r: Rect2, skin: int) -> void:
+	ci.draw_rect(r, Color(BG, 0.985), true)
+	if skin >= 0 and skin < 4:
+		var t := Assets.tex("gfx/screens/%02d.png" % (8 + skin))
+		if t:
+			ci.draw_texture_rect(t, r, true, Color(0.55, 0.65, 1.0, 0.28))
+	ci.draw_rect(r, Color(0.05, 0.05, 0.15), false, 2.0)
+	ci.draw_rect(r.grow(-2), BORDER_OUT, false, 1.0)
+	ci.draw_rect(r.grow(-3), BORDER_IN, false, 1.0)
+
+
 static func draw_text(ci: CanvasItem, pos: Vector2, text: String, color := TEXT_COLOR, size := FONT_SIZE) -> void:
 	var f := Assets.font()
 	ci.draw_string(f, pos + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, SHADOW)

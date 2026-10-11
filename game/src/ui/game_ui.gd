@@ -12,6 +12,7 @@ var _banner: Label
 var _caption_root: Control
 var _caption_lines: Array[Label] = []
 var _title_root: Control
+var _strips: Array[Label] = []      # the two status panes of the top bar: chapter title (op 0x18), place (op 0x17)
 
 
 func _init() -> void:
@@ -39,6 +40,14 @@ func _init() -> void:
 	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_banner.visible = false
 	add_child(_banner)
+
+	for k in 2:
+		var l := UIStyle.label("", 14, UIStyle.NAME_COLOR if k == 0 else UIStyle.TEXT_COLOR)
+		l.position = Vector2(8, 2 + 19 * k)
+		l.size = Vector2(256, 18)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		add_child(l)
+		_strips.append(l)
 
 	dialog = DialogBox.new()
 	add_child(dialog)
@@ -95,10 +104,15 @@ func popup(text: String, auto_close := 0.0) -> void:
 	await get_tree().process_frame
 	_popup_box.position = (vsize() - _popup_box.size) / 2
 	if auto_close > 0:
-		await get_tree().create_timer(auto_close).timeout
+		await wait_or_click(auto_close)
 	else:
 		await _wait_click()
 	_popup_box.visible = false
+
+
+## A timed message box (0x42f699 style 2, mod cave 0x407d33): it closes after (讯息显示速度 + 1) s, or on a click.
+func message(text: String) -> void:
+	await popup(text, 1.2 if Game.demo else Settings.message_hold())
 
 
 func _wait_click() -> void:
@@ -137,54 +151,82 @@ func banner(text: String, kind: int) -> void:
 	_banner.visible = false
 
 
-## Narration captions over a dark/background screen. `wait` = wait for click after this line,
-## `clear` = clear accumulated lines afterwards.
-func caption(text: String, a1: int, wait_click: int, clear: int) -> void:
+## Text of status pane k (0 = op 0x18 标题显示 via 0x47650f, 1 = op 0x17 地名显示 via 0x476612), kept until replaced.
+func set_strip(k: int, text: String) -> void:
+	_strips[k].text = text
+
+
+func clear_strips() -> void:
+	for l in _strips:
+		l.text = ""
+
+
+## Narration captions (op 0x2c → 0x4327ef), in a 640×80 strip at the bottom of the scene view (y 360..440).
+## a1 = 0 clears the strip and starts at its top; a2 ≠ 0 starts a new line 24 px down (one past y 439 clears the
+## strip and starts at the top again); otherwise the text goes on where the last one ended, and so does a "\n".
+## The text types out at a character per 50 ms (a click shows the rest of the line). a3 ≠ 0 then holds: a click
+## with 会话窗口不自动关闭, else 0.5 / 1.0 / 2.0 s by 讯息显示速度 (a click ends it sooner).
+const CAP_TOP := 0x170
+const CAP_X := 64.0       # column 8 of the text grid [G: 8 px a column]
+const CAP_SIZE := 18
+var _cap_pos := Vector2(CAP_X, CAP_TOP)
+
+
+func caption(text: String, a1: int, a2: int, a3: int) -> void:
 	if Game.autoplay:
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [caption] ", text)
 		return
-	var l := UIStyle.label(text, 18)
-	l.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	l.size = Vector2(vsize().x * 0.66, 10)
+	if a2 != 0:
+		_cap_pos = Vector2(CAP_X, _cap_pos.y + 24)
+	if a1 == 0 or (a2 != 0 and _cap_pos.y > 0x1b7):
+		clear_captions()
+	var parts := text.split("\n")
+	for i in parts.size():
+		if i > 0:
+			_cap_pos = Vector2(CAP_X, _cap_pos.y + 24)
+		await _caption_part(parts[i])
+	if a3 != 0:
+		var h := Settings.caption_hold()
+		if h < 0:
+			await _wait_click()
+		else:
+			await wait_or_click(h)
+
+
+func _caption_part(s: String) -> void:
+	if s == "":
+		return
+	var l := UIStyle.label(s, CAP_SIZE)
+	l.position = _cap_pos
 	_caption_root.add_child(l)
 	_caption_lines.append(l)
-	# stack the lines by their wrapped height; move the block up when it would run off the screen
-	var gap := 10.0
-	var lh := Assets.font().get_height(18) + 2
-	var heights: Array[float] = []
-	var total := 0.0
-	for c in _caption_lines:
-		var hh := maxf(c.get_line_count(), 1) * lh
-		heights.append(hh)
-		total += hh + gap
-	var y := minf(vsize().y * 0.25, maxf(vsize().y - 24 - total, 12.0))
-	for i in _caption_lines.size():
-		_caption_lines[i].position = Vector2(vsize().x * 0.16, y)
-		_caption_lines[i].size = Vector2(vsize().x * 0.66, heights[i])
-		y += heights[i] + gap
-	l.modulate.a = 0
-	var tw := create_tween()
-	tw.tween_property(l, "modulate:a", 1.0, 0.5)
-	await tw.finished
-	if wait_click != 0:
-		await _wait_click()
-	else:
-		await get_tree().create_timer(0.6).timeout
-	if clear != 0:
-		var tw2 := create_tween()
-		for c in _caption_lines:
-			tw2.parallel().tween_property(c, "modulate:a", 0.0, 0.4)
-		await tw2.finished
-		for c in _caption_lines:
-			c.queue_free()
-		_caption_lines.clear()
+	var n := l.get_total_character_count()
+	var clicks := Game.clicks
+	if not Game.demo:
+		for k in n:
+			if Game.clicks != clicks or Game.skip_held():
+				break
+			l.visible_characters = k
+			await get_tree().create_timer(0.05).timeout
+	l.visible_characters = -1
+	_cap_pos.x += Assets.font().get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, CAP_SIZE).x
+
+
+## Wait `sec` seconds; a new click (or holding Ctrl) ends it sooner (0x42c646).
+func wait_or_click(sec: float) -> void:
+	var n := Game.clicks
+	var t := 0.0
+	while t < sec and Game.clicks == n and not Game.skip_held():
+		await get_tree().process_frame
+		t += get_process_delta_time()
 
 
 func clear_captions() -> void:
 	for c in _caption_lines:
 		c.queue_free()
 	_caption_lines.clear()
+	_cap_pos = Vector2(CAP_X, CAP_TOP)
 
 
 ## Special technique name (绝招) banner.

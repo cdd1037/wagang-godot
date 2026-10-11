@@ -5,7 +5,8 @@ extends Control
 
 signal advanced
 
-const CHARS_PER_SEC := 60.0
+## The typewriter (0x42c8b0) waits one 50 ms tick per character; with 讯息显示速度 快 the page appears at once.
+const CHARS_PER_SEC := 20.0
 
 var face: Texture2D
 var speaker := ""
@@ -17,6 +18,8 @@ var _waiting := false
 var _box := Rect2()
 var _face_rect := Rect2()
 var fast_forward := false
+var _hold := -1.0      # after the page: seconds before it closes by itself, -1 = wait for a click
+var _held := 0.0
 
 
 func _init() -> void:
@@ -68,7 +71,7 @@ func _draw() -> void:
 	if face:
 		draw_rect(_face_rect.grow(2), UIStyle.BORDER_OUT, false, 2.0)
 		draw_texture_rect(face, _face_rect, false)
-	if _waiting:
+	if _waiting and _hold < 0:
 		var t := Time.get_ticks_msec() / 300 % 2
 		var p := Vector2(_box.end.x - 20, _box.end.y - 14 + t * 2)
 		draw_colored_polygon(PackedVector2Array([p, p + Vector2(10, 0), p + Vector2(5, 6)]), UIStyle.NAME_COLOR)
@@ -80,10 +83,12 @@ func talk(face_tex: Texture2D, name: String, text: String, top := false) -> void
 	speaker = name
 	_name_label.text = name
 	_label.text = text
-	_label.visible_characters = 0
+	_typing = Settings.message_speed() != 0
+	_label.visible_characters = 0 if _typing else -1
 	_shown = 0.0
-	_typing = true
-	_waiting = false
+	_waiting = not _typing
+	_hold = Settings.dialogue_hold()
+	_held = 0.0
 	visible = true
 	_layout(top)
 	queue_redraw()
@@ -116,6 +121,12 @@ func _process(delta: float) -> void:
 	elif _waiting and Game.skip_held():
 		_waiting = false
 		advanced.emit()
+	elif _waiting and _hold >= 0:
+		# 会话窗口不自动关闭 off: the page closes after its hold (a click closes it sooner)
+		_held += delta
+		if _held >= _hold:
+			_waiting = false
+			advanced.emit()
 	queue_redraw()
 
 

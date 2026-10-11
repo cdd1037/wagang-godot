@@ -182,6 +182,7 @@ Run from the repository root. Each step writes into `game/assets/`.
 |---|---|---|
 | 1 | `tools/venv/bin/python -I tools/dump_image.py` | `data/exe_image.bin`: `wagan.wa`'s mapped sections as one flat image at 0x400000, used as the emulated memory |
 | 2 | `cp wg2025/person.wa game/assets/data/person_wa.bin` | the mod's per-person graphics table, loaded at 0x55a000 |
+| 2a | `cp wg2025/savedata/Niuniu.wa game/assets/data/niuniu.bin` | the shipped settings record: a new `user://niuniu.bin` starts from it (环境设定 bytes 1..5 and 0x6b) |
 | 3 | `tools/venv/bin/python -I tools/conv_data.py` | `data/*.json`: persons, classes, class families, items, shops, strategies, terrain, shapes, names, texts |
 | 4 | `tools/venv/bin/python -I tools/eex.py` | `scripts/R_xx.json`, `scripts/S_xx.json`, `scripts/opcodes.json` (plus text listings in `extract/eex_txt/`) |
 | 5 | `tools/venv/bin/python -I tools/conv_gfx.py` | `gfx/`: maps, terrain, unit sprites, portraits, story backgrounds and sprites, effects, icons, UI pieces, palettes, each with an `index.json` |

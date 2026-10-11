@@ -174,8 +174,30 @@ def conv_ui(out, quantize=False):
             items.append({'source': dll, 'resource_id': rid, 'file': f, 'size': list(im.size),
                           'keyed_index0': pal0 == (247, 0, 255)})
         items.append({'group': key, 'description': desc})
+    # the app icon (RT_GROUP_ICON 137, 32x32) of the message boxes (dialogs 339 / 340 / 348)
+    f = 'exe/icon137.png'
+    app_icon(g.GAME + 'wagan.wa').save(d + '/' + f)
+    items.append({'source': 'wagan.wa', 'resource_id': 'icon 137', 'file': f, 'size': [32, 32]})
     g.write_index('ui', {'items': items})
     return {'ui': sum(1 for x in items if 'file' in x)}
+
+
+def app_icon(path):
+    """The 32x32 image of RT_GROUP_ICON 137, wrapped as a one-image .ico for PIL."""
+    import io, struct, pefile
+    pe = pefile.PE(path)
+    icons, groups = {}, {}
+    for e in pe.DIRECTORY_ENTRY_RESOURCE.entries:
+        if e.id in (3, 14):
+            for d in e.directory.entries:
+                for l in d.directory.entries:
+                    (icons if e.id == 3 else groups)[d.id] = pe.get_data(l.data.struct.OffsetToData, l.data.struct.Size)
+    grp = groups[137]
+    ents = [struct.unpack_from('<BBBBHHIH', grp, 6 + 14 * i) for i in range(struct.unpack_from('<H', grp, 4)[0])]
+    w, h, _, _, _, bc, _, iid = max((e for e in ents if e[0] == 32), key=lambda e: e[5])
+    img = icons[iid]
+    ico = struct.pack('<HHH', 0, 1, 1) + struct.pack('<BBBBHHII', w, h, 0, 0, 1, bc, len(img), 22) + img
+    return Image.open(io.BytesIO(ico)).convert('RGBA')
 
 
 LOCAL = {'palettes': conv_palettes, 'maps': conv_maps, 'terrain': conv_terrain, 'icons': conv_icons,

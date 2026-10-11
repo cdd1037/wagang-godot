@@ -149,19 +149,29 @@ through EV variables.
 | `BattleHUD` | hovered-unit panel, turn and weather, phase banners, damage numbers |
 | `EffectPlayer` | strategy and effect animations (Xben / MCALL animation sets) |
 | `DuelLayer` | the 单挑 screen, implemented from `docs/duel.md` |
-| `SortieScreen` | 出场选择, choosing who goes into battle |
+| `SortieScreen` | 选择武将 (dialog 236), choosing who goes into battle; `SortieMap` its 出战位置 preview |
+| `Minimap` | 战场缩小图, the battle minimap with the draggable view frame |
 
 ## UI (`ui/`)
 
 `GameUI` sits above the stages and owns the dialogue box (typewriter text, portraits), choice menus, popups,
 banners, captions, chapter titles, fades and the video layer. Panels use the original's blue dragon-pattern window
-texture (`UIStyle`). The out-of-battle menus are `PartyMenu` (equipment and items) and the windows below.
+texture (`UIStyle`). The menu is one list of the original's menu-bar commands; the windows below follow the
+original dialogs. `Settings` (`core/settings.gd`) holds 环境设定 in GS / Niuniu.wa as the original does and
+re-applies it whenever Mem is reset or restored.
 
 * `InfoWindow` is 武将情报 (dialog 166 of wagan.wa) with its pages 能力 / 装备 / 策略 / 兵种, and `DetailPanel` the
   item (dialog 167) and strategy (dialog 285) details it opens. Both extend `DlgPanel`, which lays a window out by
   the control rects of the original dialog template (dialog units, scaled ×1.98 / ×1.8 into 640×480), draws group
   boxes, buttons and the original's bar painter (Kao.wa tiles), and routes clicks to keyed hit areas. The window
   is modal (the original's is modeless and follows the hovered unit). Spec: [rules.md](rules.md) §11.
+* `DlgPanel` also has a list view (columns sharing the width, header sort hits, scroll buttons) and a tab strip;
+  hover, tap (touch: a first tap selects, long press = right click) and right-click hooks. On it: the shops
+  `ShopWindow` (买进 / 卖出, also the warehouse-full variant), `EquipWindow` (装备), both with `PersonPanel` (the
+  person box, stat preview and equipment slots of dialogs 327 / 328) and `ItemCols` (the list columns, prices and
+  sort keys); `ItemListWindow` (持有道具一览), `UnitListWindow` (部队情报一览), `TerrainWindow` (地形情报一览),
+  `HistoryWindow` (历史情报), `SettingsWindow` (环境设定) and `MsgBox` (the Win32 OK / yes-no boxes, 版本情报).
+  `MerchantBox` is the shops' merchant window with its 确认 and 输入数值 boxes. Spec: rules.md §13.
 
 * "Click to continue" waits compare `Game.clicks`, a counter of presses kept by `Game._input`, instead of polling
   whether a button is held: a short trackpad tap is never missed, and the click that closed one box does not also
@@ -190,8 +200,8 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | Path | Contents |
 |---|---|
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
-| `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
+| `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `settings`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
-| `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
-| `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `party_menu`, `ui_style`, `video_layer` |
+| `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
+| `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
 | `debug/` | `test_runner`, `input_bot`, small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

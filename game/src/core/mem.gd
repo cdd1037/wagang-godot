@@ -57,6 +57,7 @@ func reset() -> void:
 	var pw := FileAccess.get_file_as_bytes(Assets.path("data/person_wa.bin"))
 	for i in pw.size():
 		w8(BYTEVARS + i, pw[i])
+	Settings.apply()      # 环境设定 stays as it is across new games and loads
 
 
 func _page(addr: int) -> PackedByteArray:
@@ -263,3 +264,4 @@ func restore(d: Dictionary) -> void:
 	pages.clear()
 	for k in d.get("pages", {}):
 		pages[int(k)] = Marshalls.base64_to_raw(d["pages"][k])
+	Settings.apply()      # the save's GS carries old option bits; the original's loader skips them

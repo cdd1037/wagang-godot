@@ -29,8 +29,9 @@ resize it freely; when you let go, it snaps to the game's 4:3 shape so the pictu
 On iPhone and Android the game runs in landscape: the 4:3 picture fills the screen height, with touch buttons on both
 sides (see [Touch controls](#touch-controls-iphone-and-android)).
 
-The title screen offers **继续游戏** (continue from the autosave, when there is one), **开始新游戏** (new game),
-**读取进度** (load) and **结束游戏** (quit; not on iPhone and Android). After an ending has
+The title screen offers **继续游戏** (continue from the autosave, when there is one), **新游戏** (new game),
+**读取进度** (load), **环境设定** (settings, see [Settings](#settings-环境设定)) and **结束游戏** (quit; not on iPhone
+and Android). After an ending has
 been reached once, the title picture changes. Downloaded builds show their version (版本 1.0.N) in the bottom-right
 corner.
 
@@ -63,8 +64,17 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | **快进** (right of the picture) | fast-forward on/off: ×4 speed and text skips ahead, like holding Ctrl; the button is lit while on |
 | Back button / gesture (Android) | what a right click does: like **返回**, or **菜单** where 返回 is dimmed. It does not quit the game; leave it with the home gesture |
 
-Dialogue boxes show the speaker's portrait and name. Text types out; a click shows the rest, the next click
-continues.
+Dialogue boxes show the speaker's portrait and name. With 讯息显示速度 快 (the default) a page appears at once,
+otherwise it types out and a click shows the rest; the next click continues (or the page closes by itself when
+会话窗口不自动关闭 is off). Short notices close by themselves after a second or so; a click closes them sooner.
+
+### Settings (环境设定)
+
+On the title screen and in the menu. Switches for background music (听背景音乐) and sound effects (听音效); 战斗时，
+自动显示战场缩小图 opens the battle minimap at each battle start; 会话窗口不自动关闭 makes dialogue wait for a click;
+升级显示能力成长 lists every stat change on a level-up; 讯息显示速度 and 武将移动速度 (快 / 普通 / 慢); 对话框花色 the
+background pattern of the windows (花色１–４ or 无). The settings are kept for all saves, as in the original. 战斗时，
+窗口自动最大化 is the original's window option and has no effect here.
 
 ## Story scenes
 
@@ -75,17 +85,29 @@ thing that moves the story on, such as talking to a particular person.
 While a scene is waiting for you:
 
 * **菜单** (top right, or right click / Esc) opens the menu:
-  * **部队状态** – party roster; pick a character for the 武将情报 window (also: right-click a party member in the
-    scene)
-  * **装备** – equip weapons, armour and accessories from the bag
-  * **道具** – use items outside battle (stat fruits, level-up and promotion items)
+  * **武将一览** – the party in a sortable table (class, level, HP, MP, stats); click a row for its 武将情报 (also:
+    right-click a party member in the scene)
+  * **持有道具一览** – the warehouse and what everyone wears (武具一览) and the consumables (道具一览); click an item
+    for its details
+  * **地形情报一览** – what each terrain means to each kind of unit (地形效果, 消耗机动力) and which element strategies
+    work there
+  * **历史情报** – the chronicle, coloured by kind; 按顺序显示 switches between written order and by kind
+  * **环境设定** – the settings
   * **存储进度 / 读取进度** – save or load
+  * **版本情报** – the game's version box
   * **回到标题** – back to the title screen
-  * **史录** – the chronicle: story events, deeds and items, in one scrolling list; choose an entry to read it in
-    full
-* **出征** (top right, or first in the menu) appears once the next battle is ready. It marches out. If more members
-  are available than the battle allows, a sortie screen (出场选择) lets you choose who goes; required members are
-  pre-selected.
+* When the next battle is ready the top bar shows the town's buttons (they can be missing in some towns):
+  * **装备** – the warehouse on the left, the chosen character on the right. Pointing at a piece shows how the
+    stats would change; a click puts it on (the old piece goes back to the warehouse), a click on a worn piece takes
+    it off; a right click shows an item's details. Pieces a character cannot wear are greyed with a red ×.
+  * **买进** – the shop: 武器店 (equipment, bought for the character on the right and worn at once; it must be able
+    to wear it) and 道具店 (consumables, with a count). With 贾润甫 in the party everything costs 20 % less.
+  * **卖出** – sell warehouse equipment or consumables. Selling a plain (not treasure) weapon or armour at Lv 3 earns
+    a fruit as well.
+  * **出征** marches out. If more members are available than the battle allows, the sortie screen (选择武将) lets you
+    choose who goes: click a character to add or remove it, at least two thirds of the places must be filled; the
+    sort buttons order the grid, **战场位置** shows the start positions on the coming map, **取消** stays in town.
+    Required members are pre-selected and stay.
 
 Hub towns have shops, side quests and optional characters. Some scenes contain **mini-games**:
 
@@ -123,11 +145,13 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
      (they lose their turn); the target counters once. Enemies do this too.
    * **策略** – cast a strategy (uses MP); pick it, then the target or area. The menu shows the hit chance.
    * **交给** – give the unit's accessory to a neighbour (樊虎 hands out accessories from the warehouse).
-   * **道具** – use an item on the unit or a neighbour.
+   * **道具** – use an item on the unit or a neighbour (items work only in battle). A fruit raises a stat (not past
+     100), 仙人果 gives experience (not past Lv 70), 印绶 promotes the class at Lv 20 / 40.
    * **待命** – wait. Right-clicking in the command menu takes the move back.
    * Items: 六军镜·形势 gives a second attack, 六军镜·权谋 a second strategy at double MP, 六军镜·阴阳 another move
      after acting, 六军镜·技巧 绝招 without a full MP bar.
-4. Once every unit has acted the phase ends, or end it early from the system menu.
+4. Once every unit has acted you are asked whether to end the phase (结束所有部队的命令吗？), or end it early from
+   the system menu.
 
 **Information**
 
@@ -148,12 +172,19 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 
   **上一武将 / 下一武将** step through the units of the same side (yours and allies, or the enemy) on the map. ←/→
   change the page, Page Up/Down (or Q/E) the unit; Esc, a right click or **确定** close it. The same window opens
-  from **部队一览**, from the menu's **部队状态** outside battle, by right-clicking a party member in a story scene,
-  and by right-clicking a name in 出场选择.
+  from **武将一览**, by right-clicking a party member in a story scene, and by right-clicking a character in 选择武将.
 * Turn number, turn limit and weather are shown top right.
 
-**System menu** (Esc, or a right click on an empty cell; **菜单** on a phone): **回合结束** (end turn), **部队一览** (unit list), **胜利条件**
-(objectives), **存储进度 / 读取进度** (save / load), **回到标题** (title).
+* A left click on an empty cell shows its terrain: name, whether it heals (可以恢复) or cannot be entered (无法移动),
+  and which element strategies (fire, water, earth, wind) work there. The cursor's cell and terrain are shown top
+  left.
+
+**System menu** (Esc, or a right click on an empty cell; **菜单** on a phone): **结束回合** (end the phase, after a
+yes/no), **检索未执行部队** (jump to the next unit that has not acted), **武将一览** (sortable unit table, 我军 / 敌军),
+**持有道具一览**, **地形情报一览**, **历史情报**, **胜利条件** (objectives; the goal area blinks again), **战场缩小图**
+(the minimap: drag its frame to scroll the map), **环境设定**, **存储进度 / 读取进度** (save / load), **版本情报**,
+**回到标题** (title). When none of your units can act any more you are asked whether to end the phase; answer 否 to
+look around first.
 
 **Moving around the map:** arrow keys move the cursor; the mouse at a screen edge or a middle-button drag scrolls.
 On a phone drag the map with a finger; tapping a cell shows its unit or terrain panel.
@@ -233,4 +264,4 @@ winner may gain experience when the duel closes.
 | Windows: the game starts with an error about a missing pack | Keep `WaGang.pck` next to `WaGang.exe` (unzip the whole folder) |
 | Window too small or large | Drag the window's edge or corner (it snaps to 4:3), or toggle full screen (⌘F) |
 | Missing characters (▯) in text | The game uses system Chinese fonts: Songti SC, Hiragino Sans GB and Heiti SC on macOS (make sure they are not disabled in Font Book); SimSun, Microsoft YaHei and SimHei on Windows (install the Chinese supplemental fonts if your Windows lacks them). The iPhone version brings its own (Noto Serif SC) |
-| A town scene "does nothing" | It is waiting for you: find the character or place that continues the story, or check the menu for **出征** |
+| A town scene "does nothing" | It is waiting for you: find the character or place that continues the story, or look for **出征** in the top bar |

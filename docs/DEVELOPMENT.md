@@ -111,7 +111,11 @@ countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b i
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
 terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards), `t_rules` the general battle rules (反应 / 士气 equipment,
 组阵, effect 37, 笼屉, 怀恨攻击 and the counterattack's combat object, 太保令, the level-up penalty and report, SetExp
-past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience), `t_person` prints person stats.
+past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience), `t_shop` the shops and the warehouse (prices with
+八折, the bonus fruit, goods per record, buying = wearing, 装备 moves, selling), `t_menus` the group 5 windows
+(环境设定 applied without writing Niuniu.wa, 历史情报 line order, the sortie builder and 选择武将 rules, 部队情报一览
+sorting, 地形情报一览, the town gate GS+2; `OUT=dir` with a window saves their pictures), `t_person` prints person
+stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 

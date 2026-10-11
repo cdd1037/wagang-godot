@@ -51,9 +51,10 @@ Audit of 2026-10-11, against commit 8c00d22. Tags as in [rules.md](rules.md): **
 Many MISSING rows are several sites of one feature. The list below merges them into about 60 features. A few are
 dormant in the shipped game or left out on purpose; those are marked.
 
-**Answer to "has the port reached feature parity?": no.** The story scripts, the map, the base CCZ battle rules,
-the mod's formula changes, its battle commands (group 2), its character skills (group 3) and the general battle
-rules (group 4) are ported. Missing: shops, and a few information windows and settings (group 5).
+**Answer to "has the port reached feature parity?": yes, for everything this audit found.** The story scripts, the
+map, the base CCZ battle rules, the mod's formula changes, its battle commands (group 2), its character skills
+(group 3), the general battle rules (group 4) and the shops, menus, windows and settings (group 5) are ported. Left:
+the deliberate differences below, and item 28's note (the AI does not weigh the extra targets of an area strike).
 
 ## Skill owners
 
@@ -102,7 +103,7 @@ sets every slot to 1024 (nobody); later scenarios assign holders:
 | 5 | 3975 | 【术】云袖 | 29 鲁明月 (R_12, cleared R_23) | label (the heal aura is hard-coded to pid 29, B1 F1a) |
 | 6 | 3976 | 【技】煞 | 3 尉迟恭 (R_42..R_44) | label (the trigger is hard-coded to pid 3, B2 §G) |
 | 7 | 3977 | 【术】市侩 相马 | 20 贾润甫 (R_20) | mounts +1 move (B2 §D) |
-| 8 | 3978 | 【术】市侩 | 20 贾润甫 (R_03, R_13) | no code or script reads it: the "八折" discount has no effect [G] |
+| 8 | 3978 | 【术】市侩 | 20 贾润甫 (R_03, R_13) | the slot itself is not read, but the buy price 0x426ff4 was rewritten in place (no jump into the mod sections): × 4 / 5 while pid 20 is in the party — the "八折" (rules.md §13.2) [C] |
 | 9 | 3979 | 【术】百宝 | 9 尤俊达 (R_18) | equip any weapon/armour (B2 §I) |
 | 10 | 3980 | 【术】舍命 | 13 王伯当 (R_02) | damage +30 % (B4 §F) |
 | 11 | 3981 | 【招】回旋杀手锏 | 8 秦琼 (R_27) | 杀手锏 variant (B5 F1) |
@@ -375,51 +376,53 @@ Corrections to the batch reports, found while porting:
       kept the first attacker there. 恢复HP / 恢复MP items of value 0xff fill up (0x43c42e): 鸡腿 healed at most 255.
       仙人果 gives its value as experience through SetExp and counts in 0x55a400.
 
-### 5. Shops, menus and windows
+### 5. Shops, menus and windows — done
 
-34. **Shops.** The town toolbar's 卖出 / 买进 / 装备 buttons (0x41973c) are hidden by story flags 0xf3 / 0xf2 / 0xf1.
-    * 买进 (327) with 输入数值 (320), and 卖出 (329):
-      * goods per shop record (58 records, 52 with goods);
-      * sell price rules and the bonus fruit;
-      * the merchant window.
-    * The 装备 window (328):
-      * person list from the fixed table 0x4dbdb0;
-      * stat preview;
-      * "仓库装备现存量 N/200".
-    * → B6 F1. The port has no buy/sell; its 装备 is a list menu.
-35. **持有道具一览 (325)** and **地形情报一览 (335)**: 12 terrains × 27 families, tabs 地形效果 / 消耗机动力.
-    → B6 F1a, F2.
-36. **历史情报:**
-    * categories in the order 1, 2, 3, 4, each with its own colour;
-    * a 按顺序显示 toggle;
-    * available in battle too.
-    * → B6 F3.
-37. **环境设定**, on the title screen and in the menu: BGM/SE switches, message and move speed, auto minimap,
-    dialogue auto-close, 升级显示能力成长, dialogue-box pattern. Kept in Niuniu.wa bytes 1..5. → B2 §J, B6 F8.
-38. **Sortie:**
-    * the candidates come from the fixed 32-pid table, in its order, with the exclusion list (管毅 is never
-      offered unless forced) → B2 §P;
-    * the 战场位置 preview map → B5 F13.
-39. **Not reached by any patch** (menu commands found by reading the APPMENU resource and its handler 0x474c59):
-    * 战场缩小图 (minimap window);
-    * 检索未执行部队 (jump to the next unit that has not acted);
-    * 版本情报;
-    * 部队情报一览 as a sortable list with a 我军/敌军 switch.
-40. **Cosmetic:**
-    * the empty-cell terrain popup (from group 4): a left click on an empty cell in the player phase shows a 3×2
-      box with the terrain picture and name, "可以恢复" or "无法移动", and the four strategy element icons, greyed
-      where that element cannot be cast (0x45576d) → B5 row 0x4559ba;
-    * choice-box portrait (op 0x12 arg1) → B3 F14;
-    * SE 2 on 不能对自己使用 → B3 F15;
-    * cursor "(x:y) terrain" readout → B5;
-    * 技能说明 button (left out on purpose; spec B6 F7).
+All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests; the spec is rules.md §13.
+
+34. **Shops** (toolbar 卖出 / 买进 / 装备 with the flags 0xf3 / 0xf2 / 0xf1): 买进 327 with 输入数值 320, 卖出 329 and
+    the merchant window; 装备 328 with the person table 0x4dbdb0, the stat preview and "仓库装备现存量 N/200". → B6 F1.
+    **Done** (`ShopWindow`, `EquipWindow`, `PersonPanel`, `MerchantBox`, `ItemCols`). Found on the way: equipment is
+    bought for the chosen person and worn at once; the 八折 of 贾润甫 is real (see the skill table above); the bonus
+    fruit is certain; the "warehouse full" text is the exe's Shift-JIS string, shown as it reads on a Chinese system.
+    The port's own out-of-battle 道具 menu and its menu 装备 had no original and are gone.
+35. **持有道具一览 (325)** and **地形情报一览 (335)**. → B6 F1a, F2. **Done** (`ItemListWindow`, `TerrainWindow`).
+36. **历史情报** (order, colours, 按顺序显示, also in battle). → B6 F3. **Done** (`HistoryWindow`).
+37. **环境设定** on the title and in the menu, kept in Niuniu.wa bytes 1..5 and 0x6b. → B2 §J, B6 F8. **Done**
+    (`Settings`, `SettingsWindow`): BGM / SE switches, message speed (typewriter, dialogue holds, timed boxes,
+    captions), 会话窗口不自动关闭, move speed (battle steps by family, story frame period), 升级显示能力成长, skins, the
+    minimap at battle start. The save loader 0x40cc65 skips GS+0 / +8 / +0x10 (three NOPed stores at 0x40cd30, 0x40cdc4,
+    0x40cdd8), so the options are global. The title is 新游戏 / 读取进度 / 环境设定 / 结束游戏 with CD track 18.
+38. **Sortie**: the 32-pid table with the j = 0 quirk and the exclusion slot; dialog 236 with the 战场位置 preview 333.
+    → B2 §P, B5 F13. **Done** (`ScriptHost.build_sortie`, `SortieScreen`, `SortieMap`).
+39. **Menu commands without a patch**: 战场缩小图, 检索未执行部队, 版本情报, 部队情报一览 with the 我军 / 敌军 switch.
+    **Done** (`Minimap`, `BattleInput.find_unit`, `MsgBox.version`, `UnitListWindow`). Also from the menu audit:
+    结束回合 and an all-done phase ask "结束所有部队的命令吗？"; 胜利条件 shows the text op 0x19 stored (op 0x19 itself
+    shows nothing) and blinks op 0x5b's area again; op 0x5b blinks its area instead of keeping it drawn; op 0x08
+    设定结果 is GS+2, which gates the town menu, toolbar and clicks.
+40. **Cosmetic**: the empty-cell terrain popup, the choice-box portrait with "1."–"3.", SE 2 on 不能对自己使用, the
+    cursor "(x:y) terrain" readout. **Done.** (技能说明 stays out on purpose, B6 F7.)
+41. **Found while doing this group** (original code, rules.md §13.5–§13.7):
+    * captions op 0x2c: a1 = 0 clears, a2 starts a line, a3 pauses — the port had a2 / a3 as "wait" / "clear";
+    * timed boxes (style 2) for the original's messages; ops 0x17 / 0x18 show a timed box (and the pane text in towns);
+    * unit actions 0x45778f: the port's kind numbers were wrong (1 is cheer, 2 defend, 3 hurt, 11 / 12 turns);
+    * battle items: the use animation, the fruit / 仙人果 / 印绶 refusals and effects, the picker messages;
+    * weapon / armour level notice per level with its panel; get_item's order, the 255 stack limit and its warning,
+      the warehouse-full 卖出 window; the op 0x59 reward screen (no "得到了" boxes, a missing level from person 0's);
+    * terrain changes: the sounds by new terrain, the holds with SE on, op 0x58 arg 6 as "quiet", EV[0] as "no patch";
+    * battle steps play their sound (0x43f38b).
 
 ### Deliberate differences (port design, keep unless asked)
 
 * **Autosave:** the original saves silently into slots 0..4 in rotation after every player phase; the port keeps
   its own autosave file instead. → B5 row 0x44e1c9.
 * **Story videos:** 001.wmv and later cannot be skipped in the original (B2 §R). The port lets every video be skipped.
-* **Windows:** the port uses modal windows and its own menus instead of the menu bar and toolbar.
+* **Windows:** the port uses modal windows, one list for the menu bar and text buttons in the top bar for the
+  toolbar. A right click on an empty battle cell opens that list (the original asks to end the phase; the list's
+  first item does). 战斗时，窗口自动最大化 is shown but has nothing to size.
+* **Looks:** the dialogs are drawn in the port's style; the skin tints their background, and the original's dark
+  red / black list texts are lighter on the dark panels. The Win32 merchant and 武将情报 windows that the original
+  keeps open beside the map are modal here.
 * **Deterministic RNG mode** (0x47fb14): dead in the original, since its checkbox does not exist.
 
 ## Doc corrections made with this audit
@@ -1760,7 +1763,7 @@ builds the dialogs [C]: shop record = min(GS+7 >> 1, 57) (0x4790ae) in the 0x28-
 person whose face the merchant window shows, +8 16 equipment ids, +0x18 16 consumable ids, 0xff = none;
 0x466b2d / 0x466c87); tabs 武器店 / 道具店; sell price 0x40c7a9 = price byte (+0x12)·300 >> 2, ×(lvl+1) >> 1 for
 weapons/armour, 0xff → 0xffff; gold capped at 9 999 999 (0x40dbed); bag = 200 3-byte slots at GS+0x13, consumables
-are stack counts at GS+0x26b; selling a non-treasure weapon/armour of level 3 may return a fruit (0x40d51b: kind 0
+are stack counts at GS+0x26b; selling a non-treasure weapon/armour of level 3 always returns a fruit (0x40d51b: kind 0
 → 0x67, 2/8 → 0x62, 4/6 → 0x66, 10/12 → 0x63, 14 → 0x64, 16 → 0x65; message 0x486e40).
 
 * **F1a 仓库装备现存量 "N/200"** (static 2000 next to the label "仓库装备现存量" in templates 325, 328, 329; 327 has
@@ -1777,13 +1780,15 @@ are stack counts at GS+0x26b; selling a non-treasure weapon/armour of level 3 ma
 * **F1c Portrait** of the chosen person in 买进/装备 (control 1076): sge.wa 301+face (face rule 0x4075a7, as in
   武将情报), loaded on every person change (0x46a05e). [C]
 * **F1d Equipment panel** (Wepon / Armor / Sub Item, 0x46942a per slot): for pid 11 樊虎 the "Sub Item:" label is
-  disabled (0x469433); Exp bar maximum 100, treasure 150, +100 at Lv 9 (0x4695c6, same rule as DetailPanel.exp_max).
+  disabled (0x469433); Exp bar maximum 100, treasure 150, a treasure at Lv 9 250 (0x4695c6; the +100 is on the
+  treasure branch only).
   Related rule from another batch (0x40790d → 0x4d9a91): 樊虎 may not equip any accessory (can_equip returns 0 for
   category 2) — the port's Person.can_equip (person.gd:239) and 装备 menu allow it. [C]
 * **F1e Merchant message window** (0x46d9a4: used for the sell confirmations "Lv.%2d的%s可卖%d。\n要卖掉吗？" /
   "%s的价格为%d。\n要卖掉吗？", the bonus message and the bag-full message; plain message box instead when 0x40b922 or
   0x41a0a4(0x496f38)): 456×120 window at client (16,56) of the main window (or (16,168) of the caller when
-  [0x4cf306]); mod drawing (0x46d452/0x46d7e9/0x46d7fb): 120×120 sge portrait 301+face of person (shop record +4) at
+  [0x4cf306]); mod drawing (0x46d452/0x46d7e9/0x46d7fb): 120×120 sge portrait 301+face of person (shop record +4; the
+  "warehouse full" message uses record +0) at
   (0,0), mark.wa bitmap 2 (8×80) at (136,29) and bitmap 3 at (448,29), black transparent; text area (144,29,304,80),
   ≤ 3 lines at x = 0x13 columns, y = 51/71/91. [C code; pixel placement of the text grid G]
 

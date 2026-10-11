@@ -11,7 +11,7 @@ extends Node2D
 
 const FW := 48
 const FH := 64
-const STEP_TIME := 0.055
+const STEP_TIME := 0.055     # at 武将移动速度 普通; the scene's frame period scales it (Settings.scene_frame)
 
 var pid := -1
 var sprite_id := 0
@@ -77,7 +77,7 @@ func _process(delta: float) -> void:
 	if walking:
 		_anim_t += delta
 		var seq := [0, 1, 0, 2]
-		var f: int = seq[int(_anim_t / 0.12) % 4]
+		var f: int = seq[int(_anim_t / (0.12 * _speed())) % 4]
 		if f != frame:
 			frame = f
 			queue_redraw()
@@ -91,6 +91,11 @@ const STEP_DY := [-1, 0, 1, 0]
 ## the axis with the larger distance, X on a tie (0x42855f), and keeps its direction while that still gets closer
 ## (0x42836e), so it walks that axis first, then the other. (The original's distance field, 0x429266, also routes
 ## around blocked cells; that is not modelled.)
+## The story-scene loop runs one frame per GS+8 × 50 ms (0x429908): 普通 1, 慢 2, 快 unthrottled.
+func _speed() -> float:
+	return Settings.scene_frame() / 0.05
+
+
 static func walk_steps(x0: int, y0: int, x1: int, y1: int) -> Array[int]:
 	var dx := x1 - x0
 	var dy := y1 - y0
@@ -112,7 +117,7 @@ static func walk_steps(x0: int, y0: int, x1: int, y1: int) -> Array[int]:
 func walk_to(x: int, y: int, end_dir: int = -1, fast := false) -> void:
 	walking = true
 	_anim_t = 0.0
-	var st := 0.0 if fast else STEP_TIME
+	var st := 0.0 if fast else STEP_TIME * _speed()
 	for d in walk_steps(gx, gy, x, y):
 		dir = d
 		await _tween_to(foot_point(gx + STEP_DX[d], gy + STEP_DY[d], gz), st)

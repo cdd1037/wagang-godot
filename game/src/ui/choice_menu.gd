@@ -29,6 +29,10 @@ var _press_gen := 0          # touch: counts presses, so a long-press timer know
 ## Optional: called (and awaited) with a row's index on a right click or long press on that row, instead of
 ## cancelling; the menu stays open (出场选择 shows the member's 武将情报 this way).
 var info := Callable()
+## Optional: a portrait for the next choose(): the box becomes the scripts' choice box (op 0x12 → 0x42de12), 480×128
+## at the middle of the view with the 120×120 face at its left end and the options beside it.
+var face: Texture2D
+const FACE_W := 154.0
 
 
 func _init() -> void:
@@ -66,11 +70,14 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	pos.x = clampf(pos.x, 0, vs.x - (w + PAD * 2 + 16))
 	pos.y = clampf(pos.y, 0, vs.y - h)
 	_rect = Rect2(pos, Vector2(w + PAD * 2 + 16, h))
+	if face:
+		_rect = Rect2(((vs - Vector2(432, 96)) / 2 - Vector2(46, 20)).floor(), Vector2(480, 128))
 	visible = true
 	_active = true
 	_touch_down = false
 	queue_redraw()
 	if Game.autoplay or Game.demo:
+		face = null
 		if Game.demo:
 			await get_tree().create_timer(1.0).timeout
 		await get_tree().process_frame
@@ -89,6 +96,7 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	var r: int = await chosen
 	visible = false
 	_active = false
+	face = null
 	return r
 
 
@@ -99,6 +107,8 @@ func _is_enabled(i: int) -> bool:
 ## Screen rectangle of item i (only meaningful while it is one of the visible rows).
 func _row_rect(i: int) -> Rect2:
 	var y0 := _rect.position.y + PAD + (ROW_H if title != "" else 0)
+	if face:
+		return Rect2(_rect.position.x + FACE_W, _rect.position.y + 26 + (i - _top) * ROW_H, _rect.size.x - FACE_W - 12, ROW_H)
 	return Rect2(_rect.position.x + 4, y0 + (i - _top) * ROW_H, _rect.size.x - 8, ROW_H)
 
 
@@ -116,6 +126,8 @@ func _scroll_to(i: int) -> void:
 
 func _draw() -> void:
 	UIStyle.draw_panel(self, _rect)
+	if face:
+		draw_texture_rect(face, Rect2(_rect.position + Vector2(1, 0), Vector2(120, 120)), false)
 	if title != "":
 		UIStyle.draw_text(self, Vector2(_rect.position.x + PAD + 8, _rect.position.y + PAD + 17), title, UIStyle.NAME_COLOR)
 	var f := Assets.font()

@@ -302,13 +302,19 @@ static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, _weathe
 		return true
 	if caster.has_effect(50):
 		return true
-	if s <= 4:
-		return target_terrain in [0, 1, 2, 8, 16, 18, 19, 20, 21, 22, 23, 24]
-	if s <= 9:
-		return target_terrain in [7, 8, 9, 10, 13]
-	if s <= 14:
-		return target_terrain in [0, 1, 3, 4, 7, 8, 9, 10, 13]
-	return target_terrain in [3, 4]
+	return element_ok(s / 5, target_terrain)
+
+
+## The element tests by terrain: 0 火 (0x420ab6), 1 水 (0x420b17), 2 风 (0x420b42), 3 地 (0x420b98).
+static func element_ok(e: int, t: int) -> bool:
+	match e:
+		0:
+			return t in [0, 1, 2, 8, 16, 18, 19, 20, 21, 22, 23, 24]
+		1:
+			return t in [7, 8, 9, 10, 13]
+		2:
+			return t in [0, 1, 3, 4, 7, 8, 9, 10, 13]
+	return t in [3, 4]
 
 
 ## Strategy category per id 0..0x3d (table 0x42093c), which picks the check in 0x420422.

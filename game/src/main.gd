@@ -245,7 +245,10 @@ func _retry_autosave() -> void:
 func _title_screen() -> void:
 	await get_tree().process_frame
 	_abort_flow = false
-	Audio.play_bgm(2)
+	# title loop 0x41bf67: the 环境设定 options from Niuniu.wa (0x4e20ff), then CD track 18 (0x4092e8)
+	Settings.load_file()
+	Audio.play_bgm(18)
+	ui.clear_strips()
 	if _title_bg == null:
 		_title_bg = Sprite2D.new()
 		_title_bg.centered = false
@@ -259,7 +262,8 @@ func _title_screen() -> void:
 	_show_version()
 	ui.set_black(false)
 	while true:
-		var items: Array = ["开始新游戏", "读取进度"]
+		# dialog 193: 新游戏 读取进度 环境设定 结束游戏 (the port adds 继续游戏)
+		var items: Array = ["新游戏", "读取进度", "环境设定"]
 		if _autosave_enabled() and not Game.save_info(Game.AUTO_SLOT).is_empty():
 			items.push_front("继续游戏")
 		if not OS.has_feature("mobile"):
@@ -270,7 +274,9 @@ func _title_screen() -> void:
 			"继续游戏":
 				if await _load_slot(Game.AUTO_SLOT):
 					return
-			"开始新游戏":
+			"环境设定":
+				await SettingsWindow.open(ui)
+			"新游戏":
 				_title_bg.visible = false
 				Game.new_game_state()
 				Game.scenario = 0
@@ -389,7 +395,7 @@ func _slot_labels() -> Array:
 func save_menu() -> void:
 	# 保存 (0x474c90 → mod 0x4d009f): refused while the scripts forbid saving (op 0x74 → u32 [0x4ce004] = 0)
 	if Mem.r32(0x4ce004) == 0:
-		await ui.popup("目前不可存盘。")
+		await ui.message("目前不可存盘。")
 		return
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")
 	if i < 0:
@@ -471,22 +477,3 @@ func _autosave_flush() -> void:
 	_autosave_written_ms = Time.get_ticks_msec()
 	if not Game.write_capture(Game.AUTO_SLOT, _autosave):
 		push_warning("autosave could not be written")
-
-
-# ------------------------------------------------------------------ status screens
-func show_party_status() -> void:
-	var ids := Game.party_ids()
-	if ids.is_empty():
-		await ui.popup("没有部队。", 1.0)
-		return
-	var labels := []
-	for pid in ids:
-		var p := Game.person(pid)
-		labels.append("%s  %s  Lv%d" % [p.name, p.class_name_str(), p.level])
-	var i_last := 0
-	while true:
-		var i := await ui.menu.choose(labels, Vector2(-1, -1), true, "部队", [], 0, i_last)
-		if i < 0:
-			return
-		i_last = i
-		await InfoWindow.open(ui, ids, i)     # 武将情报 with the party list (0x4768c0)

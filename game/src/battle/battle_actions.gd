@@ -122,7 +122,10 @@ func move_unit(u: BUnit, path: Array[Vector2i]) -> void:
 		u.pos = path[-1]
 		return
 	n.set_pose(UnitSprite.Pose.WALK, u.dir)
-	n.walk_speed = 8.0
+	# 0x44201b: a cell takes 48 / s frames of 50 ms by 武将移动速度 and the family; the walk picture changes
+	# halfway through the cell; then the step sound
+	var t := Settings.cell_time(u.family())
+	n.walk_speed = 2.0 / t
 	for c in path:
 		var d := Grid.dir_of(c - u.pos)
 		u.dir = d
@@ -132,13 +135,33 @@ func move_unit(u: BUnit, path: Array[Vector2i]) -> void:
 			n.position = view().cell_pos(c)
 		else:
 			var tw := n.create_tween()
-			tw.tween_property(n, "position", view().cell_pos(c), 0.075)
+			tw.tween_property(n, "position", view().cell_pos(c), t)
 			await tw.finished
+			Audio.se(step_se(u.family(), view().terrain_at(c)))
 		u.pos = c
 	n.walk_speed = 4.0
 	n.set_pose(UnitSprite.Pose.STAND, u.dir)
 	u.moved = true
 	st.refresh_units()
+
+
+## The step sound of a cell (0x43f38b): by the terrain entered (2 → SE 27, 7 → 26, 9 / 13 → 29, 10 → 28), else by
+## the family: 0 3 7 11 12 13 15 16 17 20 24 → SE 24, 21..23 → SE 25, the others SE 23.
+static func step_se(family: int, terrain: int) -> int:
+	match terrain:
+		2:
+			return 27
+		7:
+			return 26
+		9, 13:
+			return 29
+		10:
+			return 28
+	if family in [0, 3, 7, 11, 12, 13, 15, 16, 17, 20, 24]:
+		return 24
+	if family in [21, 22, 23]:
+		return 25
+	return 23
 
 
 func face(u: BUnit, target: Vector2i) -> void:
@@ -774,8 +797,7 @@ func _duanzao(x: BUnit) -> void:
 		lvl = (lvl + 1) & 0xff
 		Mem.w8(p.base + off + 1, lvl)
 		Mem.w8(p.base + off + 2, 0xff if lvl >= maxl else 0)
-		Audio.play_se(SE_EQUIP_UP)
-		await st.ui.popup("%s 的%s等级上升到 %d！" % [p.name, "防具" if armour else "武器", lvl], 0.0 if not Game.demo else 1.0)
+		await equip_notice(p, not armour)
 	await st.op_unit_status({"args": [x.pid, 1, 0xff, 0]})
 	Audio.play_se("se30")
 
@@ -868,8 +890,15 @@ func _show_level_up(p: Person, g: Array) -> void:
 	if st.in_battle():
 		await st.op_unit_status({"args": [p.id, 11, 0, 0]})
 	Audio.play_se(SE_LEVELUP)
-	for t in p.level_up_texts(g):
-		await st.ui.popup(t, 0.0 if not Game.demo else 1.2)
+	# "X升为N级。" and "学会了策略「…」！" are timed boxes (style 2); the detailed report of 升级显示能力成长 is an
+	# OK box (style 0, 0x4dbe57)
+	var detail := Mem.r8(Settings.LEVEL_DETAIL) != 0
+	var texts := p.level_up_texts(g)
+	for i in texts.size():
+		if i == 0 and detail:
+			await st.ui.popup(texts[i], 0.0 if not Game.demo else 1.2)
+		else:
+			await st.ui.message(texts[i])
 
 
 func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
@@ -908,20 +937,44 @@ func add_equip_exp(p: Person, weapon: bool, amount: int) -> void:
 	var maxl := 10 if treasure else 3
 	var thr := 100 + (50 if treasure else 0) + (100 if treasure and lvl == 9 else 0)
 	var total := cur + amount
-	var up := false
 	while total >= thr and lvl < maxl:
 		lvl += 1
 		total -= thr
-		up = true
+		# 0x409620 writes the level, then the notice runs once per level (0x4083ef)
+		if weapon:
+			p.weapon_lvl = lvl
+		else:
+			p.armor_lvl = lvl
+		await equip_notice(p, weapon)
 	if weapon:
 		p.weapon_lvl = lvl
 		p.weapon_exp = 0xff if lvl >= maxl else total
 	else:
 		p.armor_lvl = lvl
 		p.armor_exp = 0xff if lvl >= maxl else total
-	if up:
+
+
+## A weapon or armour level gained (0x4083ef). In a battle the unit turns once (12), then a weapon swings twice (7)
+## and cheers (1), armour defends twice (2 with its wait, 0, 2 ticks, 2, 0) and cheers; SE 13 and "武器等级上升！" /
+## "护具等级上升！". Then, always, the panel with the item, its new level, the wearer and the value before → after.
+func equip_notice(p: Person, weapon: bool) -> void:
+	if st.in_battle():
+		await st.op_unit_status({"args": [p.id, 12, 0, 0]})
+		if weapon:
+			await st.op_unit_status({"args": [p.id, 7, 0, 0]})
+		else:
+			await st.op_unit_status({"args": [p.id, 2, 0, 1]})
+			await st.op_unit_status({"args": [p.id, 0, 0, 0]})
+			await st.wait(0.1)
+			await st.op_unit_status({"args": [p.id, 2, 0, 1]})
+			await st.op_unit_status({"args": [p.id, 0, 0, 1]})
+		await st.op_unit_status({"args": [p.id, 1, 0, 0]})
 		Audio.play_se(SE_EQUIP_UP)
-		await st.ui.popup("%s 的%s等级上升到 %d！" % [p.name, "武器" if weapon else "防具", lvl], 0.0 if not Game.demo else 1.0)
+		await st.ui.message("武器等级上升！" if weapon else "护具等级上升！")
+	var iid := p.weapon if weapon else p.armor
+	var lvl := p.weapon_lvl if weapon else p.armor_lvl
+	if iid >= 0:
+		await st.hud.equip_panel(iid, lvl, p, weapon)
 
 
 # ------------------------------------------------------------------ strategies (§5)
@@ -1400,14 +1453,20 @@ func item_usable_on(iid: int, t: BUnit) -> bool:
 	return true
 
 
-func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> void:
+## Use a consumable on t; false when the handler refuses (the item stays and the unit keeps its turn).
+func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 	var iid := int(entry["id"])
 	var it := Game.item(iid)
 	var v := int(it.get("value", 0))
 	var p := t.person
+	var ty := int(it.get("type", 0))
 	face(u, t.pos)
-	Audio.play_se(SE_HEAL)
-	match int(it.get("type", 0)):
+	if ty >= 70:
+		if not await _item_check(ty, p):
+			return false
+	else:
+		Audio.play_se(SE_HEAL)
+	match ty:
 		63:
 			var h := heal_value(iid, t)
 			t.hp += h
@@ -1430,23 +1489,116 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> void:
 			await st.op_unit_status({"args": [p.id, 11, 0xff, 0xff]})
 			await st.op_unit_status({"args": [p.id, 7, 0, 0]})
 		70, 71, 72, 73, 74:
-			var si: int = [0, 2, 1, 3, 4][int(it["type"]) - 70]
-			p.set_stat_word(si, mini(p.get_stat_word(si) + v, 9999))
-			p.set_raw(si, mini(p.get_raw(si) + v, 100))
-			await st.ui.popup("%s 的能力上升了！" % p.name, 0.0 if not Game.demo else 1.0)
+			# fruits (0x41d080): word and ability up, the stat-up effect, the battle level of that stat one step up;
+			# no message
+			var si: int = [0, 2, 1, 3, 4][ty - 70]
+			var word := mini(p.get_stat_word(si) + v, 9999)
+			var raw := mini(p.get_raw(si) + v, 100)
+			await _use_anim(u, t, iid, [0x22, 0x22, 0x23, 0x24, 0x25][ty - 70])
+			p.set_stat_word(si, word)
+			p.set_raw(si, raw)
+			t.set_buff(si, Rules.buff_step(t.buff(si), true))
 		75:
-			# 仙人果 (0x41d3d9 with mod 0x4d030d): counted per person (0x55a400), the +1 grade bonus for the next
-			# five stats, its value as experience through SetExp, then 兵力 and 策略 to full
+			# 仙人果 (0x41d3d9): counted per person (0x55a400), the +1 grade bonus for the next five stats, its value as
+			# experience through SetExp, then 兵力 and 策略 to full
+			await _use_anim(u, t, iid, 0xff)
 			Mem.w8(0x55a400 + p.id, (Mem.r8(0x55a400 + p.id) + 1) & 0xff)
 			p.bonus_counter = 5
 			await set_exp(p, p.exp + v)
 			t.hp = t.max_hp()
 			t.mp = t.max_mp()
 		76:
-			p.cls = p.cls + 1
-			await st.ui.popup("%s 晋升为 %s！" % [p.name, p.class_name_str()], 0.0 if not Game.demo else 1.0)
+			await _promote(u, t, iid)
 	_consume(entry)
 	st.refresh_units()
+	return true
+
+
+## The refusals of 0x41c4e9 / 0x40934d (timed boxes) for fruits, 仙人果 and 印绶.
+func _item_check(ty: int, p: Person) -> bool:
+	var why := ""
+	if ty <= 74:
+		if p.get_raw([0, 2, 1, 3, 4][ty - 70]) >= 100:
+			why = "该项能力已经达到100，不能再提升了。"
+	elif ty == 75:
+		if p.level >= 70:
+			why = "不能再升级了。"
+	elif p.cls > 38:
+		why = "这是不能提升兵种的部队。"
+	elif p.cls % 3 == 2:
+		why = "不能再提升兵种了。"
+	elif p.level < (p.cls % 3 + 1) * 20:
+		why = "下一个兵种需要等级%d以上。" % ((p.cls % 3 + 1) * 20)
+	if why == "":
+		return true
+	await st.ui.message(why)
+	return false
+
+
+## The use animation every battle item handler shares (0x41c762): the user, standing, holds the item's icon (5 ticks),
+## SE 41, raises it while cheering (10 ticks); then the icon fades in over the target (16 ticks) and the Xben
+## effect `xben` plays there (0xff none).
+func _use_anim(u: BUnit, t: BUnit, iid: int, xben: int) -> void:
+	if Game.autoplay or u.node == null:
+		return
+	var tex := Assets.tex("gfx/icons/items/large/%03d.png" % int(Game.item(iid).get("icon", 0)))
+	await view().ensure_visible(u.pos)
+	u.node.show_frame(UnitSprite.Sheet.MOV, 6)
+	st.hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 16)}
+	await st.wait(0.25)
+	Audio.se(41)
+	u.node.show_frame(UnitSprite.Sheet.SPC, 4)
+	st.hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 0)}
+	await st.wait(0.5)
+	st.hud.icon_over = {}
+	for i in 16:
+		st.hud.icon_over = {"tex": tex, "cell": t.pos, "off": Vector2(8, 0), "alpha": (i + 1) / 16.0}
+		st.hud.queue_redraw()
+		await st.wait(0.05)
+	st.hud.icon_over = {}
+	if xben != 0xff:
+		var e := EffectPlayer.create("xben", xben)
+		if e:
+			e.position = view().cell_center(t.pos)
+			e.z_index = 10
+			view().fx_layer.add_child(e)
+			await e.done
+
+
+## 印绶 (0x41d4db): the HP and MP bases grow by twice the old class's growth (one byte each), both to full, the
+## unit spins and cheers; the class goes up with the old sprite whitening (SE 33) and the new one coming back from
+## white (SE 12); "%s的兵种提升为%s！", then "学会了「%s」策略！" for each strategy the new class has and the old one
+## had not, at a level already reached.
+func _promote(u: BUnit, t: BUnit, iid: int) -> void:
+	var p := t.person
+	await _use_anim(u, t, iid, 0xff)
+	var old := p.cls
+	var g: Dictionary = Game.cls(old).get("growth", {})
+	p._add_stat(5, (2 * int(g.get("hp", 0))) & 0xff)
+	p._add_stat(6, (2 * int(g.get("mp", 0))) & 0xff)
+	t.hp = t.max_hp()
+	t.mp = t.max_mp()
+	await st.op_unit_status({"args": [p.id, 11, 0, 0]})
+	p.cls = old + 1
+	if t.node and not Game.autoplay:
+		Audio.se(0x21)
+		for i in 16:
+			t.node.flash = ((i >> 1) + 1) / 15.0
+			await st.wait(0.05)
+		t.node.set_entry(t.sprite_entry())
+		t.node.show_frame(UnitSprite.Sheet.SPC, 4)
+		Audio.se(0x0c)
+		for i in 16:
+			t.node.flash = ((16 - i) >> 1) / 15.0
+			await st.wait(0.05)
+		t.node.flash = 0.0
+	await st.ui.message("%s的兵种提升为%s！" % [InfoWindow.display_name(p), p.class_name_str()])
+	for s in 68:
+		var lv: Dictionary = Game.strategy(s).get("learn_level_by_class", {})
+		var a := int(lv.get(str(old), 0))
+		var b := int(lv.get(str(old + 1), 0))
+		if a == 0 and b != 0 and b <= p.level:
+			await st.ui.message("学会了「%s」策略！" % str(Game.strategy(s).get("name", "?")))
 
 
 func _consume(entry: Dictionary) -> void:

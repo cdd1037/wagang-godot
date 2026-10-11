@@ -6,6 +6,8 @@ extends ScriptHost
 signal clicked_actor(pid: int)
 
 const VIEW_Y := 40
+const TOOLBAR := ["卖出", "买进", "装备", "出征"]
+const TOOLBAR_FLAGS := [0xf3, 0xf2, 0xf1]
 
 var root2d: Node2D
 var bg: Sprite2D
@@ -21,7 +23,7 @@ var scene_image := -1
 var _waiting_click := false
 var sortie_enabled := false
 var _bar_menu: Button
-var _bar_sortie: Button
+var _bar_tools: Array[Button] = []    # the town toolbar: 卖出 买进 装备 出征
 
 
 func _ready() -> void:
@@ -54,20 +56,26 @@ func _ready() -> void:
 	# shown while the scene waits for the player (same as right click / Esc)
 	_bar_menu = _bar_button("菜单", Vector2(572, 8))
 	_bar_menu.pressed.connect(func() -> void:
-		if _waiting_click:
+		if menu_ready():
 			_system_menu())
-	_bar_sortie = _bar_button("出征", Vector2(504, 8))
-	_bar_sortie.pressed.connect(func() -> void:
-		if _waiting_click and sortie_enabled:
-			_menu_sortie())
+	for i in TOOLBAR.size():
+		var b := _bar_button(TOOLBAR[i], Vector2(504, 8))
+		b.pressed.connect(_tool.bind(i))
+		_bar_tools.append(b)
 
 
+## The town's menu, toolbar and clicks on actors work while the scene waits for the player and GS+2 (op 0x08) is
+## not 0 (0x426ba3, 0x429b81).
 func menu_ready() -> bool:
-	return _waiting_click
+	return _waiting_click and town_on()
+
+
+func town_on() -> bool:
+	return Mem.r16(Mem.GS + 2) != 0
 
 
 func open_menu() -> void:
-	if _waiting_click:
+	if menu_ready():
 		_system_menu()
 
 
@@ -96,9 +104,39 @@ func _bar_button(text: String, pos: Vector2) -> Button:
 func _process(_d: float) -> void:
 	if _bar_menu == null:
 		return
-	var show := _waiting_click and not Game.autoplay and not Game.demo
+	var show := menu_ready() and not Game.autoplay and not Game.demo
 	_bar_menu.visible = show
-	_bar_sortie.visible = show and sortie_enabled
+	var x := 504.0
+	for i in _bar_tools.size():
+		var b := _bar_tools[i]
+		b.visible = show and tool_shown(i)
+		if b.visible:
+			b.position.x = x
+			x -= 68
+
+
+## The town toolbar (0x419d22) is shown with 出征 (op 0x06); story flags 0xf3 / 0xf2 / 0xf1 move 卖出 / 买进 / 装备
+## off it (0x419f22), and the others close up from the right.
+func tool_shown(i: int) -> bool:
+	return sortie_enabled and (i >= TOOLBAR_FLAGS.size() or not Mem.flag(TOOLBAR_FLAGS[i]))
+
+
+## A toolbar button (0x41973c): 0 卖出 (dialog 329), 1 买进 (327), 2 装备 (328), 3 出征.
+func _tool(i: int) -> void:
+	if not menu_ready() or not tool_shown(i):
+		return
+	if i == 3:
+		_menu_sortie()
+		return
+	_waiting_click = false
+	match i:
+		0:
+			await ShopWindow.sell(ui)
+		1:
+			await ShopWindow.buy(ui)
+		2:
+			await EquipWindow.open(ui)
+	_waiting_click = true
 
 
 var _restore: Dictionary = {}
@@ -191,7 +229,7 @@ var _press := [-1, 0]
 
 
 func _unhandled_input(ev: InputEvent) -> void:
-	if not _waiting_click:
+	if not _waiting_click or not town_on():
 		_press[0] = -1
 		return
 	if ev is InputEventMouseButton and Game.touch and ev.button_index == MOUSE_BUTTON_LEFT:
@@ -262,31 +300,32 @@ func actor_at(p: Vector2) -> int:
 	return best
 
 
+## The menu bar (0x474c59) as one list; outside battles 检索未执行部队, 结束回合, 胜利条件 and 战场缩小图 are greyed
+## (0x4759bc), so they are left out. 装备, 买进 and 卖出 are on the toolbar.
+const MENU := ["武将一览", "持有道具一览", "地形情报一览", "历史情报", "环境设定", "存储进度", "读取进度", "版本情报", "回到标题"]
+
+
 func _system_menu() -> void:
 	_waiting_click = false
-	var items := ["部队状态", "装备", "道具", "存储进度", "读取进度", "回到标题", "史录"]
-	if sortie_enabled:
-		items.push_front("出征")
-	var i := await ui.menu.choose(items, Vector2(-1, -1), true)
-	if sortie_enabled:
-		if i == 0:
-			await _menu_sortie()
-			return
-		i -= 1
-	match i:
-		6:
-			await _show_history()
-		0:
-			await Game.main.show_party_status()
-		1:
-			await PartyMenu.equip_menu(ui)
-		2:
-			await PartyMenu.item_menu(ui)
-		3:
+	var i := await ui.menu.choose(MENU, Vector2(-1, -1), true)
+	match MENU[i] if i >= 0 else "":
+		"武将一览":
+			await UnitListWindow.open(ui, null)
+		"持有道具一览":
+			await ItemListWindow.open(ui)
+		"地形情报一览":
+			await TerrainWindow.open(ui)
+		"历史情报":
+			await HistoryWindow.open(ui)
+		"环境设定":
+			await SettingsWindow.open(ui)
+		"存储进度":
 			await Game.main.save_menu()
-		4:
+		"读取进度":
 			await Game.main.load_menu()
-		5:
+		"版本情报":
+			await MsgBox.version(ui)
+		"回到标题":
 			Game.main.to_title()
 	_waiting_click = true
 
@@ -297,29 +336,6 @@ func _menu_sortie() -> void:
 		clicked_actor.emit(-2)
 		return
 	_waiting_click = true
-
-
-func _show_history() -> void:
-	if Game.history.is_empty():
-		await ui.popup("暂无史录。", 1.0)
-		return
-	# chronicle first (category 1), then deeds (3, 4) and items (2), each by entry number
-	var entries := Game.history.duplicate()
-	var rank := {1: 0, 3: 1, 4: 2, 2: 3}
-	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var ra: int = rank.get(int(a["cat"]), 4)
-		var rb: int = rank.get(int(b["cat"]), 4)
-		return ra < rb or (ra == rb and int(a["id"]) < int(b["id"])))
-	var lines := []
-	for h in entries:
-		lines.append(str(h["text"]).replace("\n", ""))
-	# one scrolling list; a chosen entry is shown in full
-	var k := 0
-	while true:
-		k = await ui.menu.choose(lines, Vector2(-1, -1), true, "史录", [], 400, k)
-		if k < 0:
-			return
-		await ui.popup(str(entries[k]["text"]))
 
 
 # ------------------------------------------------------------------ dialog placement

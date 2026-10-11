@@ -109,11 +109,11 @@ func special_enabled() -> bool:
 ## Returns true when the unit's action ended.
 func special(u: BUnit) -> bool:
 	if not special_enabled():
-		await st.ui.popup("无绝招")
+		await st.ui.message("无绝招")
 		return false
 	var mx := u.max_mp()
 	if not u.has_effect(58) and mx != 1 and (u.mp & 0xff) != mx:
-		await st.ui.popup("MP未满")
+		await st.ui.message("MP未满")
 		return false
 	Mem.w32(BattleStage.SPECIAL_RUNNING, 1)
 	var done := await _special_run(u)
@@ -361,7 +361,7 @@ func _wei_zhen_ba_huang(u: BUnit) -> bool:
 		if x and x.slot >= 35:
 			targets.append(x)
 	if targets.is_empty():
-		await st.ui.popup("范围内没有敌军部队。")
+		await st.ui.message("范围内没有敌军部队。")
 		return false
 	await _banner("威震八荒")
 	u.mp = 0
@@ -421,7 +421,7 @@ func siege_command(a: BUnit) -> bool:
 			return false
 		var hs := helpers(a, t)
 		if hs.is_empty():
-			await st.ui.popup("无法围攻该部队")
+			await st.ui.message("无法围攻该部队")
 			continue
 		await siege(a, t, hs)
 		return true
@@ -442,7 +442,7 @@ func siege(a: BUnit, t: BUnit, hs: Array[BUnit]) -> void:
 			await st.actions.attack(t, a)
 			broken = true
 	if not broken:
-		await st.ui.popup("围攻")
+		await st.ui.message("围攻")
 		await st.actions.strikes(a, t)
 		for h in hs:
 			if not t.active():
@@ -532,10 +532,10 @@ func give(u: BUnit, item: int) -> bool:
 					Mem.w8(Game.BAG + 3 * i, item)
 					break
 		elif rp.accessory >= 0:
-			await st.ui.popup("该武将辅助装备不为空")
+			await st.ui.message("该武将辅助装备不为空")
 			continue
 		elif not rp.can_equip(item):
-			await st.ui.popup("该武将不能装备该辅助")
+			await st.ui.message("该武将不能装备该辅助")
 			continue
 		else:
 			rp.equip_item(2, item, 0xff)
@@ -556,4 +556,4 @@ func _give_fx(u: BUnit, r: BUnit, item: int) -> void:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
 		Audio.play_se("se14")
 		await st.actions.wait(0.3)
-	await st.ui.popup("交出%s" % str(Game.item(item).get("name", "?")))
+	await st.ui.message("交出%s" % str(Game.item(item).get("name", "?")))

@@ -80,14 +80,20 @@ func player_phase() -> void:
 			else:
 				await system_menu()
 			continue
+		# 0x44e0d9: SE 0 on a top-level left click; an empty cell shows its terrain box, then SE 1
 		var u := st.unit_at(cell)
 		if u == null:
+			Audio.se(0)
+			if st.view.in_bounds(cell):
+				await st.hud.terrain_popup(cell)
+			Audio.se(1)
 			continue
 		if u.mode == 7 and u.slot < 115 and not u.acted:     # mod 0x4d6268: any slot (no script gives an enemy code 7)
 			var did := await select_unit(u)
 			await after_command()
-			if did and _all_done():
-				break       # checked after each action only, so units all under 乱 do not end the phase
+			# checked after each action only, so units all under 乱 do not end the phase; 否 keeps it going
+			if did and _all_done() and not st._battle_finished() and await _confirm_end():
+				break
 		else:
 			await show_unit_ranges(u)
 	st.view.clear_highlights()
@@ -111,6 +117,7 @@ func after_command() -> void:
 
 
 func show_unit_ranges(u: BUnit) -> void:
+	Audio.se(0)
 	_show_ranges(u, st.actions.reachable(u))
 	await _click()
 	st.view.clear_highlights()
@@ -177,7 +184,7 @@ func _confused_move_ui(u: BUnit) -> void:
 	var r := await _click()
 	st.view.clear_highlights()
 	if r[1] != MOUSE_BUTTON_RIGHT and st.view.in_bounds(r[0]):
-		await st.ui.popup("正处于混乱状态。" if u.status & BUnit.ST_CONFUSION else "正处于迷失状态。")
+		await st.ui.message("正处于混乱状态。" if u.status & BUnit.ST_CONFUSION else "正处于迷失状态。")
 
 
 ## The walk of the move UI, recorded as the original does (0x43da45; a click on the unit's own cell records
@@ -306,7 +313,7 @@ func _do_attack(u: BUnit) -> bool:
 func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 	if u.status & BUnit.ST_SEAL:
 		Audio.play_se("se02")
-		await st.ui.popup("正处于穷计状态。")
+		await st.ui.message("正处于穷计状态。")
 		return false
 	while true:
 		var labels := []
@@ -324,7 +331,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 		var s: int = strats[i]
 		var why := st.actions.cast_refusal(u, s)
 		if why != "":
-			await st.ui.popup(why)       # 0x41fec9 with its message
+			await st.ui.message(why)       # 0x41fec9 with its message
 			continue
 		var cells := st.actions.strategy_cast_cells(u, s)
 		st.view.set_attack_cells(cells)
@@ -343,9 +350,10 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 					# 0x420422's messages for a player-commanded caster
 					var cat: int = Rules.STRAT_CATEGORY[s] if s < Rules.STRAT_CATEGORY.size() else 17
 					if cat <= 3:
-						await st.ui.popup("不能在这里使用。")
+						await st.ui.message("不能在这里使用。")
 					elif cat == 15 and main == u:
-						await st.ui.popup("不能对自己使用。")
+						Audio.se(2)         # 0x420869: SE 2 before the message
+						await st.ui.message("不能对自己使用。")
 				continue
 			st.view.set_area_cells(st.actions.strategy_area(u, s, c))
 			var hr := 100
@@ -378,55 +386,103 @@ func _do_item(u: BUnit, items: Array) -> bool:
 	for d in Grid.DIRS:
 		cells.append(u.pos + d)
 	st.view.set_attack_cells(cells)
+	var iid := int(entry["id"])
+	var t70 := int(Game.item(iid).get("type", 0)) >= 70
+	# the own-side picker (0x45533d mode 4): a cancel plays SE 1; outside the range SE 2 + "不在范围之内。"; a unit
+	# of the other group SE 2 + "这是敌军部队。". Fruits, 仙人果 and 印绶 take any own unit and refuse afterwards.
 	while true:
 		var r := await _click()
 		if _cancels(r, cells):
 			st.view.clear_highlights()
+			Audio.se(1)
 			return false
-		var t := st.unit_at(r[0])
-		if t and cells.has(t.pos) and not t.is_enemy_of(u) and st.actions.item_usable_on(int(entry["id"]), t):
-			st.view.clear_highlights()
-			await st.actions.use_item(u, entry, t)
-			return true
+		var c: Vector2i = r[0]
+		if not cells.has(c):
+			Audio.se(2)
+			await st.ui.message("不在范围之内。")
+			continue
+		var t := st.unit_at(c)
+		if t == null:
+			continue
+		if (t.slot < 35) != (u.slot < 35):
+			Audio.se(2)
+			await st.ui.message("这是敌军部队。")
+			continue
+		if not t70 and not st.actions.item_usable_on(iid, t):
+			continue
+		st.view.clear_highlights()
+		return await st.actions.use_item(u, entry, t)
 	return false
 
 
-## 部队一览: every unit on the field by side; picking one centres the camera and shows its 武将情报 (0x47ade4).
-func unit_list() -> void:
-	var lst: Array[BUnit] = []
-	var labels := []
-	for side_name in [["我军", 0, 15], ["友军", 15, 35], ["敌军", 35, 115]]:
-		for i in range(side_name[1], side_name[2]):
-			var u := st.units[i]
-			if u.active():
-				lst.append(u)
-				labels.append("%s %s　%s Lv%d　兵 %d/%d%s" % [side_name[0], u.person.name, u.person.class_name_str(), u.level(), u.hp, u.max_hp(), "　（已行动）" if u.acted and i < 35 else ""])
-	if lst.is_empty():
-		return
-	while true:
-		var k := await st.ui.menu.choose(labels, Vector2(-1, -1), true, "部队一览", [], 320)
-		if k < 0:
-			return
-		var u := lst[k]
-		await st.view.center_on(u.pos)
-		st.view.cursor_cell = u.pos
-		st.hud.set_hover(u.pos)
-		await InfoWindow.open_unit(st.ui, st, u)
+## The menu bar (0x474c59) as one list. 结束回合 asks first (0x449cae → "结束所有部队的命令吗？").
+const MENU := ["结束回合", "检索未执行部队", "武将一览", "持有道具一览", "地形情报一览", "历史情报", "胜利条件", "战场缩小图",
+	"环境设定", "存储进度", "读取进度", "版本情报", "回到标题"]
 
 
 func system_menu() -> void:
-	var i := await st.ui.menu.choose(["回合结束", "部队一览", "胜利条件", "存储进度", "读取进度", "回到标题"], Vector2(-1, -1), true)
+	var i := await st.ui.menu.choose(MENU, Vector2(-1, -1), true)
+	if i < 0:
+		return
 	var main: Node = Game.main
-	match i:
-		0:
-			end_turn = true
-		1:
-			await unit_list()
-		2:
-			await st.ui.dialog.talk(null, "", st.victory_text if st.victory_text != "" else st.goal_text, false)
-		3:
+	match MENU[i]:
+		"结束回合":
+			if await _confirm_end():
+				end_turn = true
+		"检索未执行部队":
+			await find_unit()
+		"武将一览":
+			await UnitListWindow.open(st.ui, st)
+		"持有道具一览":
+			await ItemListWindow.open(st.ui)
+		"地形情报一览":
+			await TerrainWindow.open(st.ui)
+		"历史情报":
+			await HistoryWindow.open(st.ui)
+		"胜利条件":
+			await st.show_victory()
+		"战场缩小图":
+			st.minimap.open()
+		"环境设定":
+			await SettingsWindow.open(st.ui)
+		"存储进度":
 			await main.save_menu()
-		4:
+		"读取进度":
 			await main.load_menu()
-		5:
+		"版本情报":
+			await MsgBox.version(st.ui)
+		"回到标题":
 			main.to_title()
+
+
+func _confirm_end() -> bool:
+	return await MsgBox.yes_no(st.ui, "结束所有部队的命令吗？")
+
+
+## 检索未执行部队 (state 7 of 0x44e0d9 → 0x44e706): the player's own units (slots 0..34, colour 0, code 7, on the
+## map, neither moved nor finished, not 混乱) in slot order; the index [0x4b4238] steps on before it is used and
+## starts again at 0 each turn. The map goes to that unit and the cursor onto it; nothing is selected. With none
+## left: "没有可以行动的部队。", then the end-of-phase question.
+const FIND_INDEX := 0x4b4238
+
+
+func find_unit() -> void:
+	var lst: Array[BUnit] = []
+	for i in 35:
+		var u := st.units[i]
+		if u.state == BUnit.STATE_ON_MAP and u.mode == 7 and u.colour == 0 and not u.moved and not u.acted \
+				and not (u.status & BUnit.ST_CONFUSION):
+			lst.append(u)
+	if lst.is_empty():
+		await MsgBox.ok(st.ui, "没有可以行动的部队。")
+		if await _confirm_end():
+			end_turn = true
+		return
+	var k := Mem.r8(FIND_INDEX) + 1
+	if k >= lst.size():
+		k = 0
+	Mem.w8(FIND_INDEX, k)
+	var u := lst[k]
+	await st.view.center_on(u.pos)
+	st.view.cursor_cell = u.pos
+	st.hud.set_hover(u.pos)

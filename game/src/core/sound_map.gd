@@ -31,6 +31,8 @@ static func play_se_id(id: int, mode: int) -> void:
 		return
 	if mode == 0:
 		stop_loop()
+		if not Settings.on(Settings.SE):
+			return
 		var s := Assets.audio("audio/se/%s.wav" % se_name(id))
 		if s == null:
 			return

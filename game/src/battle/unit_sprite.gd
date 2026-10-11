@@ -4,7 +4,8 @@ extends Node2D
 ## Directions use the original engine codes: 0 up, 1 right, 2 down, 3 left.
 ## Right-facing frames are the left-facing ones mirrored.
 
-enum Pose { STAND, WALK, ATTACK, DEFEND, HURT, CHEER, WEAK }
+enum Pose { STAND, WALK, ATTACK, DEFEND, HURT, CHEER, WEAK, FIXED }
+enum Sheet { MOV, ATK, SPC }
 
 const MOV_W := 48
 const ATK_W := 64
@@ -22,6 +23,8 @@ var _mov: Texture2D
 var _atk: Texture2D
 var _spc: Texture2D
 var _shader_mat: ShaderMaterial
+# Pose.FIXED: one frame of a sheet, as the scripted unit actions draw them (0x45778f)
+var _fixed := [Sheet.MOV, 6, false, 0.0]     # sheet, frame, mirrored, y offset
 
 static var _grey_shader: Shader
 
@@ -84,6 +87,14 @@ func _dir_index() -> Array:
 		_: return [0, false]   # down
 
 
+## Show frame `idx` of a sheet (mov 48×48: 0-1 walk down, 2-3 up, 4-5 left, 6-8 stand down/up/left, 9-10 weak; atk
+## 64×64: 0-3 down, 4-7 up, 8-11 left; spc: 0-2 defend down/up/left, 3 hurt, 4 cheer), mirrored for facing right.
+func show_frame(sheet: int, idx: int, mirror := false, y_off := 0.0) -> void:
+	pose = Pose.FIXED
+	_fixed = [sheet, idx, mirror, y_off]
+	queue_redraw()
+
+
 func _draw() -> void:
 	var di: Array = _dir_index()
 	var d: int = di[0]
@@ -91,7 +102,14 @@ func _draw() -> void:
 	var tex: Texture2D = _mov
 	var fw := MOV_W
 	var idx := 0
+	var y_off := 0.0
 	match pose:
+		Pose.FIXED:
+			tex = [_mov, _atk, _spc][int(_fixed[0])]
+			fw = ATK_W if int(_fixed[0]) == Sheet.ATK else MOV_W
+			idx = int(_fixed[1])
+			mirror = bool(_fixed[2])
+			y_off = float(_fixed[3])
 		Pose.STAND:
 			# CCZ units idle with the 2-frame walk cycle on the battlefield
 			idx = d * 2 + frame
@@ -119,7 +137,7 @@ func _draw() -> void:
 		draw_rect(Rect2(4, 4, 40, 40), Color(1, 0, 1, 0.6))
 		return
 	var src := Rect2(0, idx * fw, fw, fw)
-	var off := Vector2.ZERO if fw == MOV_W else Vector2(-8, -8)
+	var off := (Vector2.ZERO if fw == MOV_W else Vector2(-8, -8)) + Vector2(0, y_off)
 	if mirror:
 		draw_set_transform(Vector2(off.x + fw, off.y), 0, Vector2(-1, 1))
 		draw_texture_rect_region(tex, Rect2(0, 0, fw, fw), src)

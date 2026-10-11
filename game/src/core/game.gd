@@ -322,14 +322,13 @@ func stack_count(id: int) -> int:
 	return Mem.r8(STACKS + id - STACK_FIRST) if is_stack_item(id) else 0
 
 
+## A bag slot is empty when its id byte is 0xff (0x40d6e0, 0x40d79c).
 func bag_entries() -> Array:
 	var out := []
 	for i in BAG_SLOTS:
 		var a := BAG + 3 * i
 		var id := Mem.r8(a)
-		if id != 0xff and id != 0:
-			out.append({"slot": i, "id": id, "lvl": Mem.r8(a + 1), "exp": Mem.r8(a + 2)})
-		elif id == 0 and Mem.r8(a + 1) != 0:
+		if id != 0xff:
 			out.append({"slot": i, "id": id, "lvl": Mem.r8(a + 1), "exp": Mem.r8(a + 2)})
 	for id in range(STACK_FIRST, STACK_LAST + 1):
 		var c := stack_count(id)
@@ -341,7 +340,7 @@ func bag_entries() -> Array:
 func bag_free_slot() -> int:
 	for i in BAG_SLOTS:
 		var a := BAG + 3 * i
-		if Mem.r8(a) == 0xff or (Mem.r8(a) == 0 and Mem.r8(a + 1) == 0):
+		if Mem.r8(a) == 0xff:
 			return i
 	return -1
 
@@ -353,25 +352,29 @@ func init_bag() -> void:
 		Mem.w8(BAG + 3 * i + 2, 0)
 
 
+## Add one item (0x40da45 / 0x40d79c): a consumable stack grows while it is below 255 (else the item is lost); other
+## items take the first empty bag slot with their level and experience, an accessory with 0xff, 0xff. False when
+## nothing was added.
 func add_item(id: int, lvl := 1, xp := 0) -> bool:
 	if is_stack_item(id):
-		Mem.w8(STACKS + id - STACK_FIRST, mini(stack_count(id) + 1, 99))
+		if stack_count(id) >= 255:
+			return false
+		Mem.w8(STACKS + id - STACK_FIRST, stack_count(id) + 1)
 		return true
 	var i := bag_free_slot()
 	if i < 0:
 		return false
-	var it := item(id)
-	var equip := String(it.get("category", "")) in ["weapon", "armor"]
+	var equip := Person.slot_of(item(id)) < 2
 	Mem.w8(BAG + 3 * i, id)
-	Mem.w8(BAG + 3 * i + 1, lvl if equip else 0)
-	Mem.w8(BAG + 3 * i + 2, xp if equip else 0)
+	Mem.w8(BAG + 3 * i + 1, lvl if equip else 0xff)
+	Mem.w8(BAG + 3 * i + 2, xp if equip else 0xff)
 	return true
 
 
 func remove_bag_slot(i: int) -> void:
 	Mem.w8(BAG + 3 * i, 0xff)
-	Mem.w8(BAG + 3 * i + 1, 0)
-	Mem.w8(BAG + 3 * i + 2, 0)
+	Mem.w8(BAG + 3 * i + 1, 0xff)
+	Mem.w8(BAG + 3 * i + 2, 0xff)
 
 
 ## Remove one item (0x411046): stacks, then the bag, then party members' equipment.

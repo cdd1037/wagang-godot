@@ -30,6 +30,7 @@ const BOSS := 0x496c96
 
 var view: BattleView
 var hud: BattleHUD
+var minimap: Minimap
 var units: Array[BUnit] = []
 var deploy: Array = []            # 115 deployment entries (R+0x2044)
 var sortie: Array[int] = []       # persons chosen to sortie (0x48b350 list)
@@ -82,6 +83,10 @@ func _ready() -> void:
 	hud.stage = self
 	ui.add_child(hud)
 	ui.move_child(hud, 0)
+	minimap = Minimap.new()
+	minimap.st = self
+	ui.add_child(minimap)
+	ui.move_child(minimap, 1)
 	actions = BattleActions.new(self)
 	ai = BattleAI.new(self)
 	input = BattleInput.new(self)
@@ -96,6 +101,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if hud and is_instance_valid(hud):
 		hud.queue_free()
+	if minimap and is_instance_valid(minimap):
+		minimap.queue_free()
 	if duel and is_instance_valid(duel):
 		duel.queue_free()     # it lives in the UI layer, which outlasts the stage
 
@@ -125,6 +132,7 @@ func run_file(file: String) -> void:
 		if not ran2:
 			break
 	hud.visible = false
+	minimap.visible = false
 	SoundMap.stop_loop()
 
 
@@ -141,6 +149,10 @@ func battle_loop() -> void:
 	view.input_enabled = true
 	view.show_cursor = true
 	hud.visible = true
+	# 0x44f053: 战斗时，自动显示战场缩小图
+	minimap.setup(self)
+	if Settings.on(Settings.MINIMAP) and not Game.autoplay:
+		minimap.open()
 	if OS.get_environment("WG_SAVETEST") != "" and turn >= 2:
 		var alive := 0
 		for u in units:
@@ -149,6 +161,7 @@ func battle_loop() -> void:
 	while not _battle_finished():
 		# ---- player phase
 		phase = PH_PLAYER
+		Mem.w8(BattleInput.FIND_INDEX, 0)        # 检索未执行部队 starts over each turn (0x44efac)
 		await hud.phase_banner("第%d回合　我军" % turn)
 		if _resumed:
 			_resumed = false
@@ -441,6 +454,7 @@ func trimmed_mean_level() -> int:
 
 func create_battlefield(id: int) -> void:
 	map_id = id
+	ui.clear_strips()            # the battle's status pane shows the cursor cell instead (mod 0x4d1c10)
 	Mem.w32(Skills.MAP_NO, id & 0xff)   # 0x44c2e3: the battle map's number (battle mode for the person getters)
 	Mem.set_ev(10, 0)            # mod 0x44ccc8: no unit has fallen yet
 	view.load_map(id)
@@ -680,7 +694,8 @@ func refresh_units() -> void:
 			if u.node.entry != u.sprite_entry() or u.node._mov == null:
 				u.node.set_entry(u.sprite_entry())
 			u.node.position = view.cell_pos(u.pos)
-			if u.node.pose == UnitSprite.Pose.STAND or u.node.pose == UnitSprite.Pose.WEAK:
+			# a frame of a scripted action stays only until the units are drawn again (as the map redraw does)
+			if u.node.pose in [UnitSprite.Pose.STAND, UnitSprite.Pose.WEAK, UnitSprite.Pose.FIXED]:
 				var weak := u.hp * 5 < u.max_hp() * 2   # below 40%: kneeling frames
 				u.node.set_pose(UnitSprite.Pose.WEAK if weak else UnitSprite.Pose.STAND, u.dir)
 			u.node.greyed = u.acted and u.is_player_side() and phase == PH_PLAYER
@@ -779,7 +794,7 @@ func _assassination_countdown(a: int, b: int) -> void:
 			refresh_units()
 			if not Game.autoplay:
 				await view.ensure_visible(u.pos)
-			await ui.popup("%s被暗杀了！！" % u.person.name)
+			await ui.message("%s被暗杀了！！" % u.person.name)
 			Mem.w8(ASSASSIN_LINK + i, 0xff)
 
 
@@ -1089,9 +1104,47 @@ func op_set_attr(ins: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ texts / UI ops
+## op 0x3d's flag in a battle (0x45991b): the person's unit (on the map with HP; 0x400.. = the current unit)
+## cheers (SE 8), SE 14, and the item's icon rises over it for 8 ticks; 5 more ticks.
+func get_item_show(pid: int, iid: int) -> void:
+	var u: BUnit = current_unit if pid >= 0x400 and pid <= 0x403 else (unit_by_pid(pid) if pid < 0x200 else null)
+	if u == null or u.state != BUnit.STATE_ON_MAP or u.hp <= 0 or Game.autoplay:
+		return
+	await op_unit_status({"args": [u.pid, 1, 0, 0]})
+	Audio.se(14)
+	var tex := Assets.tex("gfx/icons/items/large/%03d.png" % int(Game.item(iid).get("icon", 0)))
+	for i in 8:
+		hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 7 - i)}
+		hud.queue_redraw()
+		await wait(0.05)
+	await wait(0.25)
+	hud.icon_over = {}
+	refresh_units()
+
+
+## op 0x12 in a battle (0x411db9): the minimap is shown for the choice and hidden again if it was not open.
+func op_choice(ins: Dictionary) -> void:
+	var was := minimap.visible
+	if field_ready and not Game.autoplay:
+		minimap.open()
+	await super.op_choice(ins)
+	if not was:
+		minimap.visible = false
+
+
+## op 0x19 (0x413bd1): only stores the text (Reader+0x3d10) that the menu's 胜利条件 shows.
 func op_victory_cond_text(ins: Dictionary) -> void:
-	victory_text = sarg(ins, 0)
-	await ui.dialog.talk(null, "", victory_text, false)
+	victory_text = Game.substitute_names(sarg(ins, 0))
+
+
+## 胜利条件 (menu 106, 0x449cec): the stored text in an OK box titled 胜利条件 ("现在无法显示" when it is empty or
+## longer than 249 bytes); then the area of the last op 0x5b blinks again if that op had flag 0.
+func show_victory() -> void:
+	var t := victory_text
+	if t == "" or t.to_multibyte_char_buffer("GBK").size() > 249:
+		t = "现在无法显示"
+	await MsgBox.ok(ui, t, "胜利条件")
+	await blink_goal(false)
 
 
 func op_battle_goal_text(ins: Dictionary) -> void:
@@ -1202,9 +1255,10 @@ func _apply_restore() -> void:
 			var c := Vector2i(int(e["x"]), int(e["y"]))
 			var patch := int(e["patch"])
 			var node: Node = null
-			if patch >= 4:
-				if not bool(e.get("silent", false)):
-					node = view.add_patch(2 * patch - 8, c)
+			if patch == 0xff:
+				pass                 # a patch left undrawn (EV[0] = 1)
+			elif patch >= 4:
+				node = view.add_patch(2 * patch - 8, c)
 			else:
 				view.add_mark(patch, c)
 			var e2 := e.duplicate()
@@ -1352,37 +1406,83 @@ func op_unit_op_4f(ins: Dictionary) -> void:
 		await wait(0.4)
 
 
-## op 0x50: play a battle-sprite pose/animation on the person's unit (action 0..12).
+## Unit action (0x45778f(pid, kind, pre, post)), also the engine's own (level up, items, equipment). pre / post ≠ 0
+## add 8 ticks before / after, except for kinds 0 and 11. Kinds: 0 normal; 1 cheer, 2 defend (by facing), 3 hurt,
+## 4 weak, 5 the first attack frame (each with SE 8); 6 one quick swing, 7 two swings then normal (SE 7 per swing);
+## 8 turning on the spot (right, left, then up, down; SE 6 twice); 9 six weak beats of 8 ticks (SE 8); 10 a start:
+## hurt frame 4 px up for 3 ticks, then normal (SE 8); 11 two turns, then cheer; 12 one turn.
 func op_unit_status(ins: Dictionary) -> void:
 	var u := unit_by_pid(arg(ins, 0))
 	if u == null or u.state != BUnit.STATE_ON_MAP or u.node == null:
 		return
-	var action := arg(ins, 1)
+	var kind := arg(ins, 1) & 0xff
 	var pre := arg(ins, 2)
 	var post := arg(ins, 3)
 	await view.ensure_visible(u.pos)
-	if pre != 0 and action != 0 and action != 11:
+	if pre != 0 and kind != 0 and kind != 11:
 		await wait(0.4)
 	var n := u.node
-	match action:
-		0: n.set_pose(UnitSprite.Pose.STAND, u.dir)
-		1, 10: n.set_pose(UnitSprite.Pose.DEFEND, u.dir)
-		2: n.set_pose(UnitSprite.Pose.HURT, u.dir)
-		3: n.set_pose(UnitSprite.Pose.CHEER, u.dir)
-		4, 12: n.set_pose(UnitSprite.Pose.WEAK, u.dir)
+	var d := u.dir
+	var S := UnitSprite.Sheet
+	var atk: int = [4, 8, 0, 8][d]
+	match kind:
+		0:
+			n.set_pose(UnitSprite.Pose.STAND, d)
+		1:
+			n.show_frame(S.SPC, 4)
+			Audio.se(8)
+		2:
+			n.show_frame(S.SPC, [1, 2, 0, 2][d], d == 1)
+			Audio.se(8)
+		3:
+			n.show_frame(S.SPC, 3)
+			Audio.se(8)
+		4:
+			n.show_frame(S.MOV, 9)
+			Audio.se(8)
 		5:
-			if not Game.autoplay:
-				await n.play_attack(u.dir)
+			n.show_frame(S.ATK, atk, d == 1)
+			Audio.se(8)
 		6:
-			n.set_pose(UnitSprite.Pose.ATTACK, u.dir)
-			n.frame = 1
-			n.queue_redraw()
+			Audio.se(7)
+			for f in 4:
+				n.show_frame(S.ATK, atk + f, d == 1)
+				await wait(0.05)
 		7:
-			n.set_pose(UnitSprite.Pose.ATTACK, u.dir)
-			n.frame = 3
-			n.queue_redraw()
-		8, 9, 11: n.set_pose(UnitSprite.Pose.WALK, u.dir)
-	if post != 0 and action != 0 and action != 11:
+			for k in 2:
+				Audio.se(7)
+				for f in 4:
+					n.show_frame(S.ATK, atk + f, d == 1)
+					await wait(0.1)
+			n.set_pose(UnitSprite.Pose.STAND, d)
+		8:
+			for half in [[[4, true], [4, false]], [[2, false], [0, false]]]:
+				Audio.se(6)
+				for i in 8:
+					var h: Array = half[i >> 2]
+					n.show_frame(S.MOV, int(h[0]) + (i & 1), bool(h[1]))
+					await wait(0.1)
+		9:
+			Audio.se(8)
+			for i in 6:
+				n.show_frame(S.MOV, 9 + (i & 1))
+				await wait(0.4)
+		10:
+			Audio.se(8)
+			n.set_pose(UnitSprite.Pose.STAND, d)
+			await wait(0.1)
+			n.show_frame(S.SPC, 3, false, -4)
+			await wait(0.15)
+			n.set_pose(UnitSprite.Pose.STAND, d)
+		11, 12:
+			# stand down, left, up, right (0x9f00, 0xb100, 0xa800, mirrored 0xb100)
+			var turn := [[6, false], [8, false], [7, false], [8, true]]
+			for i in (9 if kind == 11 else 5):
+				n.show_frame(S.MOV, int(turn[i & 3][0]), bool(turn[i & 3][1]))
+				await wait(0.1)
+			if kind == 11:
+				n.show_frame(S.SPC, 4)
+	if post != 0 and kind != 0 and kind != 11:
 		await wait(0.4)
 
 
@@ -1511,15 +1611,48 @@ func op_op_52(ins: Dictionary) -> void:
 	refresh_units()
 
 
-## op 0x5b: show a destination area (到达指定地点).
+## op 0x5b (0x416cbb): in a battle, the area (x1, y1)–(x2, y2) is stored (ctx+0xc..0xf) with ctx+8 = (flag == 0),
+## then shown (0x45a0ce): the map goes to its middle and it blinks three times. With flag 0 胜利条件 shows it again.
+const GOAL_FLAG := 0x4b3d10
+const GOAL_AREA := 0x4b3d14
+
+
 func op_op_5b(ins: Dictionary) -> void:
+	if not in_battle():
+		return
+	var flag := arg(ins, 4)
+	if flag == 0xffff:
+		flag = 0
+	for k in 4:
+		Mem.w8(GOAL_AREA + k, arg(ins, k))
+	Mem.w32(GOAL_FLAG, 1 if flag == 0 else 0)
+	await blink_goal(flag != 0)
+
+
+## 0x45a0ce: when ctx+8 is set (or `force`), centre the stored area (clamped to the map) and blink it 3 times,
+## 0.5 s on and 0.5 s off.
+func blink_goal(force: bool) -> void:
+	if Mem.r32(GOAL_FLAG) == 0 and not force:
+		return
+	var a := [Mem.r8(GOAL_AREA), Mem.r8(GOAL_AREA + 1), Mem.r8(GOAL_AREA + 2), Mem.r8(GOAL_AREA + 3)]
+	var x1: int = mini(a[0], view.map_w - 1)
+	var y1: int = mini(a[1], view.map_h - 1)
+	var x2: int = mini(a[2], view.map_w - 1)
+	var y2: int = mini(a[3], view.map_h - 1)
+	if x1 > x2 or y1 > y2:
+		return
+	var cx := x1 + ((x2 - x1 + 1) / 2 if x2 - x1 > 2 else 0)
+	var cy := y1 + ((y2 - y1 + 1) / 2 if y2 - y1 > 2 else 0)
+	await view.center_on(Vector2i(cx, cy))
 	var cells: Array[Vector2i] = []
-	for y in range(mini(arg(ins, 1), arg(ins, 3)), maxi(arg(ins, 1), arg(ins, 3)) + 1):
-		for x in range(mini(arg(ins, 0), arg(ins, 2)), maxi(arg(ins, 0), arg(ins, 2)) + 1):
+	for y in range(y1, y2 + 1):
+		for x in range(x1, x2 + 1):
 			cells.append(Vector2i(x, y))
-	view.goal_cells = cells
-	if not cells.is_empty():
-		await view.center_on(cells[cells.size() / 2])
+	for k in 3:
+		view.goal_cells = cells
+		await wait(0.5)
+		view.goal_cells = []
+		await wait(0.5)
 
 
 ## op 0x58: alt 0 → ChangeTerrain (0x456140): terrain change at (x, y) with an overlay mark (patch < 4) or a
@@ -1537,7 +1670,7 @@ func op_op_58(ins: Dictionary) -> void:
 	if scroll == 0xffff:
 		scroll = 0
 	if alt == 0:
-		await _change_terrain(c, terr, patch, scroll, silent == 1)
+		await _change_terrain(c, terr, patch, scroll, silent != 0 and silent != 0xffff)
 	else:
 		if scroll != 0:
 			view.set_terrain(c, terr & 0xff)
@@ -1545,26 +1678,56 @@ func op_op_58(ins: Dictionary) -> void:
 	refresh_units()
 
 
-## ChangeTerrain (0x456140): record (x, y, new, old, patch) for saves and undo, set the terrain, show the mark or
-## the map patch; scroll → camera to the cell. Patch 0/2 (fire) plays SE 0x13.
-func _change_terrain(c: Vector2i, terr: int, patch: int, scroll: int, silent: bool) -> void:
-	if scroll != 0:
+## ChangeTerrain (0x456140 → 0x4561e3): record (x, y, new, old, patch) for saves and undo, set the terrain, show
+## the mark or the map patch. Unless `quiet` (op arg 6 ≠ 0): scroll → camera to the cell, and the sounds: a mark
+## 0 / 2 (fire) plays SE 0x13 and holds 1 tick; a patch to 0x0c plays SE 16, to 0x0f SE 15, to 0x11 城门 SE 18 with
+## a 1.5 s hold when no 城门 is beside it, else a 2.5 s hold (both holds only while 听音效 is on). The 7th argument
+## is byte EV[0] (mod patch at 0x416833): 1 leaves the map patch undrawn and unrecorded.
+func _change_terrain(c: Vector2i, terr: int, patch: int, scroll: int, quiet: bool) -> void:
+	if scroll != 0 and not quiet:
 		await view.center_on(c)
+	var no_patch := Mem.r8(Mem.EV) == 1
 	var old := view.terrain_at(c)
 	view.set_terrain(c, terr)
+	var gate_next := terr == 0x11 and _gate_beside(c)
 	var node: Node = null
-	if patch >= 4 and not silent:
-		node = view.add_patch(2 * patch - 8, c)
-	elif patch < 4:
+	if patch < 4:
 		view.add_mark(patch, c)
-	if patch in [0, 2]:
-		Audio.play_se("se19")
-	terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": patch, "silent": silent, "node": node})
+		if not quiet:
+			if patch in [0, 2]:
+				Audio.se(0x13)
+			await wait(0.05)
+	else:
+		if not no_patch:
+			node = view.add_patch(2 * patch - 8, c)
+		if not quiet:
+			match terr:
+				0x0c:
+					Audio.se(16)
+				0x0f:
+					Audio.se(15)
+				0x11:
+					if not gate_next:
+						Audio.se(18)
+						if Settings.on(Settings.SE):
+							await wait(1.5)
+		if not quiet and gate_next and Settings.on(Settings.SE):
+			await wait(2.5)
+	terrain_changes.append({"x": c.x, "y": c.y, "new": terr, "old": old, "patch": 0xff if no_patch and patch >= 4 else patch,
+		"silent": quiet, "node": node})
+
+
+## A 城门 (0x11) left, right, above or below c.
+func _gate_beside(c: Vector2i) -> bool:
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		if view.in_bounds(c + d) and view.terrain_at(c + d) == 0x11:
+			return true
+	return false
 
 
 ## 0x4567c1: undo the first recorded change at (x, y) with this patch (none → nothing): scroll → camera to the
-## cell; the mark or the map patch goes, the old terrain comes back. A gate (new terrain 0x11 城门) next to
-## another gate plays SE 18.
+## cell; the mark or the map patch goes, the old terrain comes back. Undoing a 城门 (new terrain 0x11) plays SE 18
+## and holds 1.5 s when another 城门 is beside it, else holds 2.5 s (holds only while 听音效 is on).
 func _revert_terrain(c: Vector2i, patch: int, scroll: int) -> void:
 	for i in terrain_changes.size():
 		var e: Dictionary = terrain_changes[i]
@@ -1576,14 +1739,17 @@ func _revert_terrain(c: Vector2i, patch: int, scroll: int) -> void:
 			view.marks.erase(c)
 			view.overlay.queue_redraw()
 		else:
+			var gate := int(e["new"]) == 0x11
+			var gate_next := gate and _gate_beside(c)
+			if gate_next:
+				Audio.se(18)
+				if Settings.on(Settings.SE):
+					await wait(1.5)
 			var n: Variant = e.get("node")
 			if n and is_instance_valid(n):
 				(n as Node).queue_free()
-			if int(e["new"]) == 0x11:
-				for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-					if view.in_bounds(c + d) and view.terrain_at(c + d) == 0x11:
-						Audio.play_se("se18")
-						break
+			if gate and not gate_next and Settings.on(Settings.SE):
+				await wait(2.5)
 		view.set_terrain(c, int(e["old"]))
 		terrain_changes.remove_at(i)
 		return
@@ -1651,29 +1817,39 @@ func op_op_51(_ins: Dictionary) -> void:
 	refresh_units()
 
 
-## op 0x59 (0x41688b): rewards. gold += avg_party_level*100 + 700 + base; up to 3 items (id, level).
+## op 0x59 (0x41688b): gold base, three (item, level) pairs, final flag. gold = party level (0x40c14f) × 100 + 700 +
+## base. The reward screen first (BattleHUD.reward_screen); then the gold (capped) and the items go in silently
+## (0x45991b without its message). A weapon or armour without a level gets one from person 0's level: treasures
+## min(L / 7 + 1, 10), others 3 from 48 on, else (L mod 18) / 6 + 1.
 func op_op_59(ins: Dictionary) -> void:
 	var gold := Game.party_avg_level() * 100 + 700 + arg(ins, 0)
-	Game.gold = Game.gold + gold
-	await ui.popup("得到了 %d 两黄金。" % gold, 0.0 if not Game.demo else 1.0)
-	var avg := Game.party_avg_level()
+	var items := []
+	var lvls := []
 	for k in 3:
 		var iid := arg(ins, 1 + 2 * k)
-		if iid == 0xffff or iid >= 0xff:
+		items.append(0xff if iid == 0xffff or iid > 0x67 else iid)
+		var l := arg(ins, 2 + 2 * k)
+		lvls.append(0 if l == 0xffff else l)
+	var final := arg(ins, 7) != 0 and arg(ins, 7) != 0xffff
+	await hud.reward_screen(gold, items, final)
+	Game.gold = mini(Game.gold + gold, 9999999)
+	var lead := Game.person(0).level
+	for k in 3:
+		var iid: int = items[k]
+		if iid == 0xff:
 			continue
-		var lvl := arg(ins, 2 + 2 * k)
 		var it := Game.item(iid)
-		if lvl == 0xffff or lvl == 0:
-			if String(it.get("category", "")) in ["weapon", "armor"]:
-				if bool(it.get("treasure", false)):
-					lvl = mini(avg / 7 + 1, 10)
-				else:
-					lvl = Rules.rand(3) + 1 if avg < 48 else 3
-			else:
-				lvl = 0
-		Game.add_item(iid, maxi(lvl, 1))
-		await ui.popup("得到了%s%s。" % [it.get("name", "?"), ("（Lv%d）" % lvl) if lvl > 0 and String(it.get("category", "")) in ["weapon", "armor"] else ""], 0.0 if not Game.demo else 1.0)
-		if bool(it.get("treasure", false)):
+		var lvl: int = lvls[k]
+		var xp := 0
+		if Person.slot_of(it) < 2:
+			var maxl := 10 if bool(it.get("treasure", false)) else 3
+			if lvl == 0:
+				lvl = Person.auto_level_at(it, lead)
+			if lvl >= maxl:
+				lvl = maxl
+				xp = 0xff
+		await receive_item(iid, maxi(lvl, 1), xp)
+		if int(it.get("unk_18", 0)) != 0:
 			SpecialFuncs.write_niuniu(iid + 3, 1)
 
 

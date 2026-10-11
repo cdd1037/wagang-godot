@@ -309,7 +309,7 @@ func victory_test() -> void:
 	await _wait(1.0)
 	await _esc()      # Esc opens the system menu (a right click on a unit opens 武将情报)
 	await _wait(0.4)
-	for k in 2:
+	for k in BattleInput.MENU.find("胜利条件"):
 		await _key("ui_down")
 	await _key("ui_accept")
 	await _wait(2.0)                           # let the text type out
@@ -394,7 +394,7 @@ func load_test() -> void:
 	await _esc()      # Esc opens the system menu (a right click on a unit opens 武将情报)
 	await _wait(0.4)
 	await shot("sysmenu")
-	for k in 4:
+	for k in BattleInput.MENU.find("读取进度"):
 		await _key("ui_down")
 	await _key("ui_accept")
 	await _wait(0.4)
@@ -480,4 +480,6 @@ func run_phase() -> void:
 		await _esc()
 	await _wait(0.5)
 	await shot("sysmenu")
-	await _key("ui_accept")
+	await _key("ui_accept")       # 结束回合
+	await _wait(0.4)
+	await _key("ui_accept")       # 是 to "结束所有部队的命令吗？"

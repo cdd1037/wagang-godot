@@ -89,13 +89,38 @@ static func item_special(item_id: int, level: int) -> String:
 	return effect_text(item_id, level)
 
 
+static func effect_name(code: int) -> String:
+	return _effect_name(code)
+
+
 ## 0x461ef3 with the value and suffix of 0x4621bb.
 static func effect_text(item_id: int, level: int) -> String:
+	var r := _effect_parts(item_id, level)
+	if r.is_empty():
+		return ""
+	var code: int = r[0]
+	var v: int = r[1]
+	var suffix: String = r[2]
+	if v == 0:
+		return _effect_name(code)
+	if v & 0xff == 0xff:
+		return "%s (%s)" % [Mem.str_ptr(0x48bc50, code), suffix]
+	return "%s %s" % [_effect_name(code), suffix]
+
+
+## The value part alone (0x4621bb), as the list views' 效果 column shows it: "ALL", "+N", "--", "+N%", "-N%".
+static func effect_suffix(item_id: int, level: int) -> String:
+	var r := _effect_parts(item_id, level)
+	return "" if r.is_empty() else str(r[2])
+
+
+## [effect code, value, suffix] of an item's effect (0x4621bb), [] for plain weapons and armour.
+static func _effect_parts(item_id: int, level: int) -> Array:
 	var it := Game.item(item_id)
 	var t := int(it.get("type", 0))
 	var tr := _treasure(it)
 	if not tr and t <= 0x11:
-		return ""
+		return []
 	var code := (int(it.get("special", 0x12)) if tr else t) - 0x12
 	var v := Person.treasure_effect_value(it, level) if tr else int(it.get("value", 0))
 	var suffix := ""
@@ -110,11 +135,7 @@ static func effect_text(item_id: int, level: int) -> String:
 		suffix = "+%d%%" % v
 	elif code in [0x29, 0x2b]:
 		suffix = "-%d%%" % v
-	if v == 0:
-		return _effect_name(code)
-	if v & 0xff == 0xff:
-		return "%s (%s)" % [Mem.str_ptr(0x48bc50, code), suffix]
-	return "%s %s" % [_effect_name(code), suffix]
+	return [code, v, suffix]
 
 
 ## MP cost (0x425ad0), doubled for the second cast of 连续策略 ([0x4d0d61]).

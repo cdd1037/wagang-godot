@@ -1047,13 +1047,13 @@ All tests return false outside battle (screen mode 0x4ac63c ≠ 3, 0x40b922).
 | 0x4d unit_change (0x4150e7) | mode, person, slot, x1, y1, x2, y2, side, buff_idx, buff_lvl, status, hp_dmg, mp_dmg | target = mode 0: unit of person; 1: unit in player slot `slot` (state 2); 2: all units of `side` (0xffff→6) in the rectangle (0x45ade5). Then via ChangeUnit(person, what, value, anim=1) (0x45aa5c): if buff_idx ≠ 0xffff: buff[buff_idx] (0 atk,1 def,2 spirit,3 agility,4 morale,5 move) = {0→0, 1→3, 2→6, other→3}[buff_lvl]; if status ≠ 0xffff: value & 0x80 → status &= ~value, else status \|= value; if hp_dmg ≠ 0: HP −= min(HP, hp_dmg & 0xffff) and a result ≤ 1 becomes 0 (death via 0x4121ca); if mp_dmg ≠ 0: MP = max(MP − mp_dmg, 1) (result ≤ 1 → 1). what ≤ 6 shows the buff/status animation (0x43e69f); the unit's status panel is refreshed. |
 | 0x4e change_ai (0x4146d4) | mode, person, x1, y1, x2, y2, side, ai_mode, ai_person, ai_x, ai_y | mode 0: SetAI(person, …) (10.3; no effect on party members); else 0x459e79: SetAI for every unit of `side` in the rectangle. |
 | 0x4f unit_turn (0x415f65 → 0x457428) | p1, p2, dir, b1 (0xffff→0), scroll (→1), wait (→1) | p1's unit (state 2) turns: if p2 == 0xffff to `dir` (nothing if already facing it), else toward p2's unit (direction from 0x4351da). scroll → centre camera + 8-tick delay before; SE 6; wait → 8-tick delay after. b1 [?]. Units that already finished their action keep the greyed look. |
-| 0x50 unit_status (0x416129 → 0x45778f) | person, action 0..12, pre_wait (→1), post_wait (→1) | Plays a battle-sprite animation on the person's unit (camera centred). Sheets: action 0 = back to normal pose (no sheet); 1,2,3,10 use Unit_spc (~kvr.db: defend/hurt/cheer); 4,8,9,11,12 use Unit_mov (~zl1g.dat: walk/stand/weak); 5,6,7 use Unit_atk (~gtl.dll). pre/post_wait = 8-tick delay (skipped for actions 0 and 11). [Exact frame sequences per action: TODO] |
+| 0x50 unit_status (0x416129 → 0x45778f) | person, action 0..12, pre_wait (→1), post_wait (→1) | Plays a battle-sprite animation on the person's unit (camera centred); the frame sequences are in §13.7. pre/post_wait = 8-tick delay (skipped for actions 0 and 11). |
 | 0x52 change_class (0x414d15) | person, class | person (selector → current unit) gets class `class` (0x40dff0); each equipped item the new class cannot use (0x407907) is unequipped (0x407dc4); in battle the unit sprite is reloaded (0x43fe2c). (Story files use it too.) |
 | 0x31 actor_remove, battle mode (0x41311c) | mode, person, x1, y1, x2, y2, side | mode 0: RemoveUnit(person, silent=1); else every unit of `side` in the rectangle (0x45a80f). See RemoveUnit below. |
 | 0x53 unit_retreat (0x41557b) | mode, person, x1, y1, x2, y2, side, anim (0xffff→0) | like 0x31 but RemoveUnit(silent=0, anim): the unit "retreats" with its 撤退 line and animation. |
 | 0x1b set_retreat_line (0x413c56) | person, bool | U(person)+0x20 = (bool ≠ 0): whether the unit speaks its retreat line when it leaves (default 1, set by the unit reset). |
 | 0x55 unit_reenter (0x41591c → 0x4591a1) | mode (0xffff→0), person, slot, x, y, dir (0xffff→2) | (eex.md's "unit_move" is a misnomer.) mode 0: person; mode 1: the person of player slot `slot` < 15 whose unit is in state 3. A unit in state 3 (retreated) is re-initialised with UnitInit(person, entry flags with new dir, x, y) — full HP/MP, buffs reset — and appears with the wipe-in animation (SE 0x2a). |
-| 0x5b target_area (0x416cbb) | x1, y1, x2, y2, flag (0xffff→0) | Stores the destination area rectangle in ctx+0xc..+0xf and ctx+8 = (flag == 0), then 0x4b5df0.0x45a0ce(flag) clamps it to the map and shows it (camera to its centre, area highlighted [G]). Used with "到达指定地点" goals. |
+| 0x5b target_area (0x416cbb) | x1, y1, x2, y2, flag (0xffff→0) | Stores the destination area rectangle in ctx+0xc..+0xf and ctx+8 = (flag == 0), then 0x4b5df0.0x45a0ce(flag) clamps it to the map, moves the camera to its middle and blinks it 3 times (§13.1). Used with "到达指定地点" goals. |
 | 0x58 terrain_change (0x4166eb) | patch, alt, terrain, x, y, scroll (0xffff→0), silent (0xffff→0) | alt == 0 → ChangeTerrain 0x4b5df0.0x456140(x, y, terrain, patch, scroll, silent, EV[0]&0xff): record (x, y, new, old, patch) in a 250 × 5-byte table at ctx+0x19 (0x4b3d21, for saves); terrain grid (0x4aeb38+0x640)[x,y] = terrain; scroll → camera to (x,y). patch < 4: overlay mark written to layer 0x4aeb38+0x1f40 (patch 0/2 play SE 0x13 — fire [G]); patch ≥ 4: Nima.wa entry 2·patch−8 (a 3×3-cell 144×144 image) is pasted into the map bitmap centred on (x,y) (skipped when the last arg is 1); SE for new terrain 12 小河 / 15 城墙 / 17 城门; the 3×3 area is redrawn. alt ≠ 0 → mod 0x4d7dc5(x, y, patch, scroll, terrain): if scroll ≠ 0, terrain byte (x, y) = terrain; then 0x4567c1(x, y, patch, scroll) undoes the first recorded change with that x, y and patch (none → nothing): scroll → camera; patch < 4 → the overlay mark goes; else the 3×3 map image is restored from the map (a gate, new terrain 0x11, next to another gate plays SE 18); terrain = the recorded old one; the record is freed. Used to put out fires (`58 [2,1,0,x,y,1,1]`). op 0x21 map_mark sets fire (mode 0: ChangeTerrain to 0x1a 火, patch 0) and puts it out (mode 1: 0x4567c1 with patch 0). |
 | 0x6b map_effect (0x41405b) | x, y, effect, scroll | Plays an effect animation centred on cell (x,y) (camera scrolls there first if scroll): effect < 100 → Xben.wa[effect]; 100..108 → MCALL(effect−100) full-screen (0x497af8.0x4217ff); 109 → special 0x421879; only if the cell is on screen. |
 
@@ -1256,3 +1256,171 @@ other group in the 3×3 (0x4d7efa; 六军镜·阴阳 has 0).
   chance(10) → EV[3007 + rand(3)] += 1 (辰屑). If EV[3183] ≥ 4: 尉迟恭's (3) MP byte = min(MP + 5·count, mp_base (+15
   逍遥巾, +30 诸葛巾)).
 * 统军 秦琼 (0x465d40): class 43 and pid & 0xff == 8 → strategies ≥ 0x29 by class 35's learn table (补给, 救护).
+
+## 13. Menus, shops and windows (mod_patches.md group 5) [C unless marked G]
+
+### 13.1 Menu bar and the town gate (APPMENU, handler 0x474c59, enabling 0x4759bc)
+* Items: 文件 读取 102, 保存 101, 结束游戏 112; 功能 环境设定 107, 检索未执行部队 110, 结束回合 109; 情报 武将一览 105,
+  持有道具一览 40147, 地形情报一览 40150, 历史情报 40151, 胜利条件 106, 战场缩小图 108, 版本情报 40073. Outside
+  battles 检索 / 结束回合 / 胜利条件 / 战场缩小图 are greyed. The port shows the list as one menu (right click, Esc,
+  or the 菜单 button); 回到标题 stands for 结束游戏.
+* Battle: the menu works while the player phase waits (ctx+0x520). Town: while the click-wait loop runs and GS+2 ≠ 0.
+  GS+2 is op 0x08 设定结果 (0x41431e → 0x42c858); the click sections of the scripts clear it first and set it again
+  at their end. While it is 0, clicks on actors (left and right) are ignored as well (0x429b81), and so is the toolbar
+  (0x426b35).
+* 保存: refused with "目前不可存盘。" while u32 [0x4ce004] == 0 (mod 0x4d009f).
+* 结束回合 (0x449cae) asks "结束所有部队的命令吗？" (yes/no box), as does the end of a player action that leaves no
+  unit able to act (0x44e0d9); 否 keeps the phase going.
+* 检索未执行部队 (0x44e706): the player's own units (slots 0..34, colour 0, code 7, state 2, neither moved nor
+  finished, not 混乱) in slot order; byte [0x4b4238] steps on before it is used (wrapping to 0) and is 0 again at each
+  turn start (0x44efac), so the first press goes to the second unit. The map goes to the unit and the cursor onto it;
+  nothing is selected. None left: OK box "没有可以行动的部队。", then the end-of-phase question.
+* 胜利条件 (0x449cec): the text op 0x19 stored (op 0x19 itself shows nothing), in an OK box titled 胜利条件;
+  "现在无法显示" when it is empty or longer than 249 bytes. Then, if the last op 0x5b had flag 0, its area blinks again.
+* op 0x5b (0x416cbb): area (x1, y1)–(x2, y2) → ctx+0xc..0xf, ctx+8 = (flag == 0); 0x45a0ce: the map goes to the
+  middle (x1 + ⌈(x2 − x1)/2⌉ when the width is over 2, else x1; the same for y) and the area blinks 3 times, 10 ticks
+  on, 10 off. Nothing stays drawn.
+* 版本情报: dialog 348 — the app icon, "兴唐传·瓦岗山异闻录【归唐之章完结篇】", "轩辕学院 2005,2024", 确定.
+
+### 13.2 Town toolbar and shops (0x419d22, click 0x41973c)
+* Four buttons, laid out from the right: 卖出 (329), 买进 (327), 装备 (328), 出征. They exist with op 0x06's flag (the
+  sortie state); story flags 0xf3 / 0xf2 / 0xf1 move 卖出 / 买进 / 装备 off (0x419f22) and the rest close up.
+* Shop record: min(GS+7 >> 1, 57) of the 58 records loaded from Data.wa entry 2 (= shops.json, raw 36 bytes: +0 / +2
+  persons, +4 sixteen 武器店 ids, +20 sixteen 道具店 ids, 0xff none). The merchant (face and name of the window) is
+  the second person, read with the unclamped index (0 past the table); the "warehouse full" message speaks with the
+  first.
+* Buy price (0x426ff4): price byte × 100, × 4 / 5 while 贾润甫 (20) is in the party (an in-place mod rewrite: the
+  【术】市侩 "采购价格打八折"). Sell price (0x40c7a9): price byte × 75; weapons and armour × (Lv + 1) >> 1; price byte
+  0xff → unsellable ("---"). Gold is capped at 9 999 999.
+* 买进: 武器店 columns 名称 属性 装备 效果 库存 总数 价格, 道具店 名称 功效 效果 库存 价格, by id. Equipment can only be
+  bought for the chosen person (装备 ○, Person.can_equip) and is worn at once as Lv 1 / Exp 0; the old piece goes to
+  the first free bag slot (warehouse full while the slot is taken → no sale). Confirmation "%s的价格是%d。\n要买进吗？"
+  (是: 100 ms, SE 9). Consumables: 输入数值, at most min(99 − stack, gold / price); "仓库里还有很多%s。\n没有必要再买。"
+  at 99. The 道具店 tab disables the person panel.
+* 卖出: 武器店 = every bag slot (名称 属性 Lv Exp 效果 卖价), 道具店 = the stacks (名称 功效 效果 库存 卖价).
+  "Lv.%2d的%s可卖%d。\n要卖掉吗？" / "%s的价格为%d。\n要卖掉吗？" (是: SE 10); the slot becomes ff ff ff. A weapon or
+  armour that is not a treasure, sold at exactly Lv 3, always brings a fruit (0x40d51b; by type 锏 0x67 仙人果, 枪 / 锤
+  0x62, 箭 / 斧 0x66, 扇 / 法器 0x63, 甲 0x64, 袍 0x65) with "商人好像对Lv.%2d的\n%s非常中意，所以\n又给了我们一个%s。"
+  (its stack below 255). 仓库装备现存量 = bag slots in use.
+* 输入数值 (dialog 320): spin 0..max from 1; a typed value is kept modulo 10^digits(max) and brought under max a
+  leading digit at a time; the merchant's line follows the count ("%d个%s需要%d。\n要买进吗？" …). OK in sell mode:
+  100 ms, SE 10.
+* Merchant window: 456×120 at (16, 56), the speaker's 120×120 portrait, mark.wa pieces 2 / 3, name and up to three
+  lines; a message waits for a mouse button. In battles plain boxes stand in for it.
+* List views: hovering selects a row (and previews in 买进 / 装备), a click acts, a right click opens dialog 167; a
+  header click sorts (the column sorted last again → reversed). Sort keys: 名称 id; Lv / Exp / 效果 / 总数 / 库存 / 装备
+  high first; 属性 / 功效 type; 价格 / 卖价 low first. The shop and warehouse texts "仓库已满" left over from the
+  Japanese original are Shift-JIS; on a Chinese system they read "憅屔偑偄偭傁偄偱偡丅", and so they do in the port.
+
+### 13.3 装备 (328), the person panel, 持有道具一览 (325)
+* 装备 (toolbar only): the warehouse (every bag slot in use; columns 名称 属性 Lv Exp 效果 装备) and the person panel
+  shared with 买进: the members of the table 0x4dbdb0 (0 8 3 1 19 17 14 26 7 5 43 4 9 2 24 13 10 6 16 18 12 11 28 25
+  15 23 22 21 29 20 31 27) in that order, name | class (red when promotion is possible: class < 39, class % 3 < 2,
+  Lv ≥ 20·(class % 3 + 1)), Lv, portrait, HP MP 攻击 防御 精神 反应 士气 机动 as getter + Δ with "+N" / "−N", the three
+  slots ("武器∶ %s" …, icon, Lv, Exp bar 100 / treasure 150 / treasure at Lv 9 250, effect lines; 樊虎's 辅助 label
+  greyed), 上一武将 / 下一武将. Preview: a row the person can wear against the piece in its slot; a hovered slot
+  against nothing. 反应 and 士气 parts are word × bonus / 100; 机动 is not scaled.
+* A click on a wearable row puts it on (SE 9; bytes moved as they are, the old piece into the first free slot and
+  into the clicked row's place); rows the person cannot wear are greyed with a red × and ignore clicks. A click on a
+  slot takes it off (SE 1); with 200 slots used: SE 0 and the merchant's "warehouse full".
+* 持有道具一览 (menu): 武具一览 = the warehouse by id, then what the party wears (all weapons by person, then armour,
+  then accessories), columns 名称 持有者 属性 效果 Lv Exp 特殊效果; 道具一览 = the stacks (名称 库存 功效 效果). A click
+  shows the details; nothing else.
+* The bag: a slot is empty when its id byte is 0xff (0x40d6e0). Item 0 is a real weapon.
+* Outside battles nothing uses consumables (the item handlers 0x41dc43 work on battle units only).
+
+### 13.4 Information windows
+* 部队情报一览 (105, dialog 186): battle — 我军 (slots 0..34, 友军 too) or 敌军 (35..114), units on the map by
+  person id; town — the party. Columns 武将名 部队属性 Lv Exp HP MP 攻击 防御 精神 反应 士气 ("%3d/%3d"; stats of
+  the unit with buffs, or the person's). Red: a promotable class, HP when 中毒, MP when 穷计, a stat whose buff is
+  below 3; blue above 3. Header sort as in 13.2 (武将名 by pid, 部队属性 by the family order 0x486408 and tier, others
+  high first). A click shows 武将情报 (and in battle puts the map on the unit); the list stays open.
+* 地形情报一览 (dialog 335): terrains 平原 草原 树林 荒地 山地 雪原 桥梁 浅滩 沼泽 大河 城内 民居 (mod table 0x4d5fbc)
+  with picture, name and the element icons castable there (火 0, 1, 2, 8, 16, 18..24; 水 7..10, 13; 地 3, 4; 风 0, 1,
+  3, 4, 7..10, 13), against 27 family columns (headers: mod table 0x558100). 地形效果: the effect ("--" if the
+  family cannot enter, 8 for ≤ 8, 12 for ≥ 12); 消耗机动力: the cost. Coloured by value; the table scrolls sideways.
+* 历史情报 (dialog 341, mod 0x4d184c): "目前无记录" with nothing written, "需要设置对话框花色" with skin 无;
+  otherwise the text, one line per '\n' line of each entry, numbers hidden (EV[4092] = 0), coloured by category
+  (1 black, 2 red, 3 blue, other magenta). 按顺序显示 = EV[4093] (1 from R_00): checked, the buffer order; unchecked,
+  categories 1, 2, 3, 4 with a blank line after each.
+* 战场缩小图 (108, class SmallMap): the Xixi.wa map at 6 px a cell; a 5×5 dot per unit on the map by colour
+  (192,0,0) / (192,80,0) / (0,16,112), a finished 我军 unit with a (96,0,0) middle; the view frame. While the player
+  phase waits the frame can be dragged by whole cells; letting go scrolls the map. Shown from the menu, at battle start
+  with 自动显示战场缩小图, and during battle choice boxes (op 0x12).
+
+### 13.5 环境设定 (dialog KANKYOU)
+* Storage: checkboxes = GS+0 bits 0x2000 听背景音乐, 0x1000 听音效, 0x4000 窗口自动最大化 (Win32; shown, not
+  changeable in the port), 0x8000 自动显示战场缩小图, 0x800 会话窗口不自动关闭; 讯息显示速度 GS+0x10 and 武将移动速度
+  GS+8 (0 快, 1 普通, 2 慢); 升级显示能力成长 [0x4dbe25]; 对话框花色 [0x492e20] (花色１..４ = GHAI.WA 8..11, 4 无).
+  SAVEDATA\Niuniu.wa bytes 1..5 = GS+0, GS+1, GS+8, GS+0x10, [0x4dbe25], byte 0x6b the skin: read at every title
+  start, written when the dialog closes (OK or 取消). Saves do not carry them (the save loader skips GS+0, +8,
+  +0x10). The shipped file has everything on, 快, 普通, 升级显示能力成长 on, 花色３; the port starts a missing file from
+  it. (The ending op 0x0f writes byte v = 1 for v ≤ 2; R_54's v = 2 turns the options of byte 2 off at the next start —
+  kept as in the original.)
+* BGM off stops the music; requests still record the track; on plays it again from its start unless it plays. SE off
+  stops the sound playing and drops new ones; the terrain-change holds below need it on.
+* Dialogue windows: typewriter 50 ms a character unless 快 (the whole page at once); after the page a click with
+  会话窗口不自动关闭, else 1.5 / 1.0 / 2.0 s for 快 / 普通 / 慢 (a click ends it sooner). Timed boxes (style 2) close
+  after (speed + 1) s. Captions with a pause: a click or 0.5 / 1.0 / 2.0 s.
+* Battle walk: a cell takes 48 / s ticks, s = 48 / 24 / 12 for the families 0 3 5 7 11 12 13 15 16 17 20 24, else
+  48 / 12 / 6; the walk picture changes halfway; then the step sound (0x43f38b: by the terrain entered — 树林 27,
+  雪原 26, 浅滩 / 大河 29, 沼泽 28 — else 24 for those families, 25 for 21..23, 23 for the rest). Story scenes run a
+  frame per GS+8 × 50 ms (快 unthrottled).
+* Skin: the Win32 dialogs' background pattern (the port's dialog windows tint it into its panel colour; 无 plain).
+* Title screen (dialog 193): 新游戏 读取进度 环境设定 结束游戏; BGM CD track 18.
+
+### 13.6 选择武将 (dialog 236) and 出战位置 (333)
+* Builder 0x41856a (mod 0x4dbdd4): 管毅 first when all nine dwords 0x4b0a04[0..8] are non-zero (no membership test;
+  dwords 5..8 are the 武将情报 attack-range picture, filled at start-up); then the forced 0x4b09f0[0..8] that are members
+  (no duplicate check). max = max(max, F); max == F → no dialog. Offered: j = 0..31 over the table 0x4dbdb0, j = 0
+  reading table[max] — 管毅 is never offered and table[max] comes first — members not listed yet and not in
+  0x4b0a04[0..4] (op 0x06 arg 11 is the one real exclusion).
+* The dialog: 7×4 grid of standing sprites with "Lv. %2d" and the name (chosen ones faded, forced ones darkened),
+  15 slots below (frames Qusi.wa 2 forced, 1 below ⌊2M/3⌋, 0 below M), "出阵武将  - S/M", the hovered candidate's
+  portrait, abilities, bars (HP /1000, MP /255, Exp /100, stats /800) and 机动. A click adds (SE 15, while S < M) or
+  removes (SE 1) a candidate; forced ones stay. Sort buttons 部队属性顺 and "< 等级 >顺" (pressed again while active it
+  cycles 等级 → 攻击 → 精神 → 防御), session-wide; the default order is 部队属性 then 等级. 决定 iff S ≥ 1 and
+  S ≥ ⌊2M/3⌋ (100 ms, SE 5); 取消 empties the list (出征 abandoned). A right click shows 武将情报.
+* 出战位置: the map Yun.wa (GS+7 >> 1) at 12 px a cell (Qusi.wa 14 tiles) and the 15 entries of the mod table
+  0x55e9d8 (op 0x4b in towns) as numbered discs (Qusi.wa 12, set 1: 13).
+
+### 13.7 Battle extras
+* A top-level left click plays SE 0; on a cell without a visible unit it shows the terrain box (0x45576d, mod
+  0x4559ba): 3×2 cells beside the cell (left of it from the middle of the view on; above it likewise, the view width
+  deciding both), the cell's picture, the terrain name (over 29 → 平原), 可以恢复 (18..22) or 无法移动 (5 6 11 12 14 15
+  17 25..29), the four element icons grey where they cannot be cast; any click closes it, then SE 1.
+* Status pane: "(%2d:%2d) %s" of the cursor cell (mod 0x4d1c10).
+* Choice box (op 0x12, 0x42de12): at most three options, "1." … "3.", beside the 120×120 face of arg1's person (0xffff
+  = 0).
+* Unit actions 0x45778f(pid, kind, pre, post) (op 0x50 and the engine): 0 normal; 1 cheer, 2 defend by facing, 3 hurt,
+  4 weak, 5 first attack frame (SE 8 each); 6 one swing of 1-tick frames, 7 two swings of 2-tick frames then normal (SE 7
+  per swing); 8 turning on the spot (walk right, left, up, down; SE 6 twice); 9 six weak beats of 8 ticks (SE 8); 10
+  hurt frame 4 px up for 3 ticks (SE 8); 11 two turns (stand down, left, up, right; 2 ticks) then cheer; 12 one turn.
+  pre / post add 8 ticks (not for 0 and 11).
+* Items in battle (0x41dc43): the own-side picker (cancel SE 1; outside the range SE 2 + "不在范围之内。"; the other
+  group SE 2 + "这是敌军部队。"). The shared use animation 0x41c762: the user holds the icon (5 ticks), SE 41, cheers
+  with it raised (10 ticks), the icon fades in over the target (16 ticks), then the item's Xben effect. Fruits:
+  refused at ability 100 ("该项能力已经达到100，不能再提升了。"); word + v ≤ 9999, ability ≤ 100, Xben 0x22 0x22 0x23
+  0x24 0x25, that stat's battle level one step up; no message. 仙人果: refused from Lv 70 ("不能再升级了。"). 印绶:
+  refusals "这是不能提升兵种的部队。" / "不能再提升兵种了。" / "下一个兵种需要等级%u以上。"; HP / MP base + 2 × the old
+  class's growth (one byte), both full, action 11, the class up with the old sprite whitening (SE 33) and the new one
+  coming back (SE 12), "%s的兵种提升为%s！" and "学会了「%s」策略！" per strategy the new class adds at a level reached.
+  A refused item is kept and the unit keeps its turn.
+* Weapon / armour level (0x4083ef, per level gained): in a battle action 12, then 7 and 1 (weapon) or 2+post, 0, 2
+  ticks, 2+post, 0, 1 (armour), SE 13, "武器等级上升！" / "护具等级上升！"; always the 240×96 panel "<item> Lv N",
+  "<name> 装备中", "攻击|精神|防御 +before -> +after" (10 ticks, then 4 s a click ends).
+* op 0x3d get_item (0x4143c2): "得到了%s！" (timed box) before the item goes in, in battles too, where the flag first
+  lets the unit cheer (SE 8), SE 14 and the icon rise over it. Stacks up to 255 ("注意！%s的数量已达到上限！" once full);
+  a full warehouse: "仓库已满。\n请卖掉一个道具。" and the 卖出 window with the item as row 200 (selling a piece makes
+  room for it, selling it gets its price).
+* op 0x59 rewards (0x41688b): gold = party level × 100 + 700 + base. The reward screen (BGM track 9; "作战结束",
+  "酬金   %5u", "战利品" with an icon-and-name bar per item; flag: "全程作战结束", "恭贺您实现统一大业"); then the gold and
+  the items go in without messages, a missing level taken from person 0's level.
+* op 0x18 标题显示 / 0x17 地名显示 (0x40bb48 / 0x40bb78): outside battles the text goes into the title / place pane;
+  then a timed box with it (in battles only the box).
+* Captions op 0x2c (0x4327ef): a 640×80 strip at y 360; a1 = 0 clears it, a2 ≠ 0 starts a line 24 px down (past y 439
+  the strip starts over), else the text continues the line; typed at 50 ms a character; a3 ≠ 0 pauses (13.5).
+* Terrain changes (0x4561e3, 0x4567c1): op 0x58's arg 6 ≠ 0 (and 0xffff → 0) is quiet: no camera, no sound, no hold.
+  Otherwise a mark 0 / 2 plays SE 0x13 and holds a tick; a patch to 0x0c plays SE 16, to 0x0f SE 15, to 0x11 城门 SE
+  18 with a 1.5 s hold when no 城门 is beside it, else a 2.5 s hold; undoing a 城门 plays SE 18 and holds 1.5 s with
+  one beside, else 2.5 s (holds only with SE on). The 7th argument is byte EV[0]: 1 leaves the patch undrawn.

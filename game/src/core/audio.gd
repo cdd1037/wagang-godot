@@ -4,6 +4,7 @@ extends Node
 var bgm_player: AudioStreamPlayer
 var _se_players: Array[AudioStreamPlayer] = []
 var current_track := -1
+var _loop := true
 var bgm_volume_db := -4.0
 var se_volume_db := -2.0
 
@@ -20,11 +21,16 @@ func _ready() -> void:
 		_se_players.append(p)
 
 
-## Play CD track n (the game's track numbering; files are assets/audio/bgm/NN.mp3).
+## Play CD track n (the game's track numbering; files are assets/audio/bgm/NN.mp3). 0x4745b1 records the track
+## (GS+4) even while 听背景音乐 is off, and plays it only when it is on.
 func play_bgm(track: int, loop := true) -> void:
 	if track == current_track and bgm_player.playing:
 		return
 	current_track = track
+	_loop = loop
+	if not Settings.on(Settings.BGM):
+		bgm_player.stop()
+		return
 	var s := Assets.audio("audio/bgm/%02d.mp3" % track)
 	if s == null:
 		bgm_player.stop()
@@ -40,8 +46,27 @@ func stop_bgm() -> void:
 	bgm_player.stop()
 
 
-## name like "se00", "se_m_12", "se_e_03".
+## 环境设定 OK (0x41b92d): SE off stops the sound that plays; BGM off stops the music; then the recorded track is
+## played again, from its start unless it is still playing.
+func apply_switches() -> void:
+	if not Settings.on(Settings.SE):
+		stop_se()
+	if not Settings.on(Settings.BGM):
+		bgm_player.stop()
+	elif current_track >= 0:
+		play_bgm(current_track, _loop)
+
+
+func stop_se() -> void:
+	for p in _se_players:
+		p.stop()
+	SoundMap.stop_loop()
+
+
+## name like "se00", "se_m_12", "se_e_03". Nothing plays while 听音效 is off (0x474777).
 func play_se(name: String) -> void:
+	if not Settings.on(Settings.SE):
+		return
 	var s := Assets.audio("audio/se/%s.wav" % name.to_lower())
 	if s == null:
 		return

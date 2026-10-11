@@ -373,6 +373,7 @@ func _story_tests() -> void:
 		return null
 	Mem.w8(Game.person(0).base + 0x2a, 0)
 	Mem.w8(Game.person(7).base + 0x2a, 0xff)
+	Mem.w16(Mem.GS + 2, 1)                      # op 0x08 1: the town takes clicks
 	var ev := InputEventMouseButton.new()
 	ev.position = Vector2(300, 200)
 	# a right click on a party member shows 武将情报 (0x429b81), and the scene waits again afterwards

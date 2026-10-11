@@ -8,7 +8,6 @@ signal finished
 var vm: EexVM
 var ui: GameUI
 var choice_result := 0
-var result_value := 0
 var fast := false
 
 
@@ -84,8 +83,10 @@ func op_goto_scenario(ins: Dictionary) -> void:
 	Game.scenario_jumped = true
 
 
+## op 0x08 设定结果 (0x41431e → 0x42c858): GS+2 = arg. In a story scene it turns the town's menu, toolbar and
+## clicks on actors on (≠ 0) or off (0x426ba3); the click sections clear it first and set it again at their end.
 func op_set_result(ins: Dictionary) -> void:
-	result_value = arg(ins, 0)
+	Mem.w16(Mem.GS + 2, arg(ins, 0))
 
 
 # ------------------------------------------------------------------ flags & variables
@@ -300,11 +301,15 @@ func op_popup(ins: Dictionary) -> void:
 	await ui.popup(t)
 
 
+## op 0x12 (0x411db9 → 0x42de12): up to three options, numbered "1." … "3.", beside the face of arg1's person
+## (0xffff = 0; sge.wa 301 + face, mod 0x42dea0).
 func op_choice(ins: Dictionary) -> void:
 	var opts := sarg(ins, 0).split("\n", false)
 	var clean: Array = []
-	for o in opts:
-		clean.append(o)
+	for k in mini(opts.size(), 3):
+		clean.append("%d.%s" % [k + 1, opts[k]])
+	var who := arg(ins, 1)
+	ui.menu.face = Game.person_face(0 if who == 0xffff else who)
 	var i := await ui.menu.choose(clean, Vector2(-1, -1), false)
 	choice_result = i + 1
 
@@ -324,16 +329,33 @@ func op_chapter_title(ins: Dictionary) -> void:
 	await ui.chapter_title(arg(ins, 0), sarg(ins, 1))
 
 
+## op 0x18 标题显示 (0x413b09 → 0x40bb48): outside battles the text goes into the title pane; then it shows in a
+## timed box.
 func op_title_text(ins: Dictionary) -> void:
-	await ui.banner(sarg(ins, 0), 0)
+	var t := sarg(ins, 0)
+	if not in_battle():
+		ui.set_strip(0, t)
+	await ui.message(t)
 
 
+## op 0x17 地名显示 (mod 0x4d0fbf → 0x40bb78): the text up to a "\n&"; outside battles it goes into the place pane;
+## then it shows in a timed box.
 func op_place_name(ins: Dictionary) -> void:
-	await ui.banner(sarg(ins, 0), 1)
+	var t := sarg(ins, 0)
+	var cut := t.find("\n&")
+	if cut >= 0:
+		t = t.substr(0, cut)
+	if not in_battle():
+		ui.set_strip(1, t)
+	await ui.message(t)
 
 
+## op 0x2c (0x417315): text, then three words where 0xffff counts as 0 (see GameUI.caption).
 func op_caption(ins: Dictionary) -> void:
-	await ui.caption(sarg(ins, 0), arg(ins, 1), arg(ins, 2), arg(ins, 3))
+	var a: Array[int] = []
+	for i in [1, 2, 3]:
+		a.append(0 if arg(ins, i) == 0xffff else arg(ins, i))
+	await ui.caption(sarg(ins, 0), a[0], a[1], a[2])
 
 
 # ------------------------------------------------------------------ party / items / money
@@ -345,8 +367,10 @@ func op_join(ins: Dictionary) -> void:
 
 
 ## op 0x3d (0x4143c2): item (ids above 0x67 ignored), level (0 / 0xffff = by the party's level,
-## 0x40c14f), flag, person. A weapon or armour at its maximum level comes fully grown. Outside a battle
-## the original always says what was found (message style 2); in a battle only when the flag is set.
+## 0x40c14f), flag, person. A weapon or armour at its maximum level comes fully grown. "得到了%s！" (a timed box)
+## comes first, in battles too, where the flag first lets the person's unit cheer with the item over it
+## (0x45991b). A full warehouse: "仓库已满。…" and the warehouse-full 卖出 window. A stack at 255 afterwards:
+## "注意！%s的数量已达到上限！".
 func op_get_item(ins: Dictionary) -> void:
 	var iid := arg(ins, 0)
 	if iid > 0x67:
@@ -363,11 +387,29 @@ func op_get_item(ins: Dictionary) -> void:
 		if lvl >= maxl:
 			lvl = maxl
 			xp = 0xff
-	Game.add_item(iid, maxi(lvl, 1), xp)
-	if not in_battle() or arg16(ins, 2) != 0:
-		await ui.popup("得到了%s。" % str(it.get("name", "?")))
+	var name := str(it.get("name", "?"))
+	if in_battle() and arg16(ins, 2) != 0:
+		await get_item_show(arg(ins, 3), iid)
+	await ui.message("得到了%s！" % name)
+	await receive_item(iid, maxi(lvl, 1), xp)
+	if Game.is_stack_item(iid) and Game.stack_count(iid) >= 255:
+		await MsgBox.ok(ui, "注意！%s的数量已达到上限！" % name)
 	if int(it.get("unk_18", 0)) != 0:
 		SpecialFuncs.write_niuniu(iid + 3, 1)
+
+
+## Put an item into the bag (0x40d79c); with every slot in use, "仓库已满。\n请卖掉一个道具。" and the warehouse-full
+## 卖出 window (template 329, 0x46f034), where selling something makes room for it.
+func receive_item(iid: int, lvl: int, xp: int) -> void:
+	if Game.add_item(iid, lvl, xp) or Game.is_stack_item(iid):
+		return
+	await MsgBox.ok(ui, "仓库已满。\n请卖掉一个道具。")
+	await ShopWindow.warehouse_full(ui, iid, lvl, xp)
+
+
+## Battle stages: the unit's cheer with the item rising over it (0x45991b, flag ≠ 0).
+func get_item_show(_pid: int, _iid: int) -> void:
+	pass
 
 
 func op_lose_item(ins: Dictionary) -> bool:
@@ -432,35 +474,43 @@ func op_battle_select_units(ins: Dictionary) -> void:
 	Mem.w8(SORTIE_MAX, 1 if n == 0 else n)
 
 
-## Sortie list builder (0x41856a): forced persons that are party members (5 from op 0x06 / 0x4a)
-## first; the protagonist is included when all 9 dwords at 0x4b0a04 are non-zero; if the stored max
-## exceeds that count the player picks the rest. Writes the 0x48b350 list. Returns false if empty.
+## Sortie list builder (0x41856a, mod 0x4dbdd4): 管毅 first when all nine dwords 0x4b0a04[0..8] are non-zero (no
+## membership test); then the forced persons 0x4b09f0[0..8] that are party members. The max is raised to that
+## count; when it is higher the player picks the rest from the members of the table 0x4dbdb0 in its order — the
+## loop reads table[max] for j = 0, so 管毅 is never offered and table[max] comes first — leaving out those
+## already listed and those in 0x4b0a04[0..4]. Writes the 0x48b350 list; false if it is empty (取消).
 func build_sortie() -> bool:
-	var forced: Array[int] = []
+	var lst: Array[int] = []
 	var all_flags := true
 	for k in 9:
 		if Mem.r32(SORTIE_FLAGS + 4 * k) == 0:
 			all_flags = false
 	if all_flags:
-		forced.append(0)
+		lst.append(0)
 	for k in 9:
 		var f := Mem.r32(SORTIE_FORCED + 4 * k)
-		if f != 0 and f != 0xffff and f < 0x400 and Game.is_member(f) and not forced.has(f):
-			forced.append(f)
+		if f != 0 and f != 0xffff and f < 0x400 and Game.is_member(f):
+			lst.append(f)
+	var forced := lst.size()
 	var maxn := Mem.r8(SORTIE_MAX)
-	if maxn < forced.size():
-		maxn = forced.size()
+	if maxn < forced:
+		maxn = forced
 		Mem.w8(SORTIE_MAX, maxn)
-	var lst: Array[int] = forced
-	if maxn != forced.size():
-		lst = await SortieScreen.choose(ui, self, maxn, forced, [])
-	if lst.is_empty() and Game.is_member(0):
-		lst.append(0)
+	if maxn != forced:
+		var excl: Array[int] = []
+		for k in 5:
+			excl.append(Mem.r32(SORTIE_FLAGS + 4 * k))
+		var cands := lst.duplicate()
+		for j in 32:
+			var c := Mem.r8(0x4dbdb0 + (maxn if j == 0 else j))
+			if Game.is_member(c) and not cands.has(c) and not excl.has(c):
+				cands.append(c)
+		lst = await SortieScreen.choose(ui, self, maxn, cands, forced)
 	for k in lst.size():
 		Mem.w32(0x48b350 + 4 * k, lst[k])
 	Mem.w32(0x48b350 + 4 * lst.size(), 0xffff)
 	if OS.get_environment("WG_TRACE_BATTLE") != "":
-		print("  sortie forced=%s max=%d -> %s" % [forced, maxn, lst])
+		print("  sortie forced=%d max=%d -> %s" % [forced, maxn, lst])
 	return not lst.is_empty()
 
 
