@@ -235,13 +235,18 @@ static func slot_of(it: Dictionary) -> int:
 
 
 ## 0x407907: weapons and armour by the class's equip table, accessories by the family in the item's
-## +0x17 byte (0xff = anyone; the mod lets families 8, 9, 18 and 24 wear item 0x4c, 0x4da23b).
+## +0x17 byte (0xff = anyone; the mod lets families 8, 9, 18 and 24 wear item 0x4c, 0x4da23b). Mod: 樊虎 (11)
+## wears no accessory (0x4d9a91); the holder of dynamic slot 9 (尤俊达, 【术】百宝) any weapon or armour (0x4dc8fc).
 func can_equip(iid: int) -> bool:
 	var it := _item(iid)
 	if it.is_empty():
 		return false
+	if id == 11 and slot_of(it) == 2:
+		return false
 	match slot_of(it):
 		0, 1:
+			if id == Skills.dyn(9):
+				return true
 			var eq: Array = Game.cls(cls).get("equip_raw", [])
 			var t := int(it["type"])
 			return t < eq.size() and int(eq[t]) != 0
@@ -315,8 +320,91 @@ func equip_item(slot: int, iid: int, lvl: int) -> void:
 
 
 # ------------------------------------------------------------------ derived stats
+## Stat getters (0x407120..0x40720d) = min(stat word + equipment, 9999), with the mod's hooks: outside battles
+## the 宿痕 rules replace the stat word (_scar); in battles the 连理 auras and 王君珂's 并蒂 scale the result.
 func stat(s: int) -> int:
-	return mini(get_stat_word(s) + equip_bonus(s), 9999)
+	var b := equip_bonus(s)
+	if not Skills.in_battle():
+		if s == 0:
+			Mem.w32(0x55ee04, 0)       # the attack getter clears 并蒂's hit counters in towns (0x4dbcf6)
+		return maxi(_min_add(_scar(s, get_stat_word(s)), b, 9999), 0)
+	var v := mini(get_stat_word(s) + b, 9999)
+	match s:
+		0:
+			var d := _aura_distance(0, 0)
+			if d >= 0:
+				return v * (100 + 5 * (5 - d)) / 100 if d < 5 else v
+			if id == (Skills.dyn(2) & 0xffff):
+				return v * (100 + 8 * Mem.r8(0x55ee02)) / 100      # 并蒂 (0x4dbd2c)
+		1, 3, 4:
+			var d := _aura_distance([0, 1, 0, 1, 0][s], [0, 0, 0, 12, 29][s])
+			if d >= 0 and d < 5:
+				return v * (100 + 5 * (5 - d)) / 100
+	return v
+
+
+## The 连理 auras (0x4db4c5 and its copies): 攻击 of the person in dynamic slot 0 (鲁明星) and 防御 of slot 1
+## (鲁明月) near 管毅, 反应 of slot 1 near 鲁明星 (12), 士气 of slot 0 near 鲁明月 (29): +5 % per cell closer than 5.
+## Returns the distance |dx| + |dy| when this person holds slot k and both units are on the map, else -1.
+func _aura_distance(k: int, partner: int) -> int:
+	if id != Skills.dyn(k):
+		return -1
+	var me := Skills.unit_on_map(id)
+	var p := Skills.unit_on_map(partner)
+	if me == null or p == null:
+		return -1
+	return Skills.distance(me.pos, p.pos)
+
+
+## 0x47fa89: a + b, at most `mx` (a signed compare on 32 bits).
+static func _min_add(a: int, b: int, mx: int) -> int:
+	var r := (a + b) & 0xffffffff
+	if r >= 0x80000000:
+		r -= 0x100000000
+	return mx if r > mx else r
+
+
+## 宿痕 (0x4db5fd and its copies): outside battles, once a script has set the person's flag, a stat word w is
+## scaled by the level of his signature weapon (or armour): f(w) = (w − e)·(100 + level·k) / 100 + e, with the
+## base e and the factor k in EV, on 32 bits as the original computes. 谢映登's attack derives from his MP once
+## EV[3223] ≥ 3 (贯石).
+func _scar(s: int, w: int) -> int:
+	var wl := weapon_lvl
+	match s:
+		0:
+			if id == 8 and Mem.r8(Mem.EV + 4 * 3181) >= 1 and weapon == 0x18:
+				return _scaled(w, Mem.ev(3401), wl, Mem.ev(3201))
+			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
+				return _scaled(w, Mem.ev(3416), wl, Mem.ev(3204))
+			if id == 24 and Mem.ev(3223) >= 3:
+				var m := mp_base + (15 if accessory == 0x43 else 30 if accessory == 0x44 else 0)
+				return ((m * Mem.ev(3257) & 0xffffffff) / 100 + w - Mem.ev(3451)) & 0xffffffff
+		1:
+			if id == 1 and Mem.r8(Mem.EV + 4 * 3185) >= 1 and weapon == 0x19:
+				return _scaled(w, Mem.ev(3422), wl, Mem.ev(3205))
+			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
+				return _scaled(w, Mem.ev(3417), wl, Mem.ev(3204))
+		2:
+			if id == 21 and Mem.r8(Mem.EV + 4 * 3186) >= 1 and weapon == 0x23:
+				return _scaled(w, 0, wl, Mem.ev(3206))
+			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
+				return _scaled(w, Mem.ev(3418), wl, Mem.ev(3204))
+		3:
+			if id == 19 and Mem.r8(Mem.EV + 4 * 3189) >= 1 and weapon == 0x1a:
+				return _scaled(w, 0, wl, Mem.ev(3209))
+			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
+				return _scaled(w, Mem.ev(3419), wl, Mem.ev(3204))
+		4:
+			if id == 13 and Mem.r8(Mem.EV + 4 * 3182) >= 1 and armor == 0x2e:
+				return _scaled(w, 0, armor_lvl, Mem.ev(3202))
+			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
+				return _scaled(w, Mem.ev(3420), wl, Mem.ev(3204))
+	return w
+
+
+static func _scaled(w: int, e: int, lvl: int, k: int) -> int:
+	var t := ((w - e) & 0xffffffff) * ((100 + lvl * k) & 0xffffffff) & 0xffffffff
+	return (t / 100 + e) & 0xffffffff
 
 
 func max_hp() -> int:
@@ -327,8 +415,15 @@ func max_mp() -> int:
 	return mini(mp_base + equip_bonus(6), 255)
 
 
+## MovePoints (0x40729b), with 贾润甫's 【术】市侩 相马 (mod 0x4dc895): while the holder of dynamic slot 7 is a party
+## member, every party member riding a mount (accessory 0x2f, 0x3b..0x3f) moves one more (on a byte).
 func move_points() -> int:
-	return mini(int(Game.cls(cls).get("move", 4)) + equip_bonus(7), 255)
+	var m := mini(int(Game.cls(cls).get("move", 4)) + equip_bonus(7), 255)
+	var h := Skills.dyn(7)
+	if h != 0x400 and h < 1024 and Game.person(h).fixed_growth_flag == 0 and fixed_growth_flag == 0 \
+			and Mem.r8(base + 0x34) in [0x3d, 0x3e, 0x3f, 0x2f, 0x3b, 0x3c]:
+		m = (m + 1) & 0xff
+	return m
 
 
 func family() -> int:
@@ -383,6 +478,8 @@ func level_up(n := 1) -> Array:
 		return gains
 	var growth: Dictionary = Game.cls(cls).get("growth", {})
 	var gkeys := ["attack", "defense", "spirit", "agility", "morale", "hp", "mp"]
+	# 盛彦师 (10) 【术】天运 (mod 0x4dbde3 / 0x4dbdfb): one random stat of the five grows one more, once per call
+	var lucky := Rules.rand(5)
 	for i in 7:
 		var g := int(growth.get(gkeys[i], 0))
 		if i <= 4:
@@ -394,6 +491,9 @@ func level_up(n := 1) -> Array:
 				grade += 1
 			g = (grade + g) >> 1
 		for k in n:
+			if id == 10 and i <= 4 and i == lucky:
+				g += 1
+				lucky = 5
 			if i <= 4 and g == 0:
 				g = 1
 			gains[i] += g

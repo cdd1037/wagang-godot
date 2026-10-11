@@ -83,7 +83,7 @@ func player_phase() -> void:
 		var u := st.unit_at(cell)
 		if u == null:
 			continue
-		if u.mode == 7 and u.slot < 35 and not u.acted:
+		if u.mode == 7 and u.slot < 115 and not u.acted:     # mod 0x4d6268: any slot (no script gives an enemy code 7)
 			var did := await select_unit(u)
 			await after_command()
 			if did and _all_done():
@@ -138,7 +138,7 @@ func select_unit(u: BUnit) -> bool:
 			return false
 		if not reach.has(cell):
 			var other := st.unit_at(cell)
-			if other and other != u and other.mode == 7 and other.slot < 35 and not other.acted:
+			if other and other != u and other.mode == 7 and other.slot < 115 and not other.acted:
 				if other.status & (BUnit.ST_CONFUSION | BUnit.ST_LOST):
 					return await select_unit(other)
 				u = other
@@ -204,6 +204,7 @@ func command_menu(u: BUnit) -> bool:
 		var sp := st.view.cell_pos(u.pos) - st.view.camera.position + Vector2(56, -10)
 		var i := await st.ui.menu.choose(COMMANDS, sp, true, "", en, 60)
 		if i < 0:
+			st.actions.kill_rewards()
 			return false
 		Mem.set_ev(10, 0)          # mod 0x43e16b: no unit has fallen in this command yet
 		var done := false
@@ -216,8 +217,9 @@ func command_menu(u: BUnit) -> bool:
 			5: done = await _do_item(u, items)
 			6: done = true
 		if done:
-			st.actions.end_action(u)
+			await st.actions.end_action(u)
 			await _move_again(u)
+		st.actions.kill_rewards()
 	return true
 
 
@@ -245,7 +247,7 @@ func _move_again(u: BUnit) -> void:
 			if reach.has(cell):
 				await _walk(u, Grid.path_to(parents, u.pos, cell))
 				break
-	st.actions.end_action(u)
+	await st.actions.end_action(u)
 
 
 ## Picking a target: a right click cancels; with touch controls so does a tap outside the highlighted cells
@@ -279,7 +281,8 @@ func _do_attack(u: BUnit) -> bool:
 		var t := await pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active())
 		if t == null:
 			return again
-		await st.actions.attack(u, t)
+		Mem.w8(BattleActions.STRIKE, 0)        # cave 0x407651, then the attack wrapper 0x4d7808
+		await st.actions.attack_cmd(u, t)
 		if again or not u.has_effect(90) or not u.active() or (u.status & (BUnit.ST_CONFUSION | BUnit.ST_FEAR | BUnit.ST_LOST)):
 			return true
 		await st.checkpoint()
@@ -302,7 +305,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 		var en := []
 		for s in strats:
 			var sd := Game.strategy(s)
-			labels.append("%s　%d" % [sd.get("name", "?"), st.actions.strategy_mp(s)])
+			labels.append("%s　%d" % [sd.get("name", "?"), st.actions.strategy_cost(u, s)])
 			en.append(st.actions.can_cast(u, s))
 		var i := await st.ui.menu.choose(labels, Vector2(-1, -1), true, "策略　（策略值 %d）" % u.mp, en, 160)
 		if i < 0:
@@ -339,7 +342,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			st.view.set_area_cells(st.actions.strategy_area(u, s, c))
 			var hr := 100
 			if not tg.is_empty():
-				hr = Rules.strat_hit(u, tg[0], s, st.view.terrain_at(tg[0].pos), st.weather())
+				hr = Rules.strat_hit(u, tg[0], s, st.view.terrain_at(tg[0].pos), st.weather(), 0, true)
 			var ok := await st.ui.menu.choose(["执行（成功率 %d%%）" % hr, "取消"], Vector2(-1, -1), true)
 			st.view.set_area_cells([])
 			if ok == 0:

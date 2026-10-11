@@ -6,6 +6,9 @@ var st: BattleStage
 var _counter_depth := 0
 var _attack_start_actor: BUnit
 var strike_anim_repeats := 1      # 3 for 裴元庆's 尽命三锤 ([0x4d352e], animation table 0x42bf08)
+var tracing := false              # tests: record each Attack as [attacker slot, defender slot, strikes] in `trace`
+var trace: Array = []
+var _strikes_done := 0
 
 ## Sound ids from the engine (wave player 0x47467a call sites): hit 0x23 / critical 0x24 (0x40437b),
 ## no-damage 0x1e / 0x1f (0x4043fa), level-up 0x0b (0x4074ff), equipment level-up 0x0d (0x4084db),
@@ -148,13 +151,80 @@ func face(u: BUnit, target: Vector2i) -> void:
 
 
 # ------------------------------------------------------------------ attack (§4)
-## Attack (0x4064f1): the attacker's strikes, then the defender's counterattack (0x40639a).
+## The combat object's strike counter (0x4927f0 + 0x608): 1 after a strike sequence that ended on its second
+## strike. The attack wrapper skips the techniques while it is set.
+const STRIKE := 0x492df8
+
+## 【技】 attack techniques (0x4d76d0): the attacker's person, the flag it sets and the banner (0x4d78e2).
+const T_LONGYIN := 0x55ac1c      # 龙吟 (杨林): −1 weapon or armour level
+const T_FENGWU := 0x55ac20       # 凤舞九天 (宇文成都): area code 2, full damage
+const T_FIRST := 0x55ac24        # the defender strikes first: 1 双雷引 (定彦平, 东方伯), 2 抽屉枪 (姜松)
+const T_HENGTUI := 0x55ac2c      # 横推八马倒 (新文礼): area code 10
+const T_GAIMA := 0x55ac30        # 盖马三锤 (李元霸): three blows around him
+const T_GUIMEN := 0x55ac38       # 鬼门刀 (魏文通): 移动 to 0 and 怯
+const T_NUMU := 0x55ac4c         # 怒目 (单雄信): drains all MP
+const T_SHA := 0x55ac50          # 煞 (尉迟恭): up to three attacks
+const T_SHUANGLEI := 0x55ac54    # 双雷引 attacking (定彦平, 东方伯): the target strikes first, then a double counter
+const T_DOUBLE := 0x55ac68       # byte: 抽屉枪's forced second strike
+const TECHNIQUES := {44: T_HENGTUI, 34: T_GAIMA, 33: T_FENGWU, 32: T_LONGYIN, 43: T_GUIMEN, 4: T_NUMU, 3: T_SHA}
+const BANNERS := [[T_LONGYIN, 1, "龙吟"], [T_FENGWU, 1, "凤舞九天"], [T_FIRST, 1, "双雷引"], [T_GAIMA, 1, "盖马三锤"],
+	[T_HENGTUI, 1, "横推八马倒"], [T_GUIMEN, 1, "鬼门刀"], [T_NUMU, 1, "怒目"], [T_SHA, 1, "煞"], [T_FIRST, 2, "抽屉枪"]]
+
+
+## The attack of a command (mod wrapper 0x4d7808; the player's 攻击 0x43db49, the AI's 0x43ac3f / 0x43acf5).
+## Unless the last strike sequence ended on a second strike, the attacker may trigger its technique (0x4d76d0,
+## chance min(50·士气 / target's 士气, 100) %). Without one (or with 双雷引) the target may strike first instead
+## (0x4d74e4, as for 围攻). Then the attack; under 煞 it repeats while both stand and the target countered, up to
+## three attacks.
+func attack_cmd(att: BUnit, def: BUnit) -> void:
+	Mem.w32(T_FIRST, 0)
+	Mem.w32(T_DOUBLE, 0)
+	if Mem.r8(STRIKE) == 0:
+		var trig := _trigger(att, def)
+		if not trig or Mem.r32(T_SHUANGLEI) != 0:
+			if st.commands._siege_break(def, att):
+				var m: int = {0x400: 1, 14: 2, 101: 1, 136: 1}.get(def.pid, 0)    # 0x4d7b90
+				if m != 0:
+					Mem.w32(T_FIRST, m)
+				await attack(def, att)
+				Mem.w32(T_SHA, 0)
+				Mem.w32(T_SHUANGLEI, 0)
+				return
+	var n := 0
+	while true:
+		await attack(att, def)
+		if n >= 2:
+			break
+		n += 1
+		if Mem.r32(T_SHA) == 0 or att.hp == 0 or def.hp == 0:
+			break
+		Mem.w32(T_SHA, Mem.r32(T_SHA) + 1)
+	Mem.w32(T_SHA, 0)
+	Mem.w32(T_SHUANGLEI, 0)
+
+
+## 0x4d76d0: the attacker's technique, on chance min(50·士气 / target's 士气, 100) % (0x4d75d2).
+func _trigger(att: BUnit, def: BUnit) -> bool:
+	var flag: int = TECHNIQUES.get(att.pid, 0)
+	if flag == 0 and not (att.pid in [101, 136]):
+		return false
+	if not Rules.chance(mini(att.morale() * 50 / maxi(def.morale(), 1), 100)):
+		return false
+	Mem.w32(T_SHUANGLEI if flag == 0 else flag, 1)
+	return true
+
+
+## Attack (0x4064f1): the attacker's strikes, then the defender's counterattack (0x40639a). 盖马三锤 replaces the
+## strikes and leaves no counterattack.
 func attack(att: BUnit, def: BUnit) -> void:
 	var counter := _counter_depth > 0
 	if not counter:
 		_attack_start_actor = att
-	await strikes(att, def)
-	await counter_attack(att, def)
+	var whole := await strikes(att, def, true)
+	if tracing:
+		trace.append([att.slot, def.slot, _strikes_done])
+	if whole:
+		await counter_attack(att, def)
 	if not counter:
 		_counter_depth = 0
 	st.refresh_units()
@@ -162,8 +232,10 @@ func attack(att: BUnit, def: BUnit) -> void:
 
 ## The strikes of one attack, without the counterattack (0x433540; 0x4d2f1e for each unit of a 围攻): a second
 ## strike on a double. While a 绝招 runs, one strike (0x4335a0). Area and piercing weapons also hit the units of
-## the other side that area_code() adds around or behind the target (0x4061fc).
-func strikes(att: BUnit, def: BUnit) -> void:
+## the other side that area_code() adds around or behind the target (0x4061fc). `step` = the strike step of
+## Attack (0x433373), which shows a technique's banner and clears the technique flags after the first strike.
+## Returns false when 盖马三锤 took the strike's place.
+func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 	var counter := _counter_depth > 0
 	var special := Rules.special_running()
 	if not counter:
@@ -185,12 +257,17 @@ func strikes(att: BUnit, def: BUnit) -> void:
 	var total_damage := 0
 	var weapon_hit := false
 	var fallen: Array[BUnit] = []
+	if not special:
+		Mem.w8(STRIKE, 0)
+	_strikes_done = 0
 	for strike in 2:
 		if not def.active() or not att.active():
 			break
+		_strikes_done += 1
 		# 0x405e03: hit and damage for each target; the first one rolls the critical, the others share it
 		var hits: Array[bool] = []
 		var dmgs: Array[int] = []
+		var mps: Array[int] = []
 		var crit := false
 		for i in targets.size():
 			var t := targets[i]
@@ -201,8 +278,10 @@ func strikes(att: BUnit, def: BUnit) -> void:
 			var dmg := 0
 			if hit:
 				dmg = Rules.calc_damage(att, t, view().terrain_at(att.pos), view().terrain_at(t.pos), true, mode)
+			else:
+				dmg = Rules.damage_post(att, t, 0)      # 智将 adds to a miss as well (0x4dc9e0)
 			if i == 0:
-				if t.hp > 0 and Rules.chance(_crit_rate(att, t)):
+				if t.hp > 0 and Rules.chance(_crit_rate(att, t, hit)):
 					crit = true
 					if t.has_effect(57) and not special:
 						dmg = 0     # 化解攻击效果; a 绝招's critical is not cancelled (0x4d34c9)
@@ -212,14 +291,28 @@ func strikes(att: BUnit, def: BUnit) -> void:
 				dmg = dmg * 3 / 2
 			if strike == 1 and t.has_effect(57):
 				dmg = 0
-			hits.append(hit)
-			dmgs.append(mini(dmg, t.hp))
+			dmg = mini(dmg, t.hp)
+			hits.append(hit or dmg > 0)
+			dmgs.append(dmg)
+			mps.append(t.mp if Mem.r32(T_NUMU) == 1 else 0)     # 怒目: the whole MP, hit or not (0x4d8150)
+		if step:
+			await _technique_banner()
+			if Mem.r32(T_GAIMA) == 1:
+				await _gaima(att)
+				return false
 		if crit:
 			await _crit_shout(att)
 		await _anim_strike(att, targets, hits, dmgs, crit)
-		# 0x405889: apply
+		# 0x405889: apply, target by target
 		for i in targets.size():
 			var t := targets[i]
+			await _technique_hit(targets[maxi(i - 1, 0)])
+			if (dmgs[i] != 0 or mps[i] != 0) and not t.has_effect(57):
+				_on_hit_effects(att, t, targets)
+			if att.pid == 204 and Mem.r8(Skills.MAP_NO) <= 34:
+				t.status |= BUnit.ST_POISON      # 张善相 (0x4d568d): hit or miss
+			if mps[i] > 0:
+				t.mp = maxi(t.mp - mps[i], 0)
 			if not hits[i]:
 				continue
 			total_damage += dmgs[i] if i == 0 else 0
@@ -228,13 +321,25 @@ func strikes(att: BUnit, def: BUnit) -> void:
 			_apply_damage(t, dmgs[i])
 			if killed:
 				fallen.append(t)
-			else:
-				_on_hit_effects(att, t)
+			elif dmgs[i] > 0 and t.pid == 24 and Mem.r8(Mem.EV + 4 * 3223) >= 3:
+				# 谢映登's 贯石 (0x4da0a7): the damage also comes off his MP (its low byte)
+				Mem.w8(t.addr + 0x14, maxi((t.mp & 0xff) - dmgs[i], 0))
 			if att.slot < 15:
 				best_exp = maxi(best_exp, _phys_exp(att, t, killed))
-		if special or (strike == 0 and (not def.active() or not Rules.chance(Rules.double_rate(att, def, counter)))):
+		if step:
+			for f in [T_LONGYIN, T_FENGWU, T_FIRST, 0x55ac28, T_HENGTUI, T_GAIMA, 0x55ac34, T_GUIMEN, T_NUMU, 0x55ac58]:
+				Mem.w32(f, 0)
+			if Mem.r32(T_SHA) == 1:
+				Mem.w32(T_SHA, 2)
+		var again := not special and strike == 0 and _double_check(att, def, counter)
+		if step and Mem.r32(T_SHUANGLEI) == 1:
+			Mem.w32(T_SHUANGLEI, 2)
+		if not again:
 			break
-		if strike == 0 and not Game.autoplay:
+		Mem.w8(STRIKE, 1)
+		if not def.active() or not att.active():
+			break
+		if not Game.autoplay:
 			st.hud.popup_number("连击！", att.pos, Color(1, 0.9, 0.3))
 	if att.has_effect(81) and total_damage > 0:
 		att.hp = mini(att.hp + total_damage / 2, att.max_hp())
@@ -247,6 +352,80 @@ func strikes(att: BUnit, def: BUnit) -> void:
 		await _equip_exp(def, false, att, total_damage > 0)
 	if best_exp > 0:
 		await gain_exp(att, best_exp)
+	return true
+
+
+## DoubleCheck (0x406181 as the mod patches it): 双雷引's second phase forces it on a first strike; no second
+## strike after the second; else chance(DoubleRate); else 抽屉枪's flag forces it (the flag is then cleared).
+func _double_check(att: BUnit, def: BUnit, counter: bool) -> bool:
+	if Mem.r32(T_SHUANGLEI) == 2:
+		return true
+	if Rules.chance(Rules.double_rate(att, def, counter)):
+		return true
+	var forced := Mem.r8(T_DOUBLE) == 1
+	Mem.w8(T_DOUBLE, 0)
+	return forced
+
+
+## 0x4d78e2: the banner of the technique that is set, over the darkened field.
+func _technique_banner() -> void:
+	for b in BANNERS:
+		if Mem.r32(b[0]) == b[1]:
+			await _banner(b[2])
+			return
+
+
+func _banner(name: String) -> void:
+	await view().set_dim(true)
+	await st.ui.skill_banner(name)
+	await view().set_dim(false)
+
+
+## 龙吟 / 鬼门刀 at the head of the apply loop (0x4d72e0), on the unit the combat object points at, i.e. the
+## previous target (the first target twice), unless it has effect 57. 龙吟: chance 50 % the weapon level, else
+## the armour level, one lower (a maxed one may gain experience again). 鬼门刀: 移动 to 0, and 怯.
+func _technique_hit(t: BUnit) -> void:
+	if t.has_effect(57):
+		return
+	if Mem.r32(T_LONGYIN) == 1:
+		var b := t.person.base + (0x2f if Rules.chance(50) else 0x32)
+		if Mem.r8(b) != 0:
+			Mem.w8(b, Mem.r8(b) - 1)
+			if Mem.r8(b + 1) == 0xff:
+				Mem.w8(b + 1, 0)
+	elif Mem.r32(T_GUIMEN) == 1:
+		await st.commands.change_unit(t, 5, 0)
+		t.status |= BUnit.ST_FEAR
+
+
+## 盖马三锤 (0x4d83fe): three blows (0x4d2f1e) at random units of the other side on the 8 cells around the
+## attacker (the same one may be hit again), then 怯 and 穷 on the units of the other side within 4 cells
+## (0x4d8632), except those with effect 57. The original gathers those into a 15-entry list, the cells on the
+## axes twice, and overruns it when more are around; the port stops at 15.
+func _gaima(att: BUnit) -> void:
+	var around: Array[BUnit] = []
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			if dx != 0 or dy != 0:
+				var o := st.unit_on(att.pos + Vector2i(dx, dy))
+				if o and (o.slot < 35) != (att.slot < 35):
+					around.append(o)
+	if not around.is_empty():
+		for k in 3:
+			await strikes(att, around[Rules.rand(around.size())])
+	var enemy_side := att.colour >= 2
+	var hit: Array[BUnit] = []
+	for dx in 5:
+		for dy in 5 - dx:
+			for c in [Vector2i(dx, dy), Vector2i(dx, -dy), Vector2i(-dx, -dy), Vector2i(-dx, dy)]:
+				var o := st.unit_on(att.pos + c)
+				if o and (o.slot < 35) == enemy_side and hit.size() < 15:
+					hit.append(o)
+	for o in hit:
+		if not o.has_effect(57):
+			o.status |= BUnit.ST_FEAR | BUnit.ST_SEAL
+	Mem.w32(T_GAIMA, 0)
+	st.refresh_units()
 
 
 ## AreaAttackCode (0x407818): which other cells an attack hits (the area codes of 0x435d6c). The class table at
@@ -325,26 +504,65 @@ func secondary_targets(att: BUnit, def: BUnit, code: int) -> Array[BUnit]:
 	return out
 
 
-## Critical rate (0x405d69) with 并蒂 (mod 0x4dc7fd): outside a counter, the person in dynamic slot 2 (王君珂)
-## always crits while 管毅 is the unit whose move range the player opened last — as a helper in 管毅's 围攻.
-func _crit_rate(att: BUnit, t: BUnit) -> int:
+## Critical rate (0x405d69), rolled for the first target while it stands, hit or not; not while a 绝招 runs
+## (0x4d34c9). The mod's side effects (0x4d1d30): 并蒂's hit counters, and 管毅's 轩辕神枪 paralysing an adjacent
+## attacker that missed him. 并蒂 (0x4dc7fd): outside a counter, the person in dynamic slot 2 (王君珂) always crits
+## while 管毅 is the unit whose move range the player opened last — as a helper in 管毅's 围攻.
+func _crit_rate(att: BUnit, t: BUnit, hit: bool) -> int:
 	var r := Rules.crit_rate(att, t)
-	if r < 100 and not Rules.special_running() and _counter_depth != 1 and att.pid == Mem.ev(3972) \
+	if Rules.special_running():
+		return r
+	_bingdi_count(t)
+	if not hit and _xuanyuan(att, t):
+		att.status |= BUnit.ST_PARALYSIS
+	if r < 100 and _counter_depth != 1 and att.pid == Mem.ev(3972) \
 			and st.range_unit != null and st.range_unit.pid == 0:
 		return 100
 	return r
 
 
+## 并蒂's counters (0x4d1d30): while 王君珂 (dynamic slot 2) and 管毅 are both on the map, a strike on 王君珂
+## counts in byte [0x55ee04], one on 管毅 in [0x55ee06]. The phase start copies them to 0x55ee00 (0x4d1e21), and
+## a player unit's regeneration clears them (0x43cf75).
+func _bingdi_count(t: BUnit) -> void:
+	var w := Skills.unit_on_map(Skills.dyn(2))
+	var g := Skills.unit_on_map(0)
+	if w == null or g == null or Skills.distance(w.pos, g.pos) >= 0x9a:
+		return
+	if t.slot == w.slot:
+		Mem.w8(0x55ee04, (Mem.r8(0x55ee04) + 1) & 0xff)
+	elif t.slot == g.slot:
+		Mem.w8(0x55ee06, (Mem.r8(0x55ee06) + 1) & 0xff)
+
+
+## 轩辕神枪 (hit check 0x43b504 → 0x4dc924): an attacker on one of the 8 cells around 管毅 that missed him is
+## paralysed, once EV[3184] ≥ 1, with chance EV[2700] (doubled from EV[3184] ≥ 3), while he carries the spear (23).
+## No script sets EV[2700], so it never happens in the shipped game.
+func _xuanyuan(att: BUnit, t: BUnit) -> bool:
+	if t.pid != 0 or absi(t.pos.x - att.pos.x) > 1 or absi(t.pos.y - att.pos.y) > 1:
+		return false
+	var lv := Mem.r8(Mem.EV + 4 * 3184)
+	if lv == 0 or not Rules.chance(Mem.ev(2700) * (2 if lv >= 3 else 1)):
+		return false
+	return Game.person(0).weapon == 23
+
+
 ## Counterattack (0x40639a): a defender left standing and not confused hits back when the attacker is in its
-## range and lacks effect 44; a counter is answered once more only for an attacker with effect 40.
+## range and lacks effect 44; a counter is answered once more only for an attacker with effect 40. In 双雷引's
+## second phase the banner comes first (0x4d7a11). Without a counter, 煞 stops repeating (0x433610).
 func counter_attack(att: BUnit, def: BUnit) -> void:
-	if def.active() and att.active():
-		var depth := _counter_depth
-		var allow := depth == 0 or (depth == 1 and _attack_start_actor and _attack_start_actor.has_effect(40))
-		if allow and not (def.status & BUnit.ST_CONFUSION) and not att.has_effect(44) and can_attack(def, att):
-			_counter_depth += 1
-			await attack(def, att)
-			_counter_depth -= 1
+	var depth := _counter_depth
+	if not (depth == 0 or (depth == 1 and _attack_start_actor and _attack_start_actor.has_effect(40))):
+		return
+	if def.active() and att.active() and not (def.status & BUnit.ST_CONFUSION) and not att.has_effect(44) \
+			and can_attack(def, att):
+		_counter_depth += 1
+		if Mem.r32(T_SHUANGLEI) == 2:
+			await _banner("双雷引")
+		await attack(def, att)
+		_counter_depth -= 1
+	else:
+		Mem.w32(T_SHA, 0)
 
 
 ## The attacker's line before a critical strike (0x405821): with chance 25 %, while a 绝招 runs always, except
@@ -383,7 +601,9 @@ func exp_mult(u: BUnit) -> int:
 	return 100 + u.person.equip_bonus(8)
 
 
-func _on_hit_effects(att: BUnit, def: BUnit) -> void:
+## The statuses a strike with damage gives target `def` (0x405889; not to a target with effect 57, 0x4d724c).
+## 李世民's 梦魇 (67, 0x4d8caf): 迷失 on the targets of the strike in order, up to the first of a higher level.
+func _on_hit_effects(att: BUnit, def: BUnit, targets: Array[BUnit]) -> void:
 	var c := att.cls()
 	if (att.has_effect(35) or c == 50) and Rules.chance(60):
 		def.status |= BUnit.ST_CONFUSION
@@ -397,6 +617,11 @@ func _on_hit_effects(att: BUnit, def: BUnit) -> void:
 		def.status |= BUnit.ST_SEAL
 	if att.has_effect(37):
 		def.status |= [BUnit.ST_POISON, BUnit.ST_CONFUSION, BUnit.ST_PARALYSIS, BUnit.ST_SEAL][Rules.rand(4)]
+	if att.pid == 67:
+		for t in targets:
+			if t.level() > att.level():
+				break
+			t.status |= BUnit.ST_LOST
 
 
 func _apply_damage(u: BUnit, dmg: int) -> void:
@@ -437,10 +662,118 @@ func _anim_strike(att: BUnit, targets: Array[BUnit], hits: Array[bool], dmgs: Ar
 			t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
 
 
-## End of a unit's action (0x442718 with 6): moved and finished, shown greyed.
+## End of a unit's action (0x442718 with 6): moved and finished, shown greyed. Then the path skills of the
+## commanded unit (mod 0x4d90bf), on the units on the cells its last move went through, the last first (path[n−1]
+## down to path[0], n ≥ 2 steps): 罗士信's 【术】波若 (15, once [0x55ac48] is set) and 齐国远's 【术】锻造 (16, once
+## [0x55ac60] is set).
 func end_action(u: BUnit) -> void:
 	u.flags = u.flags | 6
 	st.refresh_units()
+	if u.pid != Mem.r32(BattleStage.CMD_PID):
+		return
+	var n := Mem.r8(BattleStage.PATH_LEN)
+	var skill := 0
+	if u.pid == 15 and Mem.r8(0x55ac48) != 0:
+		skill = 15
+	elif u.pid == 16 and Mem.r8(0x55ac60) != 0:
+		skill = 16
+	if skill == 0 or n < 2:
+		return
+	var c := 10 / (n - 1)
+	for k in range(n - 1, -1, -1):
+		var w := Mem.r16(BattleStage.PATH + 2 * k)
+		var x := st.unit_on(Vector2i(w & 0xff, w >> 8))
+		if x == null:
+			continue
+		if skill == 15:
+			if not await _boruo(x, c):
+				c = 0
+		else:
+			await _duanzao(x)
+
+
+## 波若 (0x4d921d): a random one of the five stats gets the strong buff (ChangeUnit to 6), and with chance c·f / 100
+## its stat word grows by one, f = 100 up to 300, 400 − w up to 400, else 0. The original computes 400 − w on the
+## double word, so between 301 and 400 the chance overflows and the growth always happens. A failure ends c.
+func _boruo(x: BUnit, c: int) -> bool:
+	var s := Rules.rand(5)
+	await st.commands.change_unit(x, s, 6)
+	var a := x.person.base + 0x11 + 2 * s
+	var raw := Mem.r32(a)
+	var w := Mem.r16s(a)
+	var f := 0
+	if w <= 300:
+		f = 100
+	elif w <= 400:
+		f = (400 - raw) & 0xffffffff
+	var pct := ((c * f) & 0xffffffff) / 100
+	if Rules.rand(100) < pct:
+		Mem.w16(a, (Mem.r16(a) + 1) & 0xffff)
+		return true
+	return false
+
+
+## 锻造 (0x4d94c9): the armour (chance 50 %) or else the weapon gains one experience point: up to 99 (a treasure
+## 149, at level 9 even 249), past that a level, 0xff at the maximum (3, a treasure 10). Shown with pose 1 and SE 30.
+func _duanzao(x: BUnit) -> void:
+	var p := x.person
+	var armour := Rules.chance(50)
+	var off := 0x31 if armour else 0x2e
+	var iid := Mem.r8(p.base + off)
+	if iid == 0xff:
+		return
+	var treasure := bool(Game.item(iid).get("treasure", false))
+	var m := 149 if treasure else 99
+	var maxl := 10 if treasure else 3
+	var e := Mem.r8(p.base + off + 2)
+	if e == 0xff:
+		return
+	var lvl := Mem.r8(p.base + off + 1)
+	if e < m or (lvl == 9 and e < 249):
+		Mem.w8(p.base + off + 2, e + 1)
+	else:
+		lvl = (lvl + 1) & 0xff
+		Mem.w8(p.base + off + 1, lvl)
+		Mem.w8(p.base + off + 2, 0xff if lvl >= maxl else 0)
+		Audio.play_se(SE_EQUIP_UP)
+		await st.ui.popup("%s 的%s等级上升到 %d！" % [p.name, "防具" if armour else "武器", lvl], 0.0 if not Game.demo else 1.0)
+	await st.op_unit_status({"args": [x.pid, 1, 0xff, 0]})
+	Audio.play_se("se30")
+
+
+## After each command, carried out or cancelled (0x43e1be → 0x4dcb09), the enemy units lying on the map at HP 0
+## count: each is worth 1 (generic), 3, or the value of table 0x4dcc40 (6, 8 or 10 for named officers), and per
+## point chance 10 % gives one 辰屑 (EV[3007..3009], a random one of the three). From EV[3183] ≥ 4 尉迟恭 (3) gets 5
+## MP per fallen enemy, up to his base MP (+15 with 逍遥巾, +30 with 诸葛巾) — capped even when none fell.
+func kill_rewards() -> void:
+	var points := 0
+	var count := 0
+	for i in range(35, 115):
+		var e := st.units[i]
+		if e.state != BUnit.STATE_ON_MAP or Mem.r16(e.addr + 0x10) != 0:
+			continue
+		var pid := Mem.r32(e.addr)
+		var v := 1
+		if pid < 0xd2:
+			v = 3
+			for k in 100:
+				if Mem.r16(0x4dcc40 + 4 * k) == pid:
+					v = Mem.r8(0x4dcc43 + 4 * k)
+					break
+		points += v
+		count += 1
+	for k in points:
+		if Rules.chance(10):
+			var j := 3007 + Rules.rand(3)
+			Mem.set_ev(j, Mem.ev(j) + 1)
+	if Mem.ev(3183) >= 4:
+		var s := Skills.unit_slot(3)
+		if s >= 0:
+			var p3 := Game.person(3)
+			var acc := Mem.r8(p3.base + 0x34)
+			var cap := p3.mp_base + (15 if acc == 0x43 else 30 if acc == 0x44 else 0)
+			var a := st.units[s].addr + 0x14
+			Mem.w8(a, mini(Mem.r8(a) + 5 * count, cap))
 
 
 ## A unit's HP reached 0 in an attack or a strategy: EV[10] = 1 for the scripts (mod 0x4d67b8, called at
@@ -536,6 +869,8 @@ func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
 
 
 # ------------------------------------------------------------------ strategies (§5)
+## The battle 策略 list (0x465d40): the strategies whose learn level for the class is reached. 秦琼 (8) as 统军 (43)
+## learns the strategies from 0x29 on by class 35's table (mod), which adds 补给 and 救护.
 func known_strategies(u: BUnit) -> Array[int]:
 	var out: Array[int] = []
 	var c := str(u.cls())
@@ -543,7 +878,10 @@ func known_strategies(u: BUnit) -> Array[int]:
 		if not s.get("loaded_by_exe", true):
 			continue
 		var lv: Dictionary = s.get("learn_level_by_class", {})
-		if lv.has(c) and int(lv[c]) > 0 and int(lv[c]) <= u.level():
+		var k := c
+		if u.cls() == 43 and (u.pid & 0xff) == 8 and int(s["id"]) >= 0x29:
+			k = "35"
+		if lv.has(k) and int(lv[k]) > 0 and int(lv[k]) <= u.level():
 			out.append(int(s["id"]))
 	return out
 
@@ -552,6 +890,17 @@ func known_strategies(u: BUnit) -> Array[int]:
 func strategy_mp(s: int) -> int:
 	var mp := int(Game.strategy(s).get("mp", 0))
 	return mp * 2 if Mem.r8(BattleStage.SECOND_CAST) != 0 else mp
+
+
+## What a cast costs u (0x4664b9 in the 策略 list, 0x422f0d when it is paid): strategy_mp, less 节约MP's percentage
+## (effect 49), then halved (at least 1) while 房玄龄 (179, 【术】房谋) stands next to u on its side (mod 0x4d4a05).
+func strategy_cost(u: BUnit, s: int) -> int:
+	var cost := strategy_mp(s)
+	if u.has_effect(49):
+		cost -= cost * u.effect_value(49) / 100
+	if Skills.beside(179, u):
+		cost = maxi(cost >> 1, 1)
+	return cost
 
 
 ## 0x4d0d71 after a cast: the first cast by a unit with 连续策略 (effect 83) sets [0x4d0d61], so the next cast
@@ -565,15 +914,32 @@ func second_cast(u: BUnit) -> bool:
 	return false
 
 
+## The cells a strategy can be cast on. 苏烈 (35, 【术】逐影随行咒, mod 0x5281c0) casts every strategy that is not
+## map-wide within 4 cells (range 13), the self-cast ones included.
 func strategy_cast_cells(u: BUnit, s: int) -> Array[Vector2i]:
 	var sd := Game.strategy(s)
 	var ally := int(sd.get("target", 0)) == 1
+	var r := int(sd.get("range", 0))
+	if r != 10 and u.pid == 35:
+		r = 13
 	# range 11: cast on the caster's own cell (weather 58-60, 飓风, the self buffs)
-	return Shapes.range_cells(int(sd.get("range", 0)), u.pos, view().map_w, view().map_h, ally or int(sd.get("range", 0)) == 11)
+	return Shapes.range_cells(r, u.pos, view().map_w, view().map_h, ally or r == 11)
+
+
+## 【术】烈魔 (the persons in EV[3985..3988]): every strategy they cast covers more (mod 0x528200): area 0 → 1,
+## 1 → 2, 2 → 3, any other → 6.
+func lie_mo(u: BUnit) -> bool:
+	for k in range(15, 19):
+		if u.pid == Skills.dyn(k):
+			return true
+	return false
 
 
 func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
-	return Shapes.area_cells(int(Game.strategy(s).get("area", 0)), u.pos, target, view().map_w, view().map_h)
+	var a := int(Game.strategy(s).get("area", 0))
+	if lie_mo(u):
+		a = [1, 2, 3][a] if a <= 2 else 6
+	return Shapes.area_cells(a, u.pos, target, view().map_w, view().map_h)
 
 
 ## Units affected by casting s at `target` (side filter 0 enemy, 1 ally).
@@ -603,6 +969,11 @@ func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 			continue
 		if t == main or Rules.strat_terrain_ok(s, u, view().terrain_at(t.pos)):
 			out.append(t)
+	if (s in DAMAGE_HANDLER or s in STATUS_HANDLER) and u.pid in [Skills.dyn(19), Skills.dyn(20)]:
+		# 【术】弱杀 (0x528270): every unit on the map with a status joins, of either side (no script hands it out)
+		for t in st.units:
+			if t.exists() and t.state == BUnit.STATE_ON_MAP and (t.status & 0x7e) and not out.has(t):
+				out.append(t)
 	return out
 
 
@@ -622,7 +993,7 @@ func usable_on(u: BUnit, s: int, t: BUnit) -> bool:
 func can_cast(u: BUnit, s: int) -> bool:
 	if u.status & BUnit.ST_SEAL:
 		return false
-	return u.mp >= strategy_mp(s)
+	return u.mp >= strategy_cost(u, s)
 
 
 ## Why u cannot cast s right now (0x41fec9), or "".
@@ -630,12 +1001,19 @@ func cast_refusal(u: BUnit, s: int) -> String:
 	return Rules.strat_castable(s, u, st.weather())
 
 
+## The strategies of the damage handler 0x42313e and the status handler 0x423549, which 烈魔 runs twice and 弱杀
+## extends.
+const DAMAGE_HANDLER := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 65]
+const STATUS_HANDLER := [31, 32, 33, 34, 35, 36, 37, 46, 47]
+
+
 func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	var sd := Game.strategy(s)
-	var cost := strategy_mp(s)
-	u.mp = maxi(u.mp - cost, 0)
+	var cost := strategy_cost(u, s)
 	face(u, target)
 	var targets := strategy_targets(u, s, target)
+	for t in targets:
+		t.extra.erase("mp_taken")
 	if s == 57 and not targets.is_empty():
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
@@ -653,6 +1031,16 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	for t in targets:
 		var e := await _apply_strategy(u, s, t)
 		best_exp = maxi(best_exp, e)
+	if lie_mo(u) and (s in DAMAGE_HANDLER or s in STATUS_HANDLER):
+		# 烈魔 (0x528100 / 0x528160): the same targets once more, with new rolls
+		for t in targets:
+			if t.active():
+				var e := await _apply_strategy(u, s, t)
+				best_exp = maxi(best_exp, e)
+	# 0x422f0d: the cost is paid after the effect; 暗鬼 (22) gives the caster the MP it took, up to its maximum
+	u.mp = Rules.sat_sub(u.mp, cost)
+	if s == 22 and not targets.is_empty():
+		u.mp += clampi(int(targets[0].extra.get("mp_taken", 0)), 0, maxi(u.max_mp() - u.mp, 0))
 	if u.slot < 15 and best_exp > 0:
 		await gain_exp(u, best_exp * exp_mult(u) / 100)
 	st.refresh_units()
@@ -691,6 +1079,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		var dmg := Rules.strat_damage(u, t, s, false)
 		if s == 22:
 			t.mp = maxi(t.mp - dmg, 0)
+			t.extra["mp_taken"] = dmg
 			if not Game.autoplay:
 				st.hud.popup_number("策略 -%d" % dmg, t.pos, Color(0.5, 0.6, 1))
 			return _strat_exp(u, t, false, true)

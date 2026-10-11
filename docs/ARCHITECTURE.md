@@ -67,7 +67,11 @@ Important locations:
 | 0x48b350 | sortie list (u32 person ids, 0xffff-terminated) |
 | 0x4b0783 | the bag (item slots) |
 | 0x4b3c80 | duel object |
-| 0x4927f0 / 0x4927f1 | attacker / defender slot of the latest attack (the scripts' 攻防 tests) |
+| 0x4927f0 / 0x4927f1 | attacker / defender slot of the latest attack (the scripts' 攻防 tests); +0x608 the strike counter |
+| 0x48baec | the loaded battle map's number, 0xff / 0xffff in towns (battle or town person getters, `core/skills.gd`) |
+| 0x55ac1c..0x55ac68 | the mod's 【技】 technique flags (rules.md §12.1) |
+| 0x55ee00..0x55ee07 | 并蒂's hit counters |
+| EV[3970..3999] | the dynamic skill slots: the person holding each skill |
 
 `Person` (`core/person.gd`) and `BUnit` (`battle/bunit.gd`) are **views**: thin objects whose properties read and
 write the record in `Mem`. Every change a script makes by address is therefore visible to the engine, and the
@@ -135,7 +139,7 @@ through EV variables.
 |---|---|
 | `BattleView` | map rendering, highlight overlays, cursor, camera and scrolling |
 | `BattleInput` | player phase: select → move range → move → command menu; a right click on a unit → 武将情报 (only a pointer right click, `BattleView.right_from_pointer`; Esc / 菜单 / a right click elsewhere → system menu) |
-| `BattleActions` | movement with zones of control, attacks (with area and piercing targets), counters, criticals, strategies, items, EXP, level-ups, retreats (formulas in `core/rules.gd`, spec in `docs/rules.md`) |
+| `BattleActions` | movement with zones of control, attacks (with area and piercing targets, the 【技】 techniques of the attack wrapper), counters, criticals, strategies, items, EXP, level-ups, retreats, the end-of-action skills and kill rewards (formulas in `core/rules.gd`, spec in `docs/rules.md` §4, §5, §12) |
 | `BattleCommands` | the mod's commands 绝招, 围攻 and 交给, and ChangeUnit (spec in `docs/mod_patches.md` B5 F1–F3) |
 | `BattleAI` | enemy and ally decision making, a port of the original AIAct scoring |
 | `BattleHUD` | hovered-unit panel, turn and weather, phase banners, damage numbers |
@@ -182,7 +186,7 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | Path | Contents |
 |---|---|
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
-| `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
+| `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `party_menu`, `ui_style`, `video_layer` |

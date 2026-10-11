@@ -110,6 +110,7 @@ func run_file(file: String) -> void:
 	vm.host = self
 	if not vm.load_script(file):
 		return
+	Mem.w32(Skills.MAP_NO, 0xffff)   # towns load their pictures through 0x426c6a, which marks "no battle map"
 	if not _restore.is_empty():
 		_apply_restore()
 	while vm.active and is_inside_tree():

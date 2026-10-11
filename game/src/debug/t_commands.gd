@@ -299,6 +299,8 @@ func run() -> void:
 	var c2 := _unit(36, 301, Vector2i(5, 6))
 	c1.hp = 9999
 	c2.hp = 9999
+	c1.status = BUnit.ST_CONFUSION      # sure hits (and no counter), so the test does not depend on the rolls
+	c2.status = BUnit.ST_CONFUSION
 	_click_soon(c1.pos)
 	var picks := func() -> void:
 		await get_tree().process_frame

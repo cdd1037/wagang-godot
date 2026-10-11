@@ -51,11 +51,11 @@ Audit of 2026-10-11, against commit 8c00d22. Tags as in [rules.md](rules.md): **
 Many MISSING rows are several sites of one feature. The list below merges them into about 60 features. A few are
 dormant in the shipped game or left out on purpose; those are marked.
 
-**Answer to "has the port reached feature parity?": no.** The story scripts, the map, the base CCZ battle rules
-and most of the mod's formula changes are ported. Missing:
-* the mod's character-skill system: most 【技】/【术】 effects (the 绝招/围攻/交给 commands are now in, group 2);
-* several mod rule changes;
-* shops, and a few information windows and settings.
+**Answer to "has the port reached feature parity?": no.** The story scripts, the map, the base CCZ battle rules,
+most of the mod's formula changes, its battle commands (group 2) and its character skills (group 3) are ported.
+Missing:
+* several mod rule changes (group 4);
+* shops, and a few information windows and settings (group 5).
 
 ## Skill owners
 
@@ -204,7 +204,7 @@ Corrections to the batch reports, found while porting:
 9. **围攻** (player command and AI behaviour): adjacent melee allies join the attack and lose their turn; the
    defender counters once. Defenders with 先手攻击, 双雷引 or 抽屉枪 break the siege; 并蒂 always crits in 管毅's
    siege. → B5 F2, B3 F11, B1 F12. **Done.** The technique flags it sets for 双雷引 / 抽屉枪 ([0x55ac24],
-   [0x55ac68]) have no effect until group 3's 【技】 techniques are in.
+   [0x55ac68]) work since group 3.
 10. **交给**: hand your accessory to an adjacent ally. 樊虎's 行囊 hands out accessories from the warehouse instead.
     → B5 F3, B6 F6. **Done.**
 11. **Command-menu layout:** 攻击 绝招 围攻 策略 交给 道具 待命, with the enable tests and icons. → B5 F4. **Done**
@@ -218,7 +218,47 @@ Corrections to the batch reports, found while porting:
 13. **Full move-path record.** 回马枪, 锻造 and 波若 need it; the port keeps only the start cell. → B5 PARTIAL details.
     **Done** (`BattleStage.record_path` / `move_path`, in memory at [0x4cfbfc] / 0x4cfc00).
 
-### 3. Character skills
+### 3. Character skills — done
+
+All of group 3 is ported (2026-10-11), with `t_skills` as its test:
+* `core/skills.gd` (the dynamic skill slots, the battle-map number, the "ally next to U" test);
+* `core/person.gd` (宿痕, the 连理 auras, 并蒂, 相马, 天运, 百宝 / 樊虎);
+* `core/rules.gd` (terrain, 双雷引's hit penalty, DoubleRate, 舍命 / 智将, 杜断);
+* `battle/battle_actions.gd` (the attack wrapper and the techniques, on-hit skills, 并蒂's counters, 房谋, 烈魔,
+  逐影随行咒, 统军, 锻造 / 波若, kill rewards);
+* `battle/battle_stage.gd` (the phase-start skills, 明镜, effect 82's drain).
+
+Done with it, because they sit in the same code: from item 31, effect 57 blocking the on-hit statuses, effect 84 in
+counters, and the effect 34 / 86 move costs; from item 20, 节约MP (effect 49).
+
+Corrections to the batch reports, found while porting:
+* **双雷引** (定彦平, 东方伯 attacking) does not strike first. With [0x55ac54] = 1 the wrapper asks 0x4d74e4 whether
+  the *target* strikes first, and it does whenever 定彦平 is in its range. 定彦平's counter is then forced to a
+  double ([0x55ac54] = 2 after the first strike step). [0x55ac24] = 1 / 2 only picks the banner.
+* **双雷引's −26 hit penalty** (cave 0x40762a) is reached only from HitRate's effect-55 branch (0x43b72f) and from
+  the 绝招 rates (0x4d2f90). Other hits keep their rate. Only 轩辕神枪 has effect 55.
+* **煞** repeats only while the target counters: the counter routine clears [0x55ac50] when there is no counter
+  (0x4064b3 → 0x433610).
+* **The wrapper skips the techniques**, and the "target strikes first" test, while the combat object's strike
+  counter (+0x608) is still 1 from a strike sequence that ended on a second strike. Only the player's 攻击 resets it
+  (0x407651), so the AI's techniques skip after such an attack.
+* **盖马三锤** strikes three random units of the other side on the 8 cells around 李元霸 himself. It then puts 怯
+  and 穷 on every unit of the other side within 4 cells, except those with effect 57 (0x4d8632). There is no
+  counter. 0x4d8632 collects into a 15-entry stack list, the cells on the axes twice, and overruns it when more
+  units are around; the port stops at 15.
+* **怒目** sets the MP damage on a miss too, and that also lets the on-hit statuses through (the block runs when the
+  HP or the MP damage is ≠ 0).
+* **波若** computes 400 − w on the double word that starts at the stat word. Between 301 and 400 the chance
+  overflows, so the stat always grows.
+* **The phase-start auras** pick sides by colour (U+5: 0 and 1 against 2 and 3), not by slot. **魔功** always
+  poisons: 0x4251e1 zeroes the context's damage, so code 0x70 never fails.
+* **Kill rewards** also run after a cancelled menu. 尉迟恭's MP is capped at base MP (+15 逍遥巾 / +30 诸葛巾) even
+  when nobody fell, which can lower MP that came from other equipment.
+* **[0x48baec]** is 0xffff in towns, written by the picture cache 0x426c6a, and the port did not track it. It is now
+  the battle map's number from `create_battlefield` on, and 0xffff when a story file starts.
+* Original code found on the way: 暗鬼 (22) gives the caster the MP it took (0x423017). The MP is paid after the
+  strategy's effect (0x422f0d).
+* The blocks 0x4d768e and 0x4d81e0 are dead code (no branch reaches them). The live strike step is 0x433373.
 
 14. **【技】 attack techniques.**
     * Trigger chance: min(50·morale(att)/morale(def), 100) % at the start of an attack, for the attacker's pid.
@@ -227,13 +267,13 @@ Corrections to the batch reports, found while porting:
       * 龙吟 (杨林): −1 weapon or armour level;
       * 鬼门刀 (魏文通): move buff 0 + 怯;
       * 怒目 (单雄信): drains all MP;
-      * 盖马三锤 (李元霸): the defender hits 3 of its own allies;
+      * 盖马三锤 (李元霸): 3 blows at the enemies around him, then 怯 + 穷 within 4 cells, no counter;
       * 凤舞九天 (宇文成都): full-damage splash;
       * 横推八马倒 (新文礼): area code 0xa;
-      * 煞 / 血战 (尉迟恭): up to 3 attacks;
-      * 双雷引 (定彦平, 东方伯): pre-emptive strike plus forced double, with a −26 hit penalty phase;
+      * 煞 / 血战 (尉迟恭): up to 3 attacks while the target counters;
+      * 双雷引 (定彦平, 东方伯): the target strikes first, then a forced double counter (−26 hit against effect 55);
       * 抽屉枪 (姜松): pre-emptive forced double.
-    * → B2 §G, B3 F10, B1 F3/F15/F16/F17, B4 (0x43b72f).
+    * → B2 §G, B3 F10, B1 F3/F15/F16/F17, B4 (0x43b72f). **Done** (`BattleActions.attack_cmd`).
 15. **Phase-start auras** (3×3 around the owner, own side unless noted):
     * 云袖 (鲁明月): HP +min(Lv+50, missing);
     * 仙乐 (柳周臣): MP;
@@ -241,48 +281,51 @@ Corrections to the batch reports, found while porting:
     * 雄师 class 42 (尉迟恭, 杨林, 杨素, …): morale buff 6, own side (resolved in this audit);
     * 魔功 (杨素): poisons adjacent enemies;
     * 天魔: dormant.
-    * → B1 F1, B3 F9.
-16. **明镜 (魏征):** adjacent allies with an ailment are fully cured at their phase start. → B4 §H.
+    * → B1 F1, B3 F9. **Done** (`BattleStage._phase_skills`).
+16. **明镜 (魏征):** adjacent allies with an ailment are fully cured at their phase start. → B4 §H. **Done.**
 17. **Stat auras and 并蒂:**
     * 连理 / 云袖 连理: +25 % … +5 % to attack/defence/agility/morale near the partner;
     * 并蒂 (王君珂): +8 % attack per hit 管毅 took in the enemy turn, with counters at 0x55ee00..07.
-    * → B2 §B, B4 §G, B1 F11.
+    * → B2 §B, B4 §G, B1 F11. **Done** (`Person.stat`, `BattleActions._bingdi_count`).
 18. **舍命 (王伯当):** +30 % damage below 60 % HP. **智将 (罗成):** +15 % of 精神 to every damage value, even on a
-    miss. → B4 §F.
+    miss. → B4 §F. **Done** (`Rules.damage_post`).
 19. **杜断 (杜如晦):** +20 strategy hit. The real roll tests the target's side; the forecast tests the caster's.
-    → B4 §D.
+    → B4 §D. **Done.**
 20. **房谋 (房玄龄):** half MP next to him. Also missing: the original 节约MP (effect 49). → B3 F3, B6 F5.
+    **Done** (`BattleActions.strategy_cost`), with 节约MP.
 21. **Strategy skills:**
     * 烈魔: bigger area, and damage/status strategies run twice;
     * 逐影随行咒 (苏烈): every range becomes 13.
-    * → B3 F5/F6.
+    * → B3 F5/F6. **Done.**
 22. **On-hit skills:**
     * 梦魇 (李世民): 迷失 on targets of his level or lower;
     * 张善相: poisons on every attack, on maps ≤ 34;
     * 贯石 (谢映登): MP lost with damage taken, and attack derived from MP.
-    * → B1 F6/F7/F8, B2 §A.
+    * → B1 F6/F7/F8, B2 §A. **Done.**
 23. **Terrain and range rules per character:**
     * 单雄信 + 板角墨麒麟: all terrain costs 1;
     * 飞将军 (张公瑾): cost −1 and range 4 (the range is done);
     * 水军 (丁天庆): water costs 1 and gives 110 %;
     * 枪母子 (张善相): range 12 (done).
-    * → B5 F10.
+    * → B5 F10. **Done.**
 24. **Other skills and items:**
     * 相马 (贾润甫): mounts +1 move → B2 §D;
     * 天运 (盛彦师): +1 to a random stat per level → B2 §E;
     * 锻造 (齐国远) / 波若 (罗士信): effects on allies the unit passes through → B5 F7;
     * 百宝 (尤俊达): any weapon or armour, and 樊虎 may not equip accessories → B2 §I;
     * 秦琼 as 统军 gets 补给 and 救护 → B6 F5.
+    * **Done.**
 25. **Kill rewards:** 辰屑 drops into EV[3007..3009] (crafting materials used by the scripts), and 尉迟恭 gains MP
-    per kill. → B5 F8.
+    per kill. → B5 F8. **Done** (`BattleActions.kill_rewards`).
 26. **宿痕 weapon scaling of town stats** (秦琼, 管毅, 程咬金, 柴绍, 罗成, and 王伯当's armour), gated by EV[3181..3189].
-    → B2 §A.
+    → B2 §A. **Done** (`Person._scar`).
 27. **Dormant in the shipped game** (implement for fidelity only):
     * 轩辕神枪 paralysis (EV[2700] is never written) → B4 §A;
     * 弱杀 → B3 F4;
     * 天魔 → B1 F1e;
     * effect-82 MP drain (value 0) → B4 §I;
     * enemy-slot units with AI code 7 commandable → B5.
+    * **Done**, all five.
 
 ### 4. General battle rules
 
@@ -296,12 +339,12 @@ Corrections to the batch reports, found while porting:
 30. **组阵 formation bonuses:** +15 % per adjacent same-family ally. Attack for classes 46/47, defence for 39/46,
     agility for 18–20. → B4 §C, B1 F10.
 31. **Item-effect rules:**
-    * effect 57 blocks every on-hit status → B1 F4;
+    * effect 57 blocks every on-hit status → B1 F4 (**done with group 3**);
     * effect 37 uses six independent rolls → B1 F5;
     * 笼屉 (effect 62) eats a 馒头 after ≥ 100 damage → B1 F8, B3 F2;
     * 怀恨攻击 (effect 87) hit counters → B4 §E, B5 F12;
-    * effect 84 doubles in counters too → B1 F16;
-    * effect 86 cost −1 and effect 34 cost 1 → B5 F10;
+    * effect 84 doubles in counters too → B1 F16 (**done with group 3**);
+    * effect 86 cost −1 and effect 34 cost 1 → B5 F10 (**done with group 3**);
     * 太保令 permanent +2 → B2 §Q.
 32. **Level-up:**
     * HP/MP catch-up penalty for party members above the average level;
@@ -314,7 +357,10 @@ Corrections to the batch reports, found while porting:
     * 策略模仿 (effect 51) → B6 F5;
     * 狂澜 against the army leader keeps applying modifiers, and no caller passes `leader_slot` → B4 extra notes;
     * SetExp keeps levelling past 70 → B2 notes;
-    * the empty-cell terrain popup → B5 row 0x4559ba.
+    * the empty-cell terrain popup → B5 row 0x4559ba;
+    * per-phase experience in Regen (0x43cf26, player colour only): 轩辕宝鉴 (effect 22) and 天闻录 (effect 23) give
+      the weapon / armour value × level / 100 experience points, effect 64 the same in EXP (found with group 3;
+      not yet specified in detail).
 
 ### 5. Shops, menus and windows
 

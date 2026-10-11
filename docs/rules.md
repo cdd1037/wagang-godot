@@ -158,9 +158,8 @@ AddStat (0x406e17): i 0..4 → stat_word[i] = min(+g, 9999); 5 → hp_base = max
 
 ### 2.2 Derived stats [C]
 * Person stat s (0..4): `GetStat_s = min(stat_word[s] + equip_bonus(s), 9999)` (0x407126 atk, 0x407157 def,
-  0x407188 spirit, 0x4071b9 agility, 0x4071ea morale), followed by many mod per-character hooks
-  (e.g. 0x4db5fd: person 8 with weapon 24 equipped… ; aura of person 0 within distance <5: ×(100+(5-d)*5)/100 for
-  enemy-side units, 0x4db574) — see §9.
+  0x407188 spirit, 0x4071b9 agility, 0x4071ea morale), with the mod's hooks: 宿痕 in towns, the 连理 auras and
+  并蒂 in battles — see §12.2.
 * MaxHP = min(hp_base + equip_bonus(5), 9999) (0x40721b); MaxMP = min(mp_base + equip_bonus(6), 255) (0x40724a).
 * Move = min(class.move + equip_bonus(7), 255) (0x40727b).
 * Battle-unit stat (0x43f4fe.. on unit struct) applies buff level byte unit[0x18+s] (s=0..4):
@@ -247,9 +246,10 @@ else:          h = sat_sub(a, d/3)*30/(d/3) + 30          # sat_sub(x,y) = x>y ?
 if has_effect(att, 39 辅助攻击命中): h = min(h + val, 100)
 if has_effect(def, 53 辅助攻击防御 shield): h = sat_sub(h, val)
 if has_effect(def, 55 辅助全防御):        h = sat_sub(h, val)
-if [0x55ac54]==1 (one-shot mod flag): h = h > 26 ? h-26 : 1
+    and (mod cave 0x40762a, only in this branch) if [0x55ac54]==1 (双雷引): h = h > 26 ? h-26 : 1
 ```
-(Mod: while a 绝招 runs ([0x4cf314], set by 0x4d3007): hit 100 except person 1 → 50 + weapon bonus; see docs/mod_patches.md.)
+(Mod: while a 绝招 runs ([0x4cf314], set by 0x4d3007): hit 100 except person 1 → 50 + weapon bonus, then the
+双雷引 penalty; see docs/mod_patches.md.)
 
 ### 4.3 Critical hit (rate 0x405d69, applied 0x405ef8) [C]
 ```
@@ -273,10 +273,13 @@ for strike in 0..1:
     if not second: break
 Counter (0x40639a)
 ```
-DoubleCheck: only after the first strike; `chance(DoubleRate)` (or forced by mod flags [0x55ac68]/[0x55ac54]==2).
-DoubleRate (0x405ce6): `a = Agi(att), d = Agi(def)`; effect 84 主动连击 → 100 (the mod also lets it double in a
-counterattack: 0x40761e skips DoubleCheck's counter test); during a counterattack → 0;
+DoubleCheck (0x406181 with the mod's cave 0x407600 and 0x4d88df): [0x55ac54] == 2 and strike counter 0 → yes;
+strike counter > 0 → no; chance(DoubleRate) → yes; else yes if byte [0x55ac68] == 1 (抽屉枪), which is then cleared.
+(The original's "no double in a counterattack" test is skipped.)
+DoubleRate (0x405ce6, caves 0x407bc8 / 0x4334f8 / 0x4075e0): `a = Agi(att), d = Agi(def)`; effect 84 主动连击 → 100,
+also in a counterattack; during a counterattack → 0; [0x55ac54] == 2 → 100;
 `a >= 3d → 100; a >= 2d → (a-2d)*80/d + 20; a >= d → (a-d)*18/d + 2; else 1`.
+The mod's attack wrapper and its techniques (0x4d7808, the strike step 0x433373) are in §12.1.
 Counter (0x40639a), depth = [0x492e04]:
 ```
 if depth > 1: stop
@@ -583,7 +586,8 @@ Item value at level L: base + growth*(L-1) (≤255) (§1.2). Treasure special-ef
 ```
 round n:
   PLAYER PHASE (ctx[0x10]=0): turn-start events (0x44ac28(turn)), script poll (0x44c601), remove HP-0 units (0x44cc03)
-      for units 0..34 (player 0-14 AND friendly 15-34): StatusRecovery (0x43c7d6), BuffDecay (0x43c975)
+      for units 0..34 (player 0-14 AND friendly 15-34), one unit after the other: phase-start skills (mod
+      0x401118, §12.3), StatusRecovery (0x43c7d6), BuffDecay (0x43c975)
       clear 0x55af00[0..34]; 暗杀 countdown of units 35..114 (0x4364c6); Poison(side 0) (0x44df61); Regen (0x43cddd) for 0..34
       player input loop (0x44e0d9): after each command remove HP-0 units (0x44cc03), then the script poll
   FRIEND PHASE (ctx[0x10]=1): script poll; AI-controlled units among 0..34 act (0x43ad1c)
@@ -619,7 +623,8 @@ Unit flag byte unit[0xd]: bit 2 / bit 4 = has moved / has acted (cleared by 战�
 灵宝万能丹 / 棒喝 / 超脱 clear 0x7e (all).
 Recovery at own phase start (0x43c7d6), r = 100 if has_effect(20 每回合恢复状态 夜明盔) else the person's raw 胆魄 byte:
 `麻, 穷, 毒: chance(r)`; `怯, 迷: r==100 or chance(r - r/10)`; `乱: r==100 or chance(max(sat_sub(r,15), 10))`.
-(mod: units with skill check 0x4d4a60(0x17) are cured of everything.)
+(mod 0x43c80a: a unit with a status that 魏征 (23) stands next to, on its side, is cured of all of them instead,
+§12.3.)
 ### 9.3 Buff decay (0x43c975) for each of the 6 buff bytes (atk, def, spirit, agility, morale, move)
 `b >= 5: b -= 1 ; b <= 1: b += 1 ; b == 4: if chance(q): b = 3 ; b == 2: if chance(r): b = 3`
 with q = (raw 胆魄 > 50 ? 10 : sat_sub(60, 胆魄)) and r as in 9.2. So a buff lasts ≥2 turns, a debuff ≥2 turns.
@@ -1099,3 +1104,106 @@ type) − 0x12, value v = treasure ? 0x46938f(special value, level) : +0x15; suf
 **Strategy detail** (dialog 285, 0x47008d(id < 0x44) → fill 0x46fa85): icon (+0x10), name, 效果 =
 0x48bd40[+0xf], 消耗ＭＰ (0x425ad0), 可能范围 = Jiqi.wa[+0xc] (0xff → 0x10), 影响范围 = Drink.wa[+0xd] (0xff → 1),
 description Fhua[150+id]. The original places both details at the mouse (0x46f9ba); the port centres them.
+
+---------------------------------------------------------------------------------------------------
+## 12. Character skills (mod) [C]
+Who has which skill: docs/mod_patches.md "Skill owners". Dynamic skill slot k = EV[3970 + k] (u32 0x55ee08 + 4k),
+1024 = nobody. "Next to U on its side" = 0x4d4a60(pid, U): pid's unit on the map, both units' slots < 35 or both
+≥ 35, both HP > 0, pid's unit on one of the 8 cells around U. Port: `core/skills.gd`.
+
+### 12.1 【技】 attack techniques (attack wrapper 0x4d7808; port `BattleActions.attack_cmd`)
+Used by the player's 攻击 (0x43db49 → 0x407651, which first sets the strike counter combat+0x608 = 0) and the AI's
+attacks (0x43ac3f via 0x4d6b80, 0x43acf5):
+```
+[0x55ac24] = [0x55ac68] = 0
+if strike counter == 0:                                    # left at 1 by a strike sequence ending on a 2nd strike
+    trig = 0x4d76d0: attacker pid 44 → [0x55ac2c] 横推八马倒, 34 → [0x55ac30] 盖马三锤, 33 → [0x55ac20] 凤舞九天,
+           32 → [0x55ac1c] 龙吟, 43 → [0x55ac38] 鬼门刀, 4 → [0x55ac4c] 怒目, 3 → [0x55ac50] 煞,
+           101 / 136 → [0x55ac54] 双雷引; each on chance(min(Morale(att)·50 / Morale(def), 100)) (0x4d75d2)
+    if not trig or [0x55ac54]:
+        if 0x4d74e4(def, att):                             # the target strikes first (as in 围攻's break)
+            [0x55ac24] = 0x4d7b90(def pid)                 # 14 → 2 (抽屉枪), 101 / 136 → 1 (双雷引): banner only
+            Attack(def, att); goto end
+repeat up to 3 times: Attack(att, def); continue only while [0x55ac50] ≠ 0 and both HP > 0, [0x55ac50] += 1
+end: [0x55ac50] = [0x55ac54] = 0
+```
+0x4d74e4(def, att): def not 乱 and HP > 0, and effect 60, or def pid 101 / 136 / 14 with chance(min(Morale(def)·50 /
+Morale(att), 100)) (姜松 then sets [0x55ac68] = 1), or [0x55ac54] == 1; and att is in def's attack range.
+Strike step of Attack (0x433373, each strike): banner of the flag that is set (0x4d78e2, order 龙吟, 凤舞九天,
+[0x55ac24] = 1 双雷引, 盖马三锤, 横推八马倒, 鬼门刀, 怒目, [0x55ac50] = 1 煞, [0x55ac24] = 2 抽屉枪; map darkened
+0x4d64ea, name 0x4d6366, restored 0x4d6576); [0x55ac30] → 盖马三锤 instead of the strike, and Attack ends without a
+counter; else presentation and apply, then [0x55ac1c..0x55ac38], [0x55ac4c], [0x55ac58] = 0, [0x55ac50] 1 → 2,
+DoubleCheck, [0x55ac54] 1 → 2. The counter (0x40639a) shows the 双雷引 banner first when [0x55ac54] == 2 (0x4d7a11),
+and clears [0x55ac50] when there is no counter (0x433610).
+* 龙吟 / 鬼门刀 (0x4d72e0, head of the apply loop, before the hit test, unless that unit has effect 57): the unit the
+  combat object points at, i.e. the previous target (target 0 twice). 龙吟: chance(50) weapon level − 1, else armour
+  level − 1 (if > 0; exp 0xff → 0). 鬼门刀: ChangeUnit(5, 0) (移动 buff 0) and status |= 怯.
+* 怒目 (0x4d8150): MP damage of every target = its whole MP, hit or not; HP damage unchanged.
+* 凤舞九天: area code 2 at full damage (0x4d93af); 横推八马倒: area code 10 (§4.5).
+* 盖马三锤 (0x4d83fe): 3 × 0x4d2f1e(att, a random unit of the other group on the 8 cells around att), then
+  0x4d8632: every unit of the other side (by colour) with |dx| + |dy| ≤ 4 of att gets 怯 | 穷 unless effect 57 (a
+  15-entry list that the original overruns when more are around).
+* 双雷引 / 抽屉枪: §4.2 (hit −26 in HitRate's effect-55 branch while [0x55ac54] == 1), §4.4 (DoubleCheck).
+
+### 12.2 Person getters (0x407120..0x40720d, mod 0x4db4c5.. / 0x4db5fd..; port `Person.stat`)
+Town mode = byte [0x48baec] == 0xff (0x44c2e3 writes the battle map's number, LoadGame 0xff, the picture cache
+0x426c6a 0xffff).
+* Towns — 宿痕: the stat word w is replaced by f(w) before `min(f(w) + bonus, 9999)` (32-bit arithmetic, the add's
+  cap a signed compare); the attack getter also clears dword [0x55ee04]. Rules (person, item, flag byte → f):
+  攻击 8 with weapon 0x18, EV[3181] → (w − EV[3401])·(100 + wl·EV[3201]) / 100 + EV[3401]; 0 with weapon 0x17,
+  EV[3184] → base EV[3416], factor EV[3204]; 24 with u32 EV[3223] ≥ 3 → (mp_base + 15 逍遥巾 / 30 诸葛巾)·EV[3257] /
+  100 + w − EV[3451]. 防御 1 with weapon 0x19, EV[3185] → EV[3422], EV[3205]; 0 → EV[3417]. 精神 21 with weapon 0x23,
+  EV[3186] → w·(100 + wl·EV[3206]) / 100; 0 → EV[3418]. 反应 19 with weapon 0x1a, EV[3189] → w·(100 + wl·EV[3209]) /
+  100; 0 → EV[3419]. 士气 13 with armour 0x2e, EV[3182] → w·(100 + al·EV[3202]) / 100; 0 → EV[3420].
+* Battles — 连理 auras: v·(100 + 5·(5 − d)) / 100 for d = |dx| + |dy| < 5 between the holder's and the partner's
+  units (both on the map): 攻击 of slot 0 near 管毅 (0), 防御 of slot 1 near 0, 反应 of slot 1 near 12, 士气 of slot 0
+  near 29. 并蒂 (attack, when the person is slot 2 and the 攻击 aura did not reach it): v·(100 + 8·byte [0x55ee02]) /
+  100. The counters: the crit-rate routine (0x4d1d30, not during a 绝招) adds 1 to byte [0x55ee04] when the first
+  target is 王君珂's unit, to [0x55ee06] when it is 管毅's, while both are on the map; every StatusRecovery / BuffDecay
+  at a phase start copies dword [0x55ee04] to [0x55ee00]; Regen of a player-colour unit clears [0x55ee04].
+* MovePoints (0x40729b, mod 0x4dc895): 相马 — +1 (on a byte) while the slot 7 holder and the person are party
+  members and the person's accessory is 0x2f or 0x3b..0x3f.
+* CanEquip (0x407907): 樊虎 (11) no accessory (0x4d9a91); the slot 9 holder (百宝) any weapon or armour (0x4dc8fc).
+* LevelUp (§2.1): 盛彦师's (10) 天运.
+
+### 12.3 Phase start (0x401118 before each unit's StatusRecovery; port `BattleStage._phase_skills`)
+Units in the 3×3 around the owner (x, y ≥ 0; row by row; not the owner; state 2) of the owner's side by colour
+(U+5: 0/1 against 2/3). Dispatch, all independent: pid 29 云袖 — HP + min(Lv + 50, MaxHP − HP), after the owner's
+poses 12 and 1 (0x43d108), Xben 10; pid 31 仙乐 — MP + min(Lv/4 + 1, MaxMP − MP), Xben 11; pid == [0x55ac40] 天魔
+(never set) — code 0xaf; pid == [0x55ac44] 魔功 (R_13: 杨素) — the *other* side gets code 0x70 (poison, always,
+0x4224a8); pid 42 神将 — 攻击 buff = 6, Xben 0x11 then 0x22; class family 16 雄师 — 士气 buff = 6, Xben 0x10 then
+0x25. Then StatusRecovery: 明镜 (0x43c80a) — status ≠ 0 and 魏征 (23) next to the unit on its side → ChangeUnit(6,
+0xfe) (all statuses off) and no recovery rolls. Regen: effect 82 drains up to its value of MP from each unit of the
+other group in the 3×3 (0x4d7efa; 六军镜·阴阳 has 0).
+
+### 12.4 Damage, hits, costs, ranges
+* CalcDamage post (0x4dc9e0, on every result, a miss's 0 included): attacker = slot 10 holder (舍命) and HP (low
+  word) < MaxHP·60/100 → min(dmg·130/100, HP); else pid 19 (智将) → min(精神'·15/100 + dmg, HP).
+* On-hit block (0x405889) runs when the HP or MP damage ≠ 0 and the target lacks effect 57 (0x4d724c); 梦魇 (0x4d8caf,
+  attacker 67): 迷失 on the strike's targets in order up to the first of a higher level. After it, for every target:
+  张善相 (204) poisons when [0x48baec] ≤ 34 (0x4d568d). After the HP: 贯石 (0x4da0a7) — target 24, byte EV[3223] ≥ 3,
+  surviving with damage > 0 → MP byte = max(MP − damage, 0).
+* 杜断 (0x4d4abc): +20 (≤ 100) on the strategy hit curve when 杜如晦 (185) is next to U, U = the target in the roll
+  and the AI's evaluation, the caster in the player's forecast (0x4404bd).
+* Strategy cost (0x4664b9 menu, 0x422f0d paid after the effect): mp (×2 in a second 连续策略 cast), − cost·v/100 with
+  effect 49 (节约MP), halved (≥ 1) with 房玄龄 (179) next to the caster (0x4d4a05). 暗鬼 (22) gives the caster
+  min(MP taken, MaxMP − MP).
+* 逐影随行咒 (0x5281c0): 苏烈 (35) casts every strategy with range ≠ 10 at range 13. 烈魔 (EV[3985..3988]): area 0 →
+  1, 1 → 2, 2 → 3, else 6 (0x528200), and the damage handler 0x42313e (strategies 0..13, 15..22, 65) and the status
+  handler 0x423549 (31..37, 46, 47) run their target loop twice (0x528100 / 0x528160). 弱杀 (EV[3989], EV[3990];
+  never set) adds every unit with a status to those two handlers' targets (0x528270).
+* MoveCost and TerrainEffect: §7.1 (单雄信, 张公瑾, 丁天庆); 丁天庆's terrain effect on 9 / 10 / 13 is 11 (0x4d39b9).
+* 轩辕神枪 (0x43b504 → 0x4dc924, consumed in the crit-rate routine): an attacker next to 管毅 that misses him is
+  paralysed, chance EV[2700] (×2 from EV[3184] ≥ 3) once EV[3184] ≥ 1 and he carries weapon 23. EV[2700] is never set.
+
+### 12.5 After a command and at the end of an action
+* 0x442718(U, 6) → 0x4d90bf: for the commanded unit and a recorded move of n ≥ 2 steps, the units on path[n−1] ..
+  path[0]: 波若 (15, byte [0x55ac48] ≠ 0) — ChangeUnit(rand(5), 6), then the stat word + 1 with chance(c·f / 100), c =
+  10 / (n − 1), f = 100 (w ≤ 300), 400 − (the double word at the stat) (w ≤ 400, so it overflows to a sure success),
+  else 0; a failure sets c = 0. 锻造 (16, byte [0x55ac60] ≠ 0) — armour (chance 50) or weapon exp + 1 up to 99 (treasure
+  149, at Lv 9 249), else a level (exp 0xff at the maximum, else 0); pose 1 and SE 30 (0x4d94c9).
+* Kill rewards (0x43e1be → 0x4dcb09, after every command, carried out or cancelled): enemy units 35..114 on the map
+  with HP (low word) 0: value 1 (pid ≥ 0xd2), else table 0x4dcc40 (u16 pid, value byte +3; default 3); per value point
+  chance(10) → EV[3007 + rand(3)] += 1 (辰屑). If EV[3183] ≥ 4: 尉迟恭's (3) MP byte = min(MP + 5·count, mp_base (+15
+  逍遥巾, +30 诸葛巾)).
+* 统军 秦琼 (0x465d40): class 43 and pid & 0xff == 8 → strategies ≥ 0x29 by class 35's learn table (补给, 救护).

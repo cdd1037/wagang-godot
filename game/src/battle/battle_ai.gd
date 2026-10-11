@@ -602,10 +602,10 @@ func _physical_attack() -> void:
 			and not (st.actions.attack_range_code(u) in [2, 3, 4]):
 		await st.commands.siege(u, t, hs)
 		return
-	await st.actions.attack(u, t)
+	await st.actions.attack_cmd(u, t)          # 0x4d6b9b / 0x43acf5: the attack wrapper 0x4d7808
 	if not t.active() and u.active() and u.has_effect(46):
 		for c in st.actions.attack_cells(u, u.pos):
 			var x := st.unit_at(c)
 			if x and x.active() and x.is_enemy_of(u):
-				await st.actions.attack(u, x)
+				await st.actions.attack_cmd(u, x)
 				break

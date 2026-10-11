@@ -433,6 +433,7 @@ func trimmed_mean_level() -> int:
 
 func create_battlefield(id: int) -> void:
 	map_id = id
+	Mem.w32(Skills.MAP_NO, id & 0xff)   # 0x44c2e3: the battle map's number (battle mode for the person getters)
 	Mem.set_ev(10, 0)            # mod 0x44ccc8: no unit has fallen yet
 	view.load_map(id)
 	for u in units:
@@ -725,8 +726,10 @@ func _phase_start_effects(a: int, b: int) -> void:
 		var u := units[i]
 		if not u.active():
 			continue
-		_status_recovery(u)
+		await _phase_skills(u)
+		await _status_recovery(u)
 		_buff_decay(u)
+		Mem.w32(0x55ee00, Mem.r32(0x55ee04))       # 并蒂: the hit counts of the last phase (0x4d1e21)
 	Mem.fill(Rules.ZHANBEI_USED + a, b - a, 0)     # 战备 may be cast again (0x44ed93 / 0x44e851)
 	if a == 0:
 		await _assassination_countdown(35, 115)    # 0x4364c6
@@ -776,8 +779,91 @@ func remove_dead() -> void:
 			unit_died.emit(u)
 
 
+## The phase-start skills of a unit (0x401118, before its status recovery): 鲁明月's 云袖 (29), 柳周臣's 仙乐 (31),
+## 天魔 (the person in [0x55ac40]; no script sets it), 魔功 (the person in [0x55ac44]: 杨素 from R_13), 尚师徒's
+## 神将 (42) and every 雄师 (class family 16), on the units of the 3×3 around it (0x4011a9).
+func _phase_skills(u: BUnit) -> void:
+	var p := u.pid
+	if p == 29:
+		await _aura(u, false, 10, 0, func(t: BUnit) -> String:
+			var h := mini(u.level() + 50, t.max_hp() - t.hp)   # 0x4d4966
+			t.hp += h
+			return "+%d" % h)
+	if p == 31:
+		await _aura(u, false, 11, 0, func(t: BUnit) -> String:
+			var m := mini(u.level() / 4 + 1, t.max_mp() - t.mp)    # 0x4d4928
+			t.mp += maxi(m, 0)
+			return "策略 +%d" % m)
+	if p == Mem.r32(0x55ac40):
+		for t in _aura_units(u, false):
+			for c in [0x31, 0x33, 0x35, 0x37]:
+				actions._stat_code(t, c)       # code 0xaf through 0x4224a8
+	if p == Mem.r32(0x55ac44):
+		for t in _aura_units(u, true):
+			await commands.change_unit(t, 6, BUnit.ST_POISON)    # code 0x70 through 0x4224a8
+	if p == 42:
+		await _aura(u, false, 0x11, 0x22, func(t: BUnit) -> String:
+			t.set_buff(0, 6)
+			return "攻击↑")
+	if u.family() == 16:
+		await _aura(u, false, 0x10, 0x25, func(t: BUnit) -> String:
+			t.set_buff(4, 6)
+			return "士气↑")
+
+
+## 0x4011a9: the units on the map in the 3×3 around `owner` (not itself), row by row, of its side by colour (0 and 1
+## together, 2 and 3 together; `opposite` for 魔功).
+func _aura_units(owner: BUnit, opposite: bool) -> Array[BUnit]:
+	var out: Array[BUnit] = []
+	var mine := owner.colour >= 2
+	for y in range(maxi(owner.pos.y - 1, 0), owner.pos.y + 2):
+		for x in range(maxi(owner.pos.x - 1, 0), owner.pos.x + 2):
+			var t := unit_on(Vector2i(x, y))
+			if t == null or t == owner or t.state != BUnit.STATE_ON_MAP:
+				continue
+			if ((t.colour >= 2) == mine) != opposite:
+				out.append(t)
+	return out
+
+
+## 0x4d47af + 0x4d485d: apply `fx` to each own-side unit around `owner`, then Xben effect `e1` (and `e2`) on them
+## with the camera on the first. 云袖 first plays 鲁明月's poses 12 and 1 (0x43d108), even with no one around.
+func _aura(owner: BUnit, opposite: bool, e1: int, e2: int, fx: Callable) -> void:
+	var ts := _aura_units(owner, opposite)
+	if owner.pid == 29:
+		await op_unit_status({"args": [29, 12, 1, 0]})
+		await op_unit_status({"args": [29, 1, 0, 0]})
+	var texts := []
+	for t in ts:
+		texts.append(fx.call(t))
+	refresh_units()
+	if ts.is_empty() or Game.autoplay:
+		return
+	await view.ensure_visible(ts[0].pos)
+	for e in [e1, e2]:
+		if e == 0:
+			continue
+		var last: EffectPlayer = null
+		for t in ts:
+			var fxp := EffectPlayer.create("xben", e)
+			if fxp:
+				fxp.position = view.cell_center(t.pos)
+				fxp.z_index = 10
+				view.fx_layer.add_child(fxp)
+				last = fxp
+		if last:
+			await last.done
+	for k in ts.size():
+		hud.popup_number(texts[k], ts[k].pos, Color(0.4, 1, 0.4))
+
+
+## StatusRecovery (0x43c7d6). 魏征 (23, 【术】明镜, mod 0x43c80a): a unit with a status that he stands next to, on
+## its side, is cured of all of them at once, without the usual rolls.
 func _status_recovery(u: BUnit) -> void:
 	if u.status == 0:
+		return
+	if Skills.beside(23, u):
+		await commands.change_unit(u, 6, 0xfe)
 		return
 	var r := 100 if u.has_effect(20) else u.person.get_raw(4)
 	var s := u.status
@@ -820,10 +906,29 @@ func _regen(u: BUnit) -> void:
 	heal = mini(heal, u.max_hp() - u.hp)
 	if heal > 0:
 		u.hp += heal
+	if u.colour == 0:
+		Mem.w32(0x55ee04, 0)           # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
 	var mp := u.effect_value(19) if u.has_effect(19) else 0
+	if u.has_effect(82):
+		mp += _drain_mp(u, u.effect_value(82))
 	mp = mini(mp, u.max_mp() - u.mp)
 	if mp > 0:
 		u.mp += mp
+
+
+## Effect 82 in the MP regeneration (0x4d7efa): up to its value of MP from each unit of the other side in the 3×3
+## around u, added to u's. The only effect-82 item (六军镜·阴阳) has the value 0.
+func _drain_mp(u: BUnit, v: int) -> int:
+	var total := 0
+	for y in range(u.pos.y - 1, u.pos.y + 2):
+		for x in range(u.pos.x - 1, u.pos.x + 2):
+			var e := unit_on(Vector2i(x, y))
+			if e == null or e == u or e.state != BUnit.STATE_ON_MAP or (e.slot < 35) == (u.slot < 35):
+				continue
+			var take := mini(e.mp, v)
+			e.mp -= take
+			total += take
+	return total
 
 
 # ------------------------------------------------------------------ weather
@@ -1046,6 +1151,8 @@ func _apply_restore() -> void:
 		return
 	vm.scene = int(d.get("scene", 0))
 	turn = int(d.get("turn", 1))
+	if bool(d.get("field_ready", false)):
+		Mem.w32(Skills.MAP_NO, int(d.get("map", 0)) & 0xff)
 	_resumed = vm.scene == 1 and int(d.get("phase", PH_PLAYER)) == PH_PLAYER and bool(d.get("field_ready", false))
 	turn_limit = int(d.get("turn_limit", 0))
 	boss_pid = int(d.get("boss", -1))

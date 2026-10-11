@@ -35,17 +35,24 @@ static func band_curve(a: int, d: int) -> int:
 
 
 # ------------------------------------------------------------------ terrain
+## TerrainEffect (0x43f84d): the family's table; 丁天庆 (6, 【术】水军) gets 110 % on 浅滩, 沼泽 and 大河 (mod
+## 0x4d39b9); then 辅助地形移动 (effect 86) at least 100 %.
 static func terrain_effect(u: BUnit, terrain: int) -> int:
 	var fam := Game.family(u.family())
 	if fam.is_empty() or terrain < 0:
 		return 10
 	var arr: Array = fam["terrain_effect"]
 	var t := int(arr[terrain]) if terrain < arr.size() else 10
+	if u.pid == 6 and terrain in [9, 10, 13]:
+		t = 11
 	if u.has_effect(86):   # 辅助地形移动
 		t = maxi(t, 10)
 	return t
 
 
+## MoveCost (0x43f7cf) of a passable terrain: 1 with effect 34 (虎类豹), and for 单雄信 (4) riding 板角墨麒麟
+## (accessory 0x2f) from EV[3190] ≥ 3 (mod 0x4db478); one less (not below 1) with 辅助地形移动 (effect 86) and for
+## 张公瑾 (25) as 神羿骑 (41, 飞将军, mod 0x4dc035); 1 for 丁天庆 (6, 水军) on 浅滩, 沼泽 and 大河 (mod 0x4d39e1).
 static func move_cost(u: BUnit, terrain: int) -> int:
 	var fam := Game.family(u.family())
 	if fam.is_empty() or terrain < 0:
@@ -56,9 +63,17 @@ static func move_cost(u: BUnit, terrain: int) -> int:
 	var c: Variant = arr[terrain]
 	if c == null:
 		return 999
-	if u.has_effect(86):
+	if u.has_effect(34):
 		return 1
-	return int(c)
+	var p := u.person
+	if u.pid == 4 and Mem.r8(Mem.EV + 4 * 3190) >= 3 and Mem.r8(p.base + 0x34) == 0x2f:
+		return 1
+	var n := int(c)
+	if n > 1 and (u.has_effect(86) or (u.pid == 25 and u.cls() == 41)):
+		n -= 1
+	if u.pid == 6 and terrain in [9, 10, 13]:
+		return 1
+	return n
 
 
 # ------------------------------------------------------------------ physical attack
@@ -77,12 +92,12 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 		# 绝招 (0x4d2f90): sure hits, except 程咬金's 三板斧: 50 %, plus 2 per weapon level with 八卦宣花斧 once
 		# EV[3185] ≥ 1 (4 per level from 3); a confused target is always hit
 		if att.pid != 1 or (def.status & BUnit.ST_CONFUSION):
-			return 100
+			return _shuanglei(100)
 		var p1 := Game.person(1)
 		var h1 := 50
 		if p1.weapon == 25 and Mem.r8(0x55e1c4) >= 1:
 			h1 += p1.weapon_lvl * (4 if Mem.r8(0x55e1c4) >= 3 else 2)
-		return h1
+		return _shuanglei(h1)
 	if is_ranged(att.family()) and def.has_effect(56):
 		return 0
 	if def.status & BUnit.ST_CONFUSION:
@@ -93,8 +108,16 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 	if def.has_effect(53):
 		h = sat_sub(h, def.effect_value(53))
 	if def.has_effect(55):
-		h = sat_sub(h, def.effect_value(55))
+		h = _shuanglei(sat_sub(h, def.effect_value(55)))
 	return clampi(h, 0, 100)
+
+
+## 双雷引's hit penalty (cave 0x40762a): while [0x55ac54] == 1, 26 less, at least 1. The mod jumps to it only from
+## the effect-55 branch of HitRate and from the 绝招 rates, so other hits keep their rate.
+static func _shuanglei(h: int) -> int:
+	if Mem.r32(0x55ac54) == 1:
+		return h - 26 if h > 26 else 1
+	return h
 
 
 ## A 绝招 is running ([0x4cf314], set by 0x4d3007).
@@ -118,10 +141,14 @@ static func crit_rate(att: BUnit, def: BUnit) -> int:
 	return 1
 
 
+## DoubleRate (0x405ce6 with the mod's caves 0x407bc8 / 0x4334f8 / 0x4075e0): 100 with effect 84, also in a
+## counterattack; else none in a counterattack; 100 in 双雷引's second phase ([0x55ac54] == 2); else the curve.
 static func double_rate(att: BUnit, def: BUnit, counter: bool) -> int:
+	if att.has_effect(84):
+		return 100
 	if counter:
 		return 0
-	if att.has_effect(84):
+	if Mem.r32(0x55ac54) == 2:
 		return 100
 	var a := att.agi()
 	var d := maxi(def.agi(), 1)
@@ -208,12 +235,23 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 		if real:
 			var r := rand(7)
 			dmg = dmg + r - 2 if r > 2 else maxi(dmg - r, 1)
-	if Game.god:
-		if def.slot < 35:
-			return 0
-		if att.slot < 35:
-			dmg *= 20
-	return mini(dmg, def.hp)
+	if Game.god and att.slot < 35 and def.slot >= 35:
+		dmg *= 20
+	dmg = damage_post(att, def, mini(dmg, def.hp))
+	if Game.god and def.slot < 35:
+		return 0
+	return dmg
+
+
+## CalcDamage's last step (mod 0x4dc9e0), on every result, a missed hit's 0 included: 【术】舍命 (the person in
+## dynamic slot 10, 王伯当) below 60 % HP deals 130 %; else 罗成 (19, 【术】智将) adds 15 % of his 精神. Both at
+## most the target's HP.
+static func damage_post(att: BUnit, def: BUnit, dmg: int) -> int:
+	if att.pid == Skills.dyn(10) and (att.hp & 0xffff) < att.max_hp() * 60 / 100:
+		return mini(dmg * 130 / 100, def.hp)
+	if att.pid == 19:
+		return mini(att.spirit() * 15 / 100 + dmg, def.hp)
+	return dmg
 
 
 # ------------------------------------------------------------------ strategies
@@ -323,7 +361,10 @@ static func strat_castable(s: int, caster: BUnit, weather: int) -> String:
 const ZHANBEI_USED := 0x55af00
 
 
-static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, leader_slot := 0) -> int:
+## StratHitRate (0x43b73f). 杜如晦 (185, 【术】杜断, mod 0x4d4abc): +20 (at most 100) on the curve when he stands next
+## to U on its side, where U is the target in the real roll and the AI's evaluation, and the caster in the
+## player's forecast (`forecast`, 0x4404bd).
+static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, leader_slot := 0, forecast := false) -> int:
 	if target.pid == 0x89:
 		return 0
 	if s == 21 and target.colour != 0 and target.pid < 0xd2:
@@ -351,6 +392,8 @@ static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int,
 		h = h * 3 / 2
 	if caster.has_effect(52):
 		h = mini(h + caster.effect_value(52), 100)
+	if Skills.beside(185, caster if forecast else target):
+		h = mini(h + 20, 100)
 	if target.has_effect(54):
 		h = sat_sub(h, target.effect_value(54))
 	if target.has_effect(55):

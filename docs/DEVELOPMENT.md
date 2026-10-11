@@ -107,7 +107,9 @@ clicks; with `OUT=file.png` and a window it also saves a screenshot of each page
 `t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
 countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the 史录 rules),
 `t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
-连续策略, the move record), `t_person` prints person stats.
+连续策略, the move record), `t_skills` the character skills (the 【技】 techniques with an attack trace, the
+phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
+terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 

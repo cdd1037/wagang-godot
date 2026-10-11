@@ -158,6 +158,23 @@ Each battle starts with its victory and defeat conditions (胜利条件 / 失败
 **Moving around the map:** arrow keys move the cursor; the mouse at a screen edge or a middle-button drag scrolls.
 On a phone drag the map with a finger; tapping a cell shows its unit or terrain panel.
 
+**Character skills.** Many characters have a skill (技能, shown in 武将情报) that works on its own:
+* **Techniques (【技】)** trigger at the start of an attack, the more likely the higher the attacker's 士气 is
+  against the target's, with a name banner: e.g. 尉迟恭 attacks up to three times while the target strikes back,
+  李元霸 hammers everyone around him and frightens and seals the whole area, 宇文成都 and 新文礼 hit the units around
+  or beside the target, 杨林 lowers a weapon or armour level, 魏文通 freezes the target's movement, 单雄信 drains its
+  MP. 定彦平 and 东方伯 lure the target into striking first and answer with a double blow; 姜松 strikes first when
+  attacked.
+* **Auras at the start of a side's phase:** 鲁明月 heals and 柳周臣 restores MP to the allies around them, 尚师徒
+  raises their attack, every 雄师 their morale, 魏征 cures their ailments; the enemy's 杨素 poisons the units around
+  him.
+* **Other skills:** 鲁明星 and 鲁明月 grow stronger near 管毅 and each other, 王君珂 with every hit 管毅 took in the
+  enemy turn, 王伯当 below 60 % troops, 罗成's attacks add a part of his 精神 (even a miss scratches). 房玄龄 halves
+  the MP cost of allies next to him, 杜如晦 raises their hit chance. 罗士信 and 齐国远 strengthen or train the
+  equipment of allies they walk through, 贾润甫 gives mounted allies one more move, 单雄信, 张公瑾 and 丁天庆 cross
+  terrain more easily, and some weapons grow stronger in town as the story goes on (宿痕).
+* Defeated enemies sometimes leave 辰屑 (a crafting material the story uses).
+
 Units that run out of troops retreat; some characters have scripted retreat lines. Experience comes from fighting
 and casting; at 100 EXP a unit levels up. From level 20 (and again from 40) a promotion item raises the unit to
 the next class. Weapons and armour gain levels with use.
