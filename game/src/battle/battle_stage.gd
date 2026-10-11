@@ -211,7 +211,15 @@ func battle_loop() -> void:
 			get_tree().quit()
 			return
 		var tp := OS.get_environment("WG_TRACE_PID")
-		if tp != "":
+		if tp == "all":
+			# debug: every unit on the map at each round start, by colour
+			var rows := {}
+			for x in units:
+				if x.active():
+					rows[x.colour] = rows.get(x.colour, []) + ["%s(%d,%d)%d" % [x.person.name, x.pos.x, x.pos.y, x.hp]]
+			for k in rows:
+				print("    [units %d] turn %d: %s" % [k, turn, " ".join(rows[k])])
+		elif tp != "":
 			# debug: where person tp's unit is at each round start
 			var x := unit_by_pid(int(tp))
 			print("    [pid %s] turn %d: %s" % [tp, turn, "no unit" if x == null else "slot %d state %d hp %d/%d at %s" % [
@@ -291,10 +299,12 @@ func op_battle_init(_ins: Dictionary) -> void:
 	for i in 115:
 		deploy[i] = {"person": 0xffff, "flags": 0}
 		Mem.w8(0x55a500 + i, 0)
-	# players = sortie list
+	# players = sortie list. 0x412230 resets only an entry's person and flags (+0, +8): a player without an op 0x4b
+	# in this battle keeps the position an earlier battle gave its entry (S_08's seventh unit)
 	var lst := sortie_list()
 	for k in mini(lst.size(), 15):
-		deploy[k] = {"person": lst[k], "flags": 0, "x": 0, "y": 0, "hidden": false}
+		deploy[k] = {"person": lst[k], "flags": 0, "x": Mem.r8(DEPLOY + 64 * k + 4), "y": Mem.r8(DEPLOY + 64 * k + 5),
+				"hidden": false}
 
 
 ## The sortie list u32[] @0x48b350 (0xffff-terminated), set by the 出场 screen / scripts.
@@ -384,6 +394,9 @@ func op_battle_enemies(ins: Dictionary) -> void:
 		deploy[35 + k] = d
 
 
+const DEPLOY := 0x494fd4       # deployment table R+0x2044, 115 entries × 64 bytes (0x418dd0); x, y at +4, +5
+
+
 ## op 0x4b: player deployment entry k → position (x, y), dir.
 func op_op_4b(ins: Dictionary) -> void:
 	if Mem.r32(0x55e9d4) != 0:
@@ -401,6 +414,8 @@ func op_op_4b(ins: Dictionary) -> void:
 	d["hidden"] = arg(ins, 4) not in [0, 0xffff]
 	d["flags"] = 4 if d["hidden"] else 0
 	deploy[k] = d
+	Mem.w8(DEPLOY + 64 * k + 4, arg(ins, 1) & 0xff)      # 0x415ef6: the entry's x, y stay for later battles
+	Mem.w8(DEPLOY + 64 * k + 5, arg(ins, 2) & 0xff)
 
 
 ## op 0x48 (0x412dd6): equipment codes for the ally/enemy deployment entry of a person (slots 15+),

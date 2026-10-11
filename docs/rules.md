@@ -732,7 +732,8 @@ re-entering with the fade-in, 0x459417), others: person +0x27..+0x29 = 0. It lea
 **op 0x44 battle_init** (0x412230): clear flags 0..255; 0x426c32(); u32 @0x55e9d4 = 0; for all 115 entries:
 person = 0xffff, flags = 0, mod byte @0x55a500[i] = 0; then entry[k].person = sortie_list[k] for the sortie list
 u32[] @0x48b350 (terminated by 0xffff; the persons chosen in the 出场 screen / op 0x4a) → player entries 0..14
-(flags 0 = player unit).
+(flags 0 = player unit). x, y are not reset: a player entry the battle gives no op 0x4b keeps the position an
+earlier battle gave it (S_08 places six; a seventh unit appears at the nearest free cell to that old position).
 
 **op 0x45 battle_settings** (0x4122f1) args `a0..a9` (tags 26 26 04 3e 32 02 32 02 47 22), S_00: `0 0 20 52 0 -1 1 0 2 1`:
 | arg | stored | meaning |

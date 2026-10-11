@@ -163,15 +163,20 @@ In battles the AI plays our units, and the AI knows nothing of the script's posi
 * **Guard:** a defeat section (its body sets story flag 1) that waits for an enemy on a cell sends the nearest unit
   there to hold it.
 * **Keep out:** a defeat section that waits for our units in an area keeps them from ending a move there (S_04's
-  友军提前攻城: coming near the town before the ambush is drawn out loses the battle).
-* **Sparing:** a defeat section that counts a side on the whole map ("fewer than n", S_03's 绿林军死伤过重) makes our
-  units leave that side alone except the target 胜利条件 names after 击退 (else the persons a section waits for at
-  HP 0); they all go for it, god mode's ×20 damage spares that side, and its clear after turn 12 is skipped.
+  友军提前攻城: coming near the town before the ambush is drawn out loses the battle). So does a section titled as
+  a trap (机关, 陷阱, 中计: S_43's 机关第五区; S_36's 挖宝04中计 is not a treasure to dig).
+* **Sparing:** a defeat section that counts an enemy side on the whole map ("fewer than n", S_03's 绿林军死伤过重;
+  not S_08's count of our own side, 我方有人撤退) makes our units leave that side alone except the target 胜利条件
+  names after 击退 (else the persons a section waits for at HP 0); they all go for it, god mode's ×20 damage spares
+  that side, and its clear after turn 12 is skipped.
 * **Duels:** a section titled "…VS…" that waits for our unit next to someone (0x2e, S_13's 管毅VS杨素) sends the unit
   there, and nobody hits that person meanwhile (the duel lowers his HP by script and keeps him on the map). God
   mode's clear after turn 12 still takes him: the duels are optional, and S_28 / S_39 need every enemy gone.
+  Duel goals come after the objectives (S_08: the race to 鹿砦 before the duels with 宇文成都).
 * Sections that wait for different units on the same cells count as one goal: the nearest of those units goes
-  (S_31: one section per 主攻手 at each corner, so the four go to four corners).
+  (S_31: one section per 主攻手 at each corner, so the four go to four corners). Nearest means the cheapest walk
+  by the unit's move costs; a unit that cannot get there is passed over. A guarded cell that is also an
+  objective (S_08's 鹿砦, which the enemy makes for too) gets every unit the objective waits for.
 * Phase and turn tests count as true. Only the pure tests 0x05 / 0x36 / 0x79 / 0x2e are evaluated, and a section
   with any other op is left out.
 * `WG_TRACE_SEC` prints each new goal (`[goal] 管毅: reach 1.36 管毅到达鹿砦 → (2, 7)`). `WG_GOALS=0` turns it
@@ -185,7 +190,7 @@ into "R剧本单挑胜利" wins). `WG_TRACE_TEXT` prints each decision (`[duel] 
 `WG_DUELSIM_CHECK=1` checks each round played against the predicted outcomes, `WG_DUELSIM=0` turns it off. When
 sections keep running without a pause for the player (R_16's 张千, who must be clicked during a 4-tick delay), the bot
 clicks an actor whose click would run a section, as a player's click during the delay would.
-`WG_TRACE_PID=p` prints person p's unit (slot, state, HP, cell) at each round start.
+`WG_TRACE_PID=p` prints person p's unit (slot, state, HP, cell) at each round start; `WG_TRACE_PID=all` every unit on the map.
 
 Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
 limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`

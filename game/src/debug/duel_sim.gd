@@ -5,7 +5,8 @@ extends RefCounted
 ## A click on a move actor runs one of the sections 攻击 / 防御 / 绝招 / 回避 (also with a suffix such as
 ## "攻击（宇文成都）"); the enemy's answer is rolled inside it (test_random), and the bars are story flags. Those
 ## sections and the ones they goto test only flags and random rolls, and change only flags, so a dry run of their
-## control flow on a copy of the flags plays a round exactly (the rest is presentation). A path through the comment
+## control flow on a copy of the flags plays a round exactly (the rest is presentation; the int variables R_49 /
+## R_51 test only pick the lines, and are read as they are). A path through the comment
 ## "R剧本单挑失败" loses the duel, one into the section "R剧本单挑胜利" wins it.
 ## best_move() enumerates every outcome of a round with its probability (each test_random both ways) and picks the
 ## move with the best chance to win, looking DEPTH rounds ahead (expectimax over the flag states, memoised; an
@@ -200,6 +201,9 @@ static func _run(vm: EexVM, sc: int, s: Array, stack: Array) -> int:
 							return -1
 					elif cop == 5:
 						r = _flags_ok(c["args"], over)
+					elif cop == 0x79:
+						# an int variable as it is now: R_49 / R_51 pick the duel's lines by EV[11]
+						r = bool(vm.host.call("op_test_int_var", c))
 					elif cop == 0x6e:
 						var q := clampf(mini(int(c["args"][0]), 100) / 100.0, 0.0, 1.0)
 						if q > 0.0 and q < 1.0:
