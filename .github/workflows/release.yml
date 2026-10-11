@@ -314,8 +314,11 @@ jobs:
           grep -q " assets/assets/data/exe_image.bin$" /tmp/apk.txt
           n=$(grep -c " assets/assets_hd/.*\.webp$" /tmp/apk.txt)
           echo "HD pack: $n images"
-          test "$n" -ge 3400
-          if grep -E " assets/assets/gfx/(portraits|maps|units)/.*\.png$" /tmp/apk.txt | head -3 | grep .; then exit 1; fi
+          test "$n" -ge 3900
+          # no original picture that has an HD version (tools/check_hd_exclude.py)
+          awk '{print $NF}' /tmp/apk.txt > /tmp/apk_files.txt
+          if sed -nE 's#^assets/assets/(gfx/.*)\.png$#assets/assets_hd/\1.webp#p' /tmp/apk_files.txt \
+              | grep -F -x -f /tmp/apk_files.txt | head -3 | grep .; then exit 1; fi
           ls -la build
 
       - name: Add it to the release
