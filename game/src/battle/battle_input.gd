@@ -105,7 +105,10 @@ func _auto_player_phase() -> void:
 		if st._battle_finished():
 			return
 		if u.active() and not u.acted:
+			if FlowGoals.enabled:
+				st.ai.flow_goal = (await FlowGoals.compute(st)).get(u.slot, {})
 			await st.ai.act(u)
+			st.ai.flow_goal = {}
 			await after_command()
 
 

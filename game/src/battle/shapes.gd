@@ -60,8 +60,8 @@ static func area_cells(code: int, src: Vector2i, t: Vector2i, w: int, h: int) ->
 				else:
 					out.append(src + Vector2i(d.x, 0))
 					out.append(src + Vector2i(0, d.y))
-		elif cells == "caster8":
-			out.clear()
+		elif cells == "caster_ring":
+			# 0x4362e7: the target, then the caster's 8 neighbours besides it (no strategy uses area 11)
 			for dy in [-1, 0, 1]:
 				for dx in [-1, 0, 1]:
 					if dx != 0 or dy != 0:

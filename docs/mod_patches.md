@@ -175,7 +175,7 @@ ChangeUnit) and `battle/battle_input.gd` (menu, 连续攻击, 连续策略, 再�
 the 绝招 moves need them:
 * **multi-target physical attacks** (item 28): `BattleActions.area_code` / `secondary_targets`;
 * **critical shouts** (item 33);
-* the **张善相 / 张公瑾 attack ranges** of item 23 (their terrain costs are still open).
+* the **张善相 / 张公瑾 attack ranges** of item 23 (张公瑾's terrain cost came with group 3).
 
 Corrections to the batch reports, found while porting:
 * **再移动** (B5 F6) is offered after *every* finished command, not only after a move: each command ends with
@@ -438,7 +438,8 @@ All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests;
 * rules.md §1.1: person byte +0x2a is the membership flag.
 * rules.md §11: the 技能说明 button is mostly, not wholly, outside the window.
 * eex.md op 0x12: arg1 is the portrait person.
-* Still open: shapes.json names area 11 `caster_ring`, while shapes.gd handles `caster8` (no strategy uses area 11).
+* shapes.json area 11 is `caster_ring`, which shapes.gd called `caster8`; it now reads the data's name and keeps the
+  target, as 0x4362e7 does (the target, then the caster's 8 neighbours besides it). No strategy uses area 11.
 
 ## Batch reports
 
@@ -989,7 +990,7 @@ Status counts: PORTED 16 · PARTIAL 4 · MISSING 18 (incl. 2 dormant, 2 cosmetic
 | 0x435eda | 0x435d6c case 2 | same | same | PORTED | same |
 | 0x435fc6 | 0x435d6c case 3 | same | same | PORTED | same |
 | 0x436053 | 0x435d6c case 7 | same | same | PORTED | same |
-| 0x436337 | 0x435d6c case 11 (8 cells around the caster, excl. the target) | same | same | PORTED | no strategy uses area 11 (note: shapes.json names it "caster_ring", shapes.gd handles "caster8") |
+| 0x436337 | 0x435d6c case 11 (8 cells around the caster, excl. the target) | same | same | PORTED | no strategy uses area 11; shapes.gd `caster_ring` (the target is the entry before the list, 0x4362e7, and is skipped) |
 | 0x4364e1 | mod code in .text 0x4364d6 (loop over on-map units, calls 0x40937f); 0x4364b6 (units 0..34) from 0x44e92e enemy-phase start, 0x4364c6 (35..114) from 0x44ee2c player-phase start | the 暗杀 countdown | 暗杀 delayed effect | MISSING | port kills at once (battle_actions.gd:485-489): feature F7 |
 | 0x43a101 | 0x4395ae AI StratScore, 战备 case | compaction of the last family test; case: ai∈{2,3} or family 9 → 0; family 0/19 → 15; 5 → 10+rand(4); 8 → 10; else rand(5) | AI 战备 scoring | PORTED | battle_ai.gd:418-423 |
 | 0x43a9be | 0x43a956 MoveAlongPath (AI walk) | `jmp 4d3a2d` after StepToward 0x437e2e: (a) byte [0x55a6d0]≠0 → 0x4d396a: path[0..n] = dir [0x55a6d1], clear; (b) [0x4cf314] (绝招 running) and person 5 → path[0] = path[1] = U.dir | 伍云召 【招】踏破连营 forced charge path | PARTIAL | normal path: battle_ai.gd:510 `_path_from`; overrides missing (绝招 not ported): feature F12 |
@@ -1128,8 +1129,8 @@ message only (battle_input.gd:259-260).
 * docs/rules.md called [0x4cf314] "special duel mode" (fixed); it is the "绝招 running" flag (set around 0x4d30a5, after the
   "MP未满" check).
 * docs/eex.md op 0x12 arg1 "cancel/default option" is the portrait person (F14). Fixed.
-* shapes.json area 11 is `"caster_ring"`, shapes.gd only knows `"caster8"` → area 11 would be target-only; no
-  strategy uses area 11 today.
+* shapes.json area 11 is `"caster_ring"`, shapes.gd only knew `"caster8"` → area 11 would be target-only; no
+  strategy uses area 11 today. Fixed.
 * The port's 杜断 (+20 strategy hit next to 杜如晦 185, 0x4d4a60(0xb9,…) in StratHit) is absent from rules.gd
   strat_hit (B4 row).
 

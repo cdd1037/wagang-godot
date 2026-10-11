@@ -288,7 +288,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 45 | 战场设定 | battle_settings | 0 | 58 | 58 | 26 26 04 3e 32 02 32 02 47 22 | (not yet analysed) |  | 4122f1 |
 | 5A | 界面5A | ui_5a | 0 | 58 | 58 | — | (not yet analysed) |  | 416c97 |
 | 07 | 测试待处理事件 | test_pending | 52 | 0 | 52 | — | (not yet analysed) |  | 415c46 |
-| 43 | 测试失败 | test_defeat | 0 | 46 | 46 | — | Counterpart of 0x42 for defeat (0x4b3d08.0x44c74d; event slot 6): leader lost / all player units gone / turn limit. | T | 411d8e |
+| 43 | 测试失败 | test_defeat | 0 | 46 | 46 | — | Counterpart of 0x42 for defeat (0x4b3d08.0x44c74d; event slot 6): the protected leader (op 0x45 a7) is among units 0..35 in state 3 / 4; or nobody is left: with 管毅 in unit 0 (person dword 0), no unit 0..15 in state 1 / 2 (HP not checked, so an ally in slot 15 counts: S_11 starts with our side hidden), else no colour-0 unit on the map (0x44c8e6 side 0); or the turn limit has passed. | T | 411d8e |
 | 5C | 指令5C | op_5c | 0 | 37 | 12 | 02 | (not yet analysed) |  | 416e17 |
 | 2B | 指令2B | op_2b | 36 | 0 | 20 | 02 | (not yet analysed) |  | 4172bb |
 | 52 | 指令52 | op_52 | 15 | 18 | 16 | 02 03 | (not yet analysed) |  | 414d15 |

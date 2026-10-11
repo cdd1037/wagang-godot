@@ -24,6 +24,7 @@ var choice_target: BUnit:
 var forbidden := Vector2i(-1, -1)
 var retreat := false
 var usable_strats: Array[int] = []
+var flow_goal: Dictionary = {}   # flow-test harness only (FlowGoals): this unit's goal cells
 var grid: Dictionary = {}        # cell -> cost from the start of the last flood (0x4aeb38 + 0x12c0)
 
 ## Neighbour order of the original's floods and walks (0x4359f5, table 0x48df68): up, right, down, left.
@@ -141,7 +142,10 @@ func act(unit: BUnit) -> bool:
 				else:
 					dest = u.pos
 			7:
-				_active(mv)      # player units under autoplay (WG_AUTO)
+				if flow_goal.is_empty():
+					_active(mv)      # player units under autoplay (WG_AUTO)
+				else:
+					_flow_walk(mv)
 	# MoveAlongPath (0x43a956): walk to dest on the last flood's grid
 	if dest.x >= 0 and dest != u.pos and grid.has(dest):
 		await st.view.ensure_visible(u.pos)
@@ -561,6 +565,53 @@ func _active(mv: int) -> void:
 	if _flood2(goal, u.pos, true) or _flood2(goal, u.pos, false):
 		_step_toward(goal, mv, true)
 		_flood4(u.pos, mv)
+
+
+
+## Flow-test harness only (FlowGoals, not the original AI): walk to the reachable cell nearest the goal cells by
+## U's move costs (other units ignored), or hold a goal cell already reached; then attack whatever is in range.
+func _flow_walk(mv: int) -> void:
+	var cells: Array = flow_goal["cells"]
+	if u.pos in cells and flow_goal["hold"]:
+		_flood4(u.pos, 0)
+		dest = u.pos
+		return
+	var far := {}
+	var buckets := {0: []}
+	for c in cells:
+		if st.view.in_bounds(c) and Rules.move_cost(u, st.view.terrain_at(c)) < 255:
+			far[c] = 0
+			buckets[0].append(c)
+	var level := 0
+	while not buckets.is_empty():
+		if not buckets.has(level):
+			level += 1
+			continue
+		for c in buckets[level]:
+			if int(far[c]) != level:
+				continue
+			var step := Rules.move_cost(u, st.view.terrain_at(c))
+			for d in FDIRS:
+				var n: Vector2i = c + d
+				if not st.view.in_bounds(n) or Rules.move_cost(u, st.view.terrain_at(n)) >= 255:
+					continue
+				if not far.has(n) or int(far[n]) > level + step:
+					far[n] = level + step
+					if not buckets.has(level + step):
+						buckets[level + step] = []
+					buckets[level + step].append(n)
+		buckets.erase(level)
+		level += 1
+	if not far.has(u.pos):
+		_active(mv)
+		return
+	_flood(u.pos, mv, true, func(_n: Vector2i) -> bool: return false)
+	dest = u.pos
+	for c in grid:
+		if c != u.pos and st.unit_at(c, u) != null:
+			continue
+		if int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
+			dest = c
 
 
 ## GoTarget (0x43afd4, codes 0 and 4): the target unit's cell (if that unit itself goes for a target, its target

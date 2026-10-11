@@ -740,7 +740,7 @@ u32[] @0x48b350 (terminated by 0xffff; the persons chosen in the 出场 screen /
 | a3 | s8 @0x496e23 (R+0x3e93) | **level offset**: a3 ≤ 50 → +a3, a3 > 50 → −(a3−50); 0xffff→0 |
 | a4, a6 (tag 0x32) | — | read and ignored (editor-only labels for victory/defeat condition types) |
 | a5 (person) | R+0x3d04 = (a5≠0xffff), u16 R+0x3d06 = a5 | **boss**: victory when this enemy is defeated (op 0x42) |
-| a7 (person) | R+0x3d08 = (a7≠0xffff), u16 R+0x3d0a = a7 | **protected leader**: defeat when this unit falls (op 0x43) |
+| a7 (person) | R+0x3d08 = (a7≠0xffff), u16 R+0x3d0a = a7 | **protected leader**: defeat when this unit, among units 0..35, is in state 3 or 4 (op 0x43, 0x44c74d) |
 | a8 (0xffff→0) | u8 R+0x3e91 → ctx+0x11 | **climate** (weather table row, 0..4) |
 | a9 (0xffff→1) | u8 R+0x3e92 → ctx+4 | **initial weather level** 0..5 |
 

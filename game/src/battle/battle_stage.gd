@@ -211,9 +211,13 @@ func battle_loop() -> void:
 			get_tree().quit()
 			return
 		if Game.god and Game.autoplay and turn > 12:
-			# debug flow-test cheat: clear the field so scripted victory can trigger
+			# debug flow-test cheat: clear the field so scripted victory can trigger. Units on the map fall as
+			# in combat (HP 0, EV[10]; the phase start's poll sees them before remove_dead), so the scripts'
+			# kill sections run (S_13's 杨素 has to reach HP 0 three times); hidden ones just go.
 			for e in range(35, 115):
-				if units[e].exists() and units[e].state in [BUnit.STATE_HIDDEN, BUnit.STATE_ON_MAP]:
+				if units[e].active():
+					await actions.unit_fell(units[e])
+				elif units[e].exists() and units[e].state == BUnit.STATE_HIDDEN:
 					units[e].hp = 0
 					units[e].state = 3
 			refresh_units()
@@ -1000,34 +1004,42 @@ func op_test_side(ins: Dictionary) -> bool:
 	return phase == arg(ins, 0)
 
 
-## op 0x42: default victory — boss defeated, or all enemy units gone.
+## op 0x42 (0x411d63 → 0x44c658): default victory. The boss (op 0x45 a5) is among units 35..115 in state 3 or 4 (a
+## boss not on the field, or still at HP 0 on it, is not enough), or no enemy-coloured unit (2, 3) is on the map
+## (0x44c8e6 side 5; hidden 伏兵 not yet out do not count).
 func op_test_event5(_ins: Dictionary) -> bool:
 	if not field_ready:
 		return false
 	if boss_pid >= 0:
-		var b := unit_by_pid(boss_pid)
-		if b == null or b.state >= 3 or (b.state == BUnit.STATE_ON_MAP and b.hp <= 0):
-			return true
-	# 0x44c8e6(5): enemy-coloured units on the map; hidden ones (伏兵 not yet out) do not count
+		for i in range(35, units.size()):
+			if units[i].state in [3, 4] and units[i].pid == boss_pid:
+				return true
 	for u in units:
-		if u.exists() and u.state == BUnit.STATE_ON_MAP and u.colour in [2, 3]:
+		if u.state == BUnit.STATE_ON_MAP and side_match(u, 5):
 			return false
 	return true
 
 
-## op 0x43: default defeat — protected leader fell, no player units left, or turn limit passed.
+## op 0x43 (0x411d8e → 0x44c74d): default defeat. The protected leader (op 0x45 a7) is among units 0..35 in state 3
+## or 4; or nobody is left: with 管毅 in unit 0 (its person dword 0), no unit 0..15 hidden or on the map (state 1 or
+## 2, whatever its HP, so allies in slot 15 count); else no unit of colour 0 on the map (0x44c8e6 side 0). Or the
+## turn limit has passed.
 func op_test_event6(_ins: Dictionary) -> bool:
 	if not field_ready:
 		return false
 	if leader_pid >= 0:
-		var l := unit_by_pid(leader_pid)
-		if l != null and l.state >= 3:
-			return true
+		for i in 36:
+			if units[i].state in [3, 4] and units[i].pid == leader_pid:
+				return true
 	var any := false
-	for i in range(0, 15):
-		var u := units[i]
-		if u.exists() and u.state in [BUnit.STATE_HIDDEN, BUnit.STATE_ON_MAP] and u.hp > 0:
-			any = true
+	if Mem.r32(units[0].addr) == 0:
+		for i in 16:
+			if units[i].state in [BUnit.STATE_HIDDEN, BUnit.STATE_ON_MAP]:
+				any = true
+	else:
+		for i in 115:
+			if units[i].state == BUnit.STATE_ON_MAP and side_match(units[i], 0):
+				any = true
 	if not any:
 		return true
 	return turn_limit > 0 and turn > turn_limit

@@ -42,7 +42,7 @@ All options are environment variables read at start-up, for example
 | `WG_RANDOM=1` | Autoplay picks random choices and clicks (otherwise deterministic) |
 | `WG_CLICKS=608,600,…` | Autoplay clicks these actors first, in order, each as soon as its click would run a section (a guided run through a puzzle; R_14's poem: `608,600,609,602,616,604,617,606,614,648,615,653,618,655,619,657`) |
 | `WG_CLICKCAP=n` | With `WG_AUTOSAVE`: end a story file after *n* autoplay clicks instead of 2,500 |
-| `WG_GOD=1` | Player side invulnerable and strong. With autoplay: enemies are cleared after turn 12, and a battle still running at turn 60 jumps to its aftermath |
+| `WG_GOD=1` | Player side invulnerable and strong. With autoplay: from turn 13 the enemies on the map fall at each round (HP 0 and EV[10] as in combat, so the scripts' kill sections run) and hidden ones go; a battle still running at turn 60 jumps to its aftermath |
 | `WG_SORTIE_P=n` | Chance (%) that autoplay presses 出征 when available (default 12) |
 
 **Tracing**
@@ -146,6 +146,22 @@ The harness (`WG_AUTOSAVE`) keeps random play moving:
 
 Autoplay clicks mostly go to actors whose click would run a section that has not run yet in this file (the
 section the next poll would pick), else to actors some section tests for, else to anyone.
+
+In battles the AI plays our units, and the AI knows nothing of the script's position objectives. Under the harness
+`FlowGoals` (`game/src/debug/flow_goals.gd`) reads them from the battle scene before each of our units acts:
+* **Reach:** a section whose other conditions hold, whose title names an objective (到达, 占领, 攻破, 突破, 打开,
+  逃离, 撤离, 挖宝, 秘藏, but nothing with 伏 or 敌军) and that waits for our units on a cell or in an area
+  (0x25 / 0x26 / 0x41) sends them there (the nearest one for a single cell). They hold the cell once there and
+  attack whatever is in range. Treasure sections (no dialogue) come last, and are dropped when they lie inside the
+  area of a trigger that is armed. The other position sections are mostly enemy triggers (伏兵起动, 我军过于南进):
+  walking into them pulled our units off the pass in S_40, and S_45's 挖宝 lies in 妖风1's area, whose 罡岚万仞
+  takes 罗成's HP (his fall loses the battle; god mode only covers combat).
+* **Guard:** a defeat section (its body sets story flag 1) that waits for an enemy on a cell sends the nearest unit
+  there to hold it.
+* Phase and turn tests count as true. Only the pure tests 0x05 / 0x36 / 0x79 / 0x2e are evaluated, and a section
+  with any other op is left out.
+* `WG_TRACE_SEC` prints each new goal (`[goal] 管毅: reach 1.36 管毅到达鹿砦 → (2, 7)`). `WG_GOALS=0` turns it
+  off.
 
 Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
 limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`

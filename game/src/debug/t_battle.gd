@@ -1,8 +1,8 @@
 extends Node
 ## Battle rules the scripts can see (docs/mod_patches.md group 1): EV[10] and the removal of fallen units after a
 ## command (0x44cc03), the 暗杀 countdown, fire (op 0x21) and its undo (op 0x58 alt ≠ 0), script attr 8, op 0x3b
-## in a battle, the AI's score for the extra targets of an area attack (0x438d96), the 史录 write rules. Prints
-## "t_battle: PASS".
+## in a battle, the AI's score for the extra targets of an area attack (0x438d96), the default defeat (op 0x43,
+## 0x44c74d), the 史录 write rules. Prints "t_battle: PASS".
 
 var _ok := true
 
@@ -157,6 +157,46 @@ func run() -> void:
 		_check(st.ai._phys_score(at, ua.pos) == (s0 - 4 if s0 > 4 else 0), "nobody else hit: −4")
 		ua.state = 0
 	at.state = 0
+	BUnit.gen += 1
+
+	# ---- op 0x43 (0x44c74d): with 管毅 in unit 0, units 0..15 in state 1 / 2 count, whatever their HP
+	for i in 115:
+		BUnit.at(i).clear(i)
+	BUnit.gen += 1
+	st.field_ready = true
+	st.turn_limit = 0
+	st.leader_pid = -1
+	var g := _unit(0, 0, 0, Vector2i(2, 2))
+	g.state = 0                                # S_11 opens with our side not yet on the field
+	var al := _unit(15, 474, 1, Vector2i(4, 2))
+	_check(not st.op_test_event6({}), "an ally in slot 15 keeps the battle going")
+	al.state = 0
+	_check(st.op_test_event6({}), "nobody in units 0..15: lost")
+	g.state = BUnit.STATE_HIDDEN
+	g.hp = 0
+	_check(not st.op_test_event6({}), "a hidden unit counts, whatever its HP")
+	al.state = 3
+	st.leader_pid = 474
+	_check(st.op_test_event6({}), "the protected leader in state 3: lost")
+	st.leader_pid = -1
+	g.pid = 2                                  # unit 0 is not 管毅: colour-0 units on the map count
+	_check(st.op_test_event6({}), "no colour-0 unit on the map: lost")
+	_unit(40, 5, 0, Vector2i(6, 2))
+	_check(not st.op_test_event6({}), "a colour-0 unit in any slot keeps it going")
+	# op 0x42 (0x44c658): the boss among units 35..115 in state 3 / 4, or no enemy colour on the map
+	var en := _unit(36, 310, 2, Vector2i(8, 2))
+	st.boss_pid = 311
+	_check(not st.op_test_event5({}), "a boss not on the field is no victory")
+	var bo := _unit(37, 311, 2, Vector2i(9, 2))
+	bo.hp = 0
+	_check(not st.op_test_event5({}), "a boss at HP 0 still on the map is no victory yet")
+	bo.state = 3
+	_check(st.op_test_event5({}), "the boss removed: victory")
+	st.boss_pid = -1
+	en.state = BUnit.STATE_HIDDEN
+	_check(st.op_test_event5({}), "only hidden enemies left: victory")
+	for i in 115:
+		BUnit.at(i).clear(i)
 	BUnit.gen += 1
 
 	# ---- 史录 (0x413adc / 0x4d1679)
