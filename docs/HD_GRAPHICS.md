@@ -15,15 +15,20 @@ Released builds contain only the HD art; there is no switch.
 
 ## Where it lives
 
-* The pack (3,500 files, about 740 MB) is too big for the git repository. It is published as `assets_hd.zip` in
+* The pack (3,905 files, about 770 MB) is too big for the git repository. It is published as `assets_hd.zip` in
   the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack).
 * **Release builds** (`.github/workflows/release.yml`) download it (also checked against GitHub's SHA-256), and
-  leave the original pictures out
-  (`exclude_filter`), so a build ships only the HD art. The workflow then plays the first scenarios from the
-  exported data to make sure no picture is missing.
+  leave out the original pictures that have an HD version, so a build draws only the HD art.
+  * The list is the `exclude_filter` of the iOS and Android presets in `game/export_presets.cfg`.
+    `tools/check_hd_exclude.py --apply` copies it into the macOS and Windows presets and fails if it leaves out a
+    picture that has no HD version. `tools/build_ios.sh` and `tools/build_android.sh` run the same check.
+  * Pictures without an HD version stay in the build: data such as the Qusi.wa tile tables 12..14, which the
+    sortie map reads pixel by pixel, and art the game does not draw (about 5 MB).
+  * The workflow then plays the first scenarios from the exported data to make sure no picture is missing.
 * **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`, which
   checks the download against the SHA-256 GitHub publishes for the asset). Without it the game falls back to the
-  original PNGs in `game/assets/`. `WG_HD=0` shows the original art for comparisons.
+  original PNGs in `game/assets/`, as it does for any picture an older pack lacks (delete `game/assets_hd` to
+  fetch the current pack). `WG_HD=0` shows the original art for comparisons.
 * **Local exports** include `game/assets_hd/` when it exists (`include_filter` in `game/export_presets.cfg`).
 
 ## How the game uses it
@@ -53,6 +58,10 @@ tools/venv/bin/pip install torch spandrel          # PyTorch with Apple GPU (MPS
 # download the models below into tools/upscale_models/
 tools/venv/bin/python -I tools/upscale_assets.py    # ~1 hour on an M4 Pro; skips files that already exist
 ```
+
+A picture the game starts to draw needs a rule in `RULES` (in `tools/upscale_assets.py`) and an entry in the iOS and
+Android presets' `exclude_filter`; `python3 -I tools/check_hd_exclude.py` then shows that each left-out original
+has its HD version. Without both, the build keeps the original, and the HD game shows it unscaled.
 
 After rebuilding, publish the new pack so the release builds use it:
 

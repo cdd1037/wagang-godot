@@ -54,6 +54,16 @@ RULES = [
     ("effects/kao/198c0_16x16.png", SPRITE, None, False),
     ("effects/kao/199c0_16x16.png", SPRITE, None, False),
     ("effects/qusi/03.png", SPRITE, None, True),
+    # added with the windows of groups 2-5 (qusi 12..14 are tile data that SortieMap reads, not pictures)
+    ("effects/qusi/0[0124].png", SPRITE, None, False),
+    ("effects/kao/*_8x8.png", SPRITE, None, False),
+    ("effects/kao/1a[5-8]c0_16x16.png", SPRITE, None, False),
+    ("effects/ranges/*/*.png", SPRITE, None, False),
+    ("icons/*/*/*.png", SPRITE, None, False),
+    ("ui/exe/icon137.png", SPRITE, None, False),
+    ("ui/mark/*.png", SPRITE, None, False),
+    ("maps/minimap/*.png", TEXTURE, None, False),
+    ("terrain/*.png", TEXTURE, None, False),
 ]
 
 GUTTER = 12  # transparent px between frames: more than the models' reach at 1x

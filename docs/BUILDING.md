@@ -147,9 +147,10 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*); 
   already published replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N`
   releases and their tags (`KEEP_BUILDS`).
 * **HD graphics only:** the workflow downloads the HD graphics pack (`assets_hd.zip` from the release tagged
-  `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures under
-  `assets/gfx` stay out of the builds (palettes, index files and the terrain-patch index images stay). It then
-  plays the first scenarios headless from the exported `.pck` and fails if the game exits with an error, a
+  `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures that have an HD
+  version stay out of the builds: the list is the iOS and Android presets', and `tools/check_hd_exclude.py` copies
+  it into the macOS and Windows presets and fails if it leaves out a picture without an HD version (palettes,
+  index files, the terrain-patch index images and the Qusi.wa tile tables stay). It then plays the first scenarios headless from the exported `.pck` and fails if the game exits with an error, a
   picture or data file is missing, or a script fails to compile. After rebuilding the pack, re-upload it (see
   [HD_GRAPHICS.md](HD_GRAPHICS.md)).
 

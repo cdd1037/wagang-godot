@@ -1,5 +1,5 @@
 #!/bin/bash
-# Download the HD graphics pack (game/assets_hd, ~720 MB) from the repository's hd-pack release.
+# Download the HD graphics pack (game/assets_hd, ~770 MB) from the repository's hd-pack release.
 # run_game.sh calls this on first run. The pack can also be built locally with tools/upscale_assets.py.
 cd "$(dirname "$0")/.." || exit 1
 REPO="seedds/wagang-godot"
@@ -13,7 +13,7 @@ if [ -e game/assets_hd ]; then
   rm -rf game/assets_hd.partial && mv game/assets_hd game/assets_hd.partial || exit 1
   echo "Moved an incomplete game/assets_hd to game/assets_hd.partial"
 fi
-echo "Downloading the HD graphics pack (~720 MB)…"
+echo "Downloading the HD graphics pack (~770 MB)…"
 mkdir -p build
 tmp=$(mktemp -d "$PWD/build/hdpack.XXXXXX") || exit 1    # same volume as game/, so the final mv is a rename
 trap 'rm -rf "$tmp"' EXIT

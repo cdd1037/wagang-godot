@@ -23,9 +23,11 @@ case "${1:-}" in
 esac
 
 if [ ! -d "$root/game/assets_hd/gfx" ]; then
-  echo "game/assets_hd is missing: the Android build ships the HD pack only (see docs/HD_GRAPHICS.md)" >&2
+  echo "game/assets_hd is missing: the Android build ships the HD art (see docs/HD_GRAPHICS.md)" >&2
   exit 1
 fi
+# every original picture the preset leaves out must have an HD version
+python3 -I "$root/tools/check_hd_exclude.py" > /dev/null || { python3 -I "$root/tools/check_hd_exclude.py" >&2; exit 1; }
 ver="$("$godot" --version | cut -d. -f1-3)"
 data="$HOME/Library/Application Support/Godot"
 [ "$(uname)" = Darwin ] || data="${XDG_DATA_HOME:-$HOME/.local/share}/godot"

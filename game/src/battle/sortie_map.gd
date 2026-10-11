@@ -8,19 +8,20 @@ extends DlgPanel
 const T := 12
 
 static var _tiles := {}          # [entry, tile] → ImageTexture
+static var _src := {}            # entry → Image
 
 
-## Tile t of a Qusi.wa entry of 12×12 tiles stored one after another (144 bytes each, read 48 px a row).
+## Tile t of a Qusi.wa entry of 12×12 tiles stored one after another (144 bytes each, read 48 px a row). The
+## entry is data, not a picture, so it is read from the original PNG (it has no HD version).
 static func tile(entry: int, t: int, key_black := false) -> Texture2D:
 	var k := Vector2i(entry, t)
 	if _tiles.has(k):
 		return _tiles[k]
-	var src := Assets.tex("gfx/effects/qusi/%02d.png" % entry)
-	if src == null:
+	if not _src.has(entry):
+		_src[entry] = Assets.image("gfx/effects/qusi/%02d.png" % entry)
+	var img: Image = _src[entry]
+	if img == null:
 		return null
-	var img := src.get_image()
-	if img.is_compressed():
-		img.decompress()
 	var out := Image.create(T, T, false, Image.FORMAT_RGBA8)
 	var w := img.get_width()
 	for y in T:

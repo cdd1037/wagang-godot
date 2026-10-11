@@ -35,9 +35,11 @@ bundle_id="$(preset_value application/bundle_identifier)"
 team="${TEAM:-$(preset_value application/app_store_team_id)}"
 
 if [ ! -d "$root/game/assets_hd/gfx" ]; then
-  echo "game/assets_hd is missing: the iOS build ships the HD pack only (see docs/HD_GRAPHICS.md)" >&2
+  echo "game/assets_hd is missing: the iOS build ships the HD art (see docs/HD_GRAPHICS.md)" >&2
   exit 1
 fi
+# every original picture the preset leaves out must have an HD version
+python3 -I "$root/tools/check_hd_exclude.py" > /dev/null || { python3 -I "$root/tools/check_hd_exclude.py" >&2; exit 1; }
 ver="$("$godot" --version | cut -d. -f1-3)"
 tpl="$HOME/Library/Application Support/Godot/export_templates/${ver}.stable/ios.zip"
 if [ ! -f "$tpl" ]; then
