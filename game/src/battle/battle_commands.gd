@@ -197,8 +197,9 @@ func _ta_po_lian_ying(u: BUnit, t: BUnit) -> void:
 		var path: Array[Vector2i] = []
 		while true:
 			c += d
-			# the original only tests x against the width here (the y test reads a wrong byte); the port stops
-			# at every map edge
+			# 0x4d4d5e tests only x (0..width; its y is the top byte of the return address, 0), but an off-map
+			# cell has no unit and terrain 0xff, whose cost (0x443070 reads family + 4's 城墙 cost) is 0xff:
+			# the charge stops at every edge, as here
 			if not st.view.in_bounds(c):
 				break
 			path.append(c)
@@ -269,9 +270,9 @@ func _sha_shou_jian(u: BUnit, t: BUnit) -> void:
 func _jin_ming(u: BUnit, t: BUnit) -> void:
 	st.actions.face(u, t.pos)
 	await _banner("尽命三锤")
-	st.actions.strike_anim_repeats = 3      # [0x4d352e]: animation table 0x42bf08
+	Mem.w8(BattleActions.TRIPLE_STRIKE, 1)  # the strikes take animation table 0x42bf08 (0x4d355e)
 	await _blow(u, t)
-	st.actions.strike_anim_repeats = 1
+	Mem.w8(BattleActions.TRIPLE_STRIKE, 0)
 
 
 ## 回马枪 (罗成), on an orthogonally adjacent target. If he moved this turn he rides back to where he started,

@@ -922,8 +922,10 @@ PhysScore(t, c) (0x438a20):
   if s > 0 and t.person < 0x400: s += (t.person == boss (R+0x3d06) or t.index == 35) ? 8 : 4
   if s < 75 and U's family ∈ {8,9,10,18}: return 0                    # casters only melee for kills
   a = area-attack code of U's class (0x407818, table 0x409191 + mod hooks); if a ∉ {0, 0xff}:
-     hits = units hit by the area attack aimed at t (0x435aad);
-     s = (hits empty ? max(s-4, 0) : s) + Σ_{u in hits} (CalcDamage(U,u) >= u.HP ? 10 : dmg*10/MaxHP(u) >= 1 ? 4 : 0)
+     hits = the other units the area attack aimed at t also hits (0x435aad → 0x435d6c kind 0, as in §4.5), the
+            lines taken from U's own cell, since CellScore does not move U to c;
+     s = (hits empty ? (s > 4 ? s-4 : 0) : s) + Σ_{u in hits} (CalcDamage(U,u) >= u.HP ? 10 : dmg*10/MaxHP(u) >= 1 ? 4 : 0)
+         (0x438d96; full damage, CalcDamage mode 0)
   if s > 0 and c lies inside t's own attack range from t's position (counterattack possible) and s > 1: s -= 1
   return s
 ```

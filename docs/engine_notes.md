@@ -73,8 +73,27 @@ Evidence = addresses in `wg2025/wagan.wa`. Decompilation with Ghidra headless: `
 GetFace 0x4075a7: pid 0 → face; else face + 7; pid 1/4/8/35 switch to fixed faces by GS+0x11 bits.
 Large = sge.wa bitmap 301+f (120×120), small = 2301+f.
 
+## Map attack animation (0x4044e9)
+Every strike: 23 steps, each followed by one tick (50 ms); steps 0..21 run a case of the switch 0x40465d (jump
+table 0x405702) picked from a step table (0x42beae; mod_patches.md B3 F13), step 22 is idle. The attacker's
+attack frames sit in the 64×64 buffers 0x4ae4c8 + 0x1000·f, the target's reaction frame at +0x4000, the two cells'
+backgrounds at +0x4900 / +0x5900.
+
+| case | attacker | target, sound |
+|---|---|---|
+| 0 | standing frame (MOV 6 + facing, 48×48) | normal |
+| 1 / 3 | attack frame 0 / 1 | normal |
+| 2 | wind-up: frame 0, an archer (0x4400a2 == 0) frame 1; on a critical (+0x604) SE 33 and 6 ticks brightened by 1, 1, 2, 2, 3, 3; an archer then waits 8 ticks | normal |
+| 10 | — | SE 37 − table 0x4400df[family] (archers 37, families 1/11/20/24 34, the others 32) |
+| 4 | frame 2 | reaction, brightened by 12 if it took HP or MP damage; SE 35 with damage, 30 without, +1 on a critical; (HP 0 already: normal, SE 7) |
+| 5 | frame 3 | as in 4 without the sound; a damaged one tinted (15, 15, 4) on a critical (0x43053e) |
+| 6, 7 | frame 3 | reaction, plain (7 also calls 0x44faf1 twice and 0x404186) |
+| 8 | standing again | normal; the action ends |
+| 9 | — | — |
+
 ## Sound ids used by the engine
-hit 35 / critical 36 (0x40437b), no damage 30/31 (0x4043fa), level-up 11 (0x4074ff), equipment level-up 13,
+hit 35 / critical 36 (0x40437b), no damage 30/31 (0x4043fa), attack swing 32 / 34 / 37 and critical wind-up 33
+(0x4044e9), level-up 11 (0x4074ff), equipment level-up 13,
 retreat 16 (0x441814), vanish 17, appear 42/15 (0x4570ee), unit turn 6, terrain change 19, revert 18,
 UI cursor/confirm/cancel 0/1/2, game over 40, duel 6/7/8/31/33/37.
 

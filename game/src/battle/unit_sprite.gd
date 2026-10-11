@@ -18,6 +18,7 @@ var anim_time := 0.0
 var walk_speed := 4.0      # frames per second for walking
 var greyed := false        # already acted this turn
 var flash := 0.0           # white flash amount (hit)
+var flash_color := Color.WHITE
 var fade := 1.0
 var _mov: Texture2D
 var _atk: Texture2D
@@ -36,11 +37,12 @@ func _init() -> void:
 shader_type canvas_item;
 uniform float grey = 0.0;
 uniform float flash = 0.0;
+uniform vec3 flash_color = vec3(1.0);
 void fragment() {
 	vec4 c = texture(TEXTURE, UV) * COLOR;
 	float l = dot(c.rgb, vec3(0.3, 0.59, 0.11));
 	c.rgb = mix(c.rgb, vec3(l * 0.85), grey);
-	c.rgb = mix(c.rgb, vec3(1.0), flash);
+	c.rgb = mix(c.rgb, flash_color, flash);
 	COLOR = c;
 }
 """
@@ -75,6 +77,7 @@ func _process(delta: float) -> void:
 			queue_redraw()
 	_shader_mat.set_shader_parameter("grey", 1.0 if greyed else 0.0)
 	_shader_mat.set_shader_parameter("flash", flash)
+	_shader_mat.set_shader_parameter("flash_color", Vector3(flash_color.r, flash_color.g, flash_color.b))
 	modulate.a = fade
 
 
@@ -151,6 +154,20 @@ func set_still(d: int) -> void:
 	dir = d
 	pose = Pose.STAND
 	queue_redraw()
+
+
+## One picture of the map attack (0x4044e9): f = −1 the standing frame (MOV 6 + facing, case 0), else attack frame
+## f of the facing (the 64×64 buffers 0x4ae4c8 + 0x1000·f). Clears the attacker's glow.
+func attack_frame(d: int, f: int) -> void:
+	dir = d
+	flash = 0.0
+	if f < 0:
+		var di: Array = _dir_index()
+		show_frame(Sheet.MOV, 6 + int(di[0]), bool(di[1]))
+	else:
+		pose = Pose.ATTACK
+		frame = f
+		queue_redraw()
 
 
 ## Play the 4-frame attack animation. Returns after it finishes.

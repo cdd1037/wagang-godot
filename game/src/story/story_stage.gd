@@ -151,8 +151,12 @@ func run_file(file: String) -> void:
 	Mem.w32(Skills.MAP_NO, 0xffff)   # towns load their pictures through 0x426c6a, which marks "no battle map"
 	if not _restore.is_empty():
 		_apply_restore()
+	_ran_secs.clear()
 	while vm.active and is_inside_tree():
+		var sc := vm.scene
 		var ran: bool = await vm.poll()
+		if ran:
+			_ran_secs["%d.%d" % [sc, vm.last_section]] = true
 		if not vm.active:
 			break
 		if not ran:
@@ -163,7 +167,9 @@ func run_file(file: String) -> void:
 			click_pid = pid
 			in_click = true
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
-			await vm.poll()
+			sc = vm.scene
+			if await vm.poll():
+				_ran_secs["%d.%d" % [sc, vm.last_section]] = true
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
 			in_click = false
 			click_pid = -1
@@ -171,6 +177,9 @@ func run_file(file: String) -> void:
 
 
 var _auto_i := 0
+var _auto_idle := 0
+var _ran_secs := {}     # the sections of this file that have run ("scene.section"), for the autoplay clicks
+static var _guided: Array = Array(OS.get_environment("WG_CLICKS").split(",", false)).map(func(x: String) -> int: return int(x))
 
 
 func _wait_for_click() -> int:
@@ -185,21 +194,39 @@ func _wait_for_click() -> int:
 			var a: RpgActor = actors[k]
 			return a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)))
 		if keys.is_empty():
+			_auto_idle += 1
+			if _auto_idle > 300 and OS.get_environment("WG_AUTOSAVE") != "":
+				# flow-test: a minute with nothing to click and no section to run, e.g. a jump start that lacks
+				# the previous file's story flags (R_10 needs flag 755 from R_09) — end the file
+				print("== flow-test: idle scene, leaving %s (missing flags from the previous file? see WG_SETFLAGS)" % vm.name)
+				vm.active = false
 			await get_tree().create_timer(0.2).timeout
 			return -2
+		_auto_idle = 0
 		_auto_i += 1
-		if _auto_i > 2500 and OS.get_environment("WG_AUTOSAVE") != "":
+		var cap := OS.get_environment("WG_CLICKCAP")
+		if _auto_i > (int(cap) if cap != "" else 2500) and OS.get_environment("WG_AUTOSAVE") != "":
 			# flow-test: random clicking is not solving this scene (puzzles, hubs) — end the file
-			print("== flow-test: click cap, leaving %s" % vm.name)
+			print("== flow-test: click cap, leaving %s; story flags set: %s" % [vm.name, _flags_set()])
 			vm.active = false
 			return -2
 		var sp := OS.get_environment("WG_SORTIE_P")
 		if sortie_enabled and Rules.chance(int(sp) if sp != "" else 12):
 			if await do_sortie():
 				return -2
-		# mostly click actors that some section of this scene tests for (like a player would)
+		# WG_CLICKS=a,b,…: click these first, in order, each as soon as its click would run a section (guided runs)
+		if not _guided.is_empty() and keys.has(_guided[0]) and await _section_for(_guided[0]) >= 0:
+			var g: int = _guided.pop_front()
+			if OS.get_environment("WG_TRACE_TEXT") != "":
+				print("  [click] ", g, " (guided)")
+			return g
+		# mostly click actors whose click runs a section that has not run yet, else actors that some section of
+		# this scene tests for (like a player would)
+		var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []
 		var hot := _clickable_pids().filter(func(x: int) -> bool: return keys.has(x))
-		if not hot.is_empty() and Rules.chance(85):
+		if not fresh.is_empty():
+			keys = fresh
+		elif not hot.is_empty() and Rules.chance(85):
 			keys = hot
 		var pid: int = keys[Rules.rand(keys.size())] if OS.get_environment("WG_RANDOM") != "" else keys[_auto_i % keys.size()]
 		if OS.get_environment("WG_TRACE_TEXT") != "":
@@ -209,6 +236,53 @@ func _wait_for_click() -> int:
 	var r: int = await clicked_actor
 	_waiting_click = false
 	return r
+
+
+## The story flags that are set, as "a-b,c,…" ranges (flow-test diagnostics).
+func _flags_set() -> String:
+	var out := []
+	var i := 0
+	while i < 2048:
+		if Mem.flag(i):
+			var j := i
+			while j + 1 < 2048 and Mem.flag(j + 1):
+				j += 1
+			out.append(str(i) if j == i else "%d-%d" % [i, j])
+			i = j
+		i += 1
+	return ",".join(out)
+
+
+## Autoplay helper: the actors among `keys` whose click would run (as vm.poll picks: the last section that
+## qualifies) a section that has not run yet in this file. The moves of the story-scene 单挑 (sections 攻击 防御
+## 绝招 回避, run round after round) never count as new.
+const DUEL_MOVES := ["攻击", "防御", "绝招", "回避"]
+
+
+func _fresh_click_pids(keys: Array) -> Array:
+	var out := []
+	var secs := vm.sections(vm.scene)
+	for pid in keys:
+		var k := await _section_for(pid)
+		if k >= 0 and not _ran_secs.has("%d.%d" % [vm.scene, k]) and not str(secs[k].get("title", "")).strip_edges() in DUEL_MOVES:
+			out.append(pid)
+	return out
+
+
+## Autoplay helper: the section a click on `pid` would run now (−1 none).
+func _section_for(pid: int) -> int:
+	var secs := vm.sections(vm.scene)
+	click_pid = pid
+	in_click = true
+	Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
+	var chosen := -1
+	for k in secs.size():
+		if await vm.check_conditions(secs[k]):
+			chosen = k
+	Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
+	in_click = false
+	click_pid = -1
+	return chosen
 
 
 ## Autoplay helper: person ids named by test_clicked conditions in the current scene.

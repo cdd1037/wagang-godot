@@ -257,6 +257,27 @@ func run() -> void:
 	sp.person.cls = 17
 	_check(st.actions.area_code(sp) == 1 and st.actions._halved(sp, 1) and not st.actions._halved(sp, 4), "无影剑 area 1, halved")
 
+	# ---- the attack animation's step table (0x42beae) and swing sound (0x4400a2)
+	var steps := func(a: int) -> Array:
+		var out := []
+		for i in 22:
+			out.append(Mem.r8(a + i))
+		return out
+	_check(steps.call(BattleActions.ANIM_TABLE) == [0, 9, 1, 10, 9, 9, 9, 2, 9, 9, 9, 3, 4, 5, 6, 9, 7, 9, 9, 9, 9, 8]
+		and steps.call(BattleActions.ANIM_TABLE_WINDUP) == [0, 9, 1, 10, 3, 1, 3, 2, 9, 9, 9, 3, 4, 5, 6, 9, 7, 9, 9, 9, 9, 8]
+		and steps.call(BattleActions.ANIM_TABLE_TRIPLE) == [0, 1, 10, 9, 9, 3, 4, 5, 6, 3, 4, 5, 6, 3, 4, 5, 6, 7, 9, 9, 9, 8],
+		"the three step tables")
+	var gy := _unit(1, 0, Vector2i(2, 2))
+	var zs := _unit(2, 204, Vector2i(2, 3))
+	_check(BattleActions.anim_table(gy) == BattleActions.ANIM_TABLE_WINDUP and BattleActions.anim_table(zs) == BattleActions.ANIM_TABLE_WINDUP
+		and BattleActions.anim_table(sp) == BattleActions.ANIM_TABLE, "管毅 and 张善相 wind up, others not")
+	Mem.w8(BattleActions.TRIPLE_STRIKE, 1)
+	_check(BattleActions.anim_table(sp) == BattleActions.ANIM_TABLE_TRIPLE and BattleActions.anim_table(gy) == BattleActions.ANIM_TABLE_WINDUP,
+		"尽命三锤's table, after the pid test")
+	Mem.w8(BattleActions.TRIPLE_STRIKE, 0)
+	sp.person.cls = 12                      # 弓兵 (family 4): SE 37
+	_check(sp.family() == 4 and BattleActions.swing_kind(sp) == 0 and BattleActions.swing_kind(gy) > 0, "archers swing with SE 37")
+
 	# ---- 围攻
 	_clear()
 	var ga := _unit(0, 0, Vector2i(5, 5))
@@ -268,8 +289,13 @@ func run() -> void:
 	_check(st.commands.siege_enabled(ga), "围攻 enabled")
 	gh.acted = true
 	_check(not st.commands.siege_enabled(ga), "a finished helper does not count")
-	gh.acted = false
-	await st.commands.siege(ga, gt, [gh] as Array[BUnit])
+	for k in 5:                             # both strikes can miss: try again a few times
+		gh.acted = false
+		ga.hp = ga.max_hp()
+		gt.hp = 9999
+		await st.commands.siege(ga, gt, [gh] as Array[BUnit])
+		if gt.hp < 9999:
+			break
 	_check(gt.hp < 9999 and gh.acted, "围攻: both strike, the helper is done")
 
 	# ---- 交给

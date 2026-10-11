@@ -345,6 +345,19 @@ func _phys_score(t: BUnit, c: Vector2i) -> int:
 		s += 8 if (t.pid == st.boss_pid or t.slot == 35) else 4
 	if s < 75 and u.family() in MAGIC_FAMILIES:
 		return 0
+	# 0x438d96: an area attack scores the other units it hits, aimed from U's own cell (CellScore does not move
+	# U), at full damage; hitting nobody else costs 4
+	var a := st.actions.area_code(u)
+	if a != 0 and a != 0xff:
+		var hits := st.actions.secondary_targets(u, t, a)
+		if hits.is_empty():
+			s = s - 4 if s > 4 else 0
+		for h in hits:
+			var dh := Rules.calc_damage(u, h, st.view.terrain_at(u.pos), st.view.terrain_at(h.pos), false, 0)
+			if dh >= h.hp:
+				s += 10
+			elif dh * 10 / maxi(h.max_hp(), 1) >= 1:
+				s += 4
 	if s > 1 and st.actions.can_attack(t, u, t.pos) and Shapes.range_cells(st.actions.attack_range_code(t), t.pos, st.view.map_w, st.view.map_h).has(c):
 		s -= 1
 	return s

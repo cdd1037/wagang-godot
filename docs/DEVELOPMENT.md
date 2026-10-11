@@ -40,6 +40,8 @@ All options are environment variables read at start-up, for example
 | `WG_AUTO=1` | Autoplay: the AI plays your phase, dialogue and waits are instant, menus pick automatically, story scenes click characters |
 | `WG_DEMO=1` | Like autoplay but at normal speed (watchable) |
 | `WG_RANDOM=1` | Autoplay picks random choices and clicks (otherwise deterministic) |
+| `WG_CLICKS=608,600,…` | Autoplay clicks these actors first, in order, each as soon as its click would run a section (a guided run through a puzzle; R_14's poem: `608,600,609,602,616,604,617,606,614,648,615,653,618,655,619,657`) |
+| `WG_CLICKCAP=n` | With `WG_AUTOSAVE`: end a story file after *n* autoplay clicks instead of 2,500 |
 | `WG_GOD=1` | Player side invulnerable and strong. With autoplay: enemies are cleared after turn 12, and a battle still running at turn 60 jumps to its aftermath |
 | `WG_SORTIE_P=n` | Chance (%) that autoplay presses 出征 when available (default 12) |
 
@@ -105,7 +107,8 @@ walking (route order and facing per step, 0x429159), `t_dialog` the message box 
 上一/下一, closing, the details, a pointer right click versus Esc on the map, long presses, story-scene right
 clicks; with `OUT=file.png` and a window it also saves a screenshot of each page and of the details),
 `t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
-countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the 史录 rules),
+countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the AI's score for
+an area attack's extra targets, the 史录 rules),
 `t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
 连续策略, the move record), `t_skills` the character skills (the 【技】 techniques with an attack trace, the
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
@@ -130,8 +133,19 @@ The harness (`WG_AUTOSAVE`) keeps random play moving:
 * A **game over** reloads the last autosave and retries.
 * A **battle** lost 3 times jumps to its aftermath on the next try.
 * A **story scene** that fails 30 times (usually chained 单挑 mini-games) is skipped.
-* A **story scene** with more than 2,500 autoplay clicks (an unsolved puzzle or hub) is ended.
+* A **story scene** with more than 2,500 autoplay clicks (an unsolved puzzle or hub) is ended; the line lists the
+  story flags that are set, to see how far a quest got.
+* A **story scene** with nothing to click and no section to run for a minute is ended ("idle scene"). This happens
+  on a jump start that lacks an earlier file's story flags: R_10's opening needs flag 755 from R_09, so start at
+  18 or pass `WG_SETFLAGS=755`. The original would sit in the same empty scene.
+* Jump starts lack earlier files' flags in quests too: R_21's 出征 needs flag 19, which 并肩王府 / 管毅邸 set only
+  with R_09's 755 / 754, so a range that starts after R_09 always ends R_21 at the click cap. With
+  `WG_SETFLAGS=755` the bot gets deep into the quest (皇宫, 喜宴, 突围救友, the rescues in the fallen 瓦岗寨), but it
+  has to win many 单挑 in one go; a lost one restarts the file.
 * An **ending** in the last chapters stops the run.
+
+Autoplay clicks mostly go to actors whose click would run a section that has not run yet in this file (the
+section the next poll would pick), else to actors some section tests for, else to anyone.
 
 Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
 limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`

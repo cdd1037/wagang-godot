@@ -1,7 +1,8 @@
 extends Node
 ## Battle rules the scripts can see (docs/mod_patches.md group 1): EV[10] and the removal of fallen units after a
 ## command (0x44cc03), the 暗杀 countdown, fire (op 0x21) and its undo (op 0x58 alt ≠ 0), script attr 8, op 0x3b
-## in a battle, the 史录 write rules. Prints "t_battle: PASS".
+## in a battle, the AI's score for the extra targets of an area attack (0x438d96), the 史录 write rules. Prints
+## "t_battle: PASS".
 
 var _ok := true
 
@@ -127,6 +128,36 @@ func run() -> void:
 	await st.op_join({"args": [pid, 1, 0]})
 	_check(Game.is_member(pid), "join works outside the battlefield")
 	Mem.w8(0x4ac63c, 3)
+
+	# ---- AI PhysScore (0x438a20 → 0x438d96): an area attack adds 10 / 4 per other unit hit, −4 when none
+	var base := Vector2i(3, st.view.map_h - 4)
+	Game.person(50).cls = 0                # 游侠: counters only on the 4 cells beside it
+	var at := _unit(5, 50, 0, base)
+	var nb := _unit(6, 51, 0, base + Vector2i(0, 1))
+	var ua: BUnit = null
+	Game.person(306).cls = 17              # 无影剑: range 3..5, area code 1 (the target's 4 neighbours)
+	for off in [Vector2i(-3, 0), Vector2i(0, -3), Vector2i(3, 0)]:
+		var cand := _unit(40, 306, 2, base + off)
+		if st.actions.can_attack(cand, at) and not st.actions.can_attack(at, cand, at.pos):
+			ua = cand
+			break
+	_check(ua != null, "a cell to attack from without a counter")
+	if ua:
+		st.ai.u = ua
+		_check(st.actions.area_code(ua) == 1, "class 17 has area code 1")
+		var code := Mem.r8(0x409191 + 17)
+		Mem.w8(0x409191 + 17, 0)
+		var s0 := st.ai._phys_score(at, ua.pos)
+		Mem.w8(0x409191 + 17, code)
+		var dn := Rules.calc_damage(ua, nb, st.view.terrain_at(ua.pos), st.view.terrain_at(nb.pos), false, 0)
+		var bonus := 10 if dn >= nb.hp else (4 if dn * 10 / maxi(nb.max_hp(), 1) >= 1 else 0)
+		_check(st.ai._phys_score(at, ua.pos) == s0 + bonus, "the neighbour adds %d" % bonus)
+		nb.state = 0
+		BUnit.gen += 1
+		_check(st.ai._phys_score(at, ua.pos) == (s0 - 4 if s0 > 4 else 0), "nobody else hit: −4")
+		ua.state = 0
+	at.state = 0
+	BUnit.gen += 1
 
 	# ---- 史录 (0x413adc / 0x4d1679)
 	Game.history.clear()

@@ -54,7 +54,7 @@ dormant in the shipped game or left out on purpose; those are marked.
 **Answer to "has the port reached feature parity?": yes, for everything this audit found.** The story scripts, the
 map, the base CCZ battle rules, the mod's formula changes, its battle commands (group 2), its character skills
 (group 3), the general battle rules (group 4) and the shops, menus, windows and settings (group 5) are ported. Left:
-the deliberate differences below, and item 28's note (the AI does not weigh the extra targets of an area strike).
+the deliberate differences below.
 
 ## Skill owners
 
@@ -183,8 +183,10 @@ Corrections to the batch reports, found while porting:
   original would let it move).
 * **围攻 siege break** (B5 F2): only 定彦平, 东方伯 and 姜松 (0x4d7b90 ≠ 0) strike first. A defender with 先手攻击 but
   another pid lets the siege run and only loses the final counter ([0x4d002c] stays 1).
-* **踏破连营's charge** tests only x against the map width (the y test reads a byte of the return address). The port
-  stops at every edge.
+* **踏破连营's charge** tests only x against the map width, and lets x == width through; the y test (0x4d4d5e) reads
+  the top byte of the return address, 0. An off-map cell still ends the charge without moving: it has no unit and
+  terrain 0xff, and the cost read 0x43f7cf → 0x443070 then takes family + 4's cost of terrain 15 城墙, which is 0xff
+  for families 0..22 (伍云召 is 统军, 17 → 21; 23..26 would read past the table). So the charge stops at every edge, as the port's does.
 * **The critical roll does not wait for a hit:** CalcDamage (0x43bc4b) makes the hit roll itself, and 0x405e03 then
   rolls the first target's critical whenever its HP > 0, so a miss can come with a critical (and its shout). The port
   rolled only on a hit.
@@ -198,8 +200,8 @@ Corrections to the batch reports, found while porting:
      尉迟恭 (夺面鞭).
    * Each has its own moves, targets and rules: 100 % hit, forced crit, no double, no counter.
    * The battle also shows a name banner, critical shouts and longer strike animations.
-   * → B5 F1, B4 §B, B1 F2/F14, B3 F12/F13. **Done**, except the extra wind-up frames of 管毅's and 张善相's
-     ordinary attacks (B3 F13, cosmetic).
+   * → B5 F1, B4 §B, B1 F2/F14, B3 F12/F13. **Done**; B3 F13's wind-up frames of 管毅 and 张善相 came later, with
+     the whole map attack animation (engine_notes.md).
 9. **围攻** (player command and AI behaviour): adjacent melee allies join the attack and lose their turn; the
    defender counters once. Defenders with 先手攻击, 双雷引 or 抽屉枪 break the siege; 并蒂 always crits in 管毅's
    siege. → B5 F2, B3 F11, B1 F12. **Done.** The technique flags it sets for 双雷引 / 抽屉枪 ([0x55ac24],
@@ -332,7 +334,8 @@ Corrections to the batch reports, found while porting:
     * Area/penetrating weapons apply to classes 6–8, 10, 11, 17, effect 43, and the skill overrides including 文士弘 长缨奔破.
     * Secondary targets take ½ damage for area codes 1–3 and 12, and full damage for line codes.
     * The port only ever hits one target.
-    * → B1 F13, B2 §H. **Done with group 2.** The AI does not yet weigh the extra targets when it picks one.
+    * → B1 F13, B2 §H. **Done with group 2.** The AI's target score counts them too (0x438d96, rules.md §10):
+      +10 per other unit the strike would fell, +4 per one it takes ≥ 10 % of, −4 when it hits nobody else.
 29. **反应/士气 equipment bonus is a percentage of the stat, not a flat add.** This affects hit, double and crit
     rates. → B2 §C. **Done** (`Person.stat`; the bonus is a percentage of the plain stat word).
 30. **组阵 formation bonuses:** +15 % per adjacent same-family ally. Attack for classes 46/47, defence for 39/46,
@@ -1104,11 +1107,12 @@ the word is cleared — set by the charge routine 0x4d4c07..0x4d4cdf (n = enemy 
 facing); (b) if [0x4cf314] (a 绝招 is running) and person == 5: path[0] = path[1] = U.dir (2 steps forward).
 The port's walk (battle_ai.gd:510) has neither; both belong to the missing 绝招 command.
 
-##### B3 F13. Attack animation step tables (0x42bed6) — MISSING, cosmetic [C tables, G meaning]
+##### B3 F13. Attack animation step tables (0x42bed6) — PORTED, cosmetic [C]
 Attack animation switch 0x40465d (step 0..21 → case via table): attacker [ebp-0x1034]+0xc person 0 管毅 or 204
-张善相 → table 0x42bef2 `0,9,1,10,3,1,3,2,9,9,9,3,4,5,6,9,7,9,9,9,9,8`; while a 绝招 runs ([0x4d352e]==1) →
-0x42bf08 `0,1,10,9,9,3,4,5,6,3,4,5,6,3,4,5,6,7,9,9,9,8`; default 0x40572e `0,9,1,10,9,9,9,2,9,9,9,3,4,5,6,9,7,9,9,9,9,8`
-(case 9 = idle). I.e. extra wind-up/strike frames for 管毅/张善相, strike frames ×3 during a 绝招.
+张善相 → table 0x42bef2 `0,9,1,10,3,1,3,2,9,9,9,3,4,5,6,9,7,9,9,9,9,8`; else while 尽命三锤 runs ([0x4d352e]==1, set
+only around its blow, 0x4d355e / 0x4d3575) → 0x42bf08 `0,1,10,9,9,3,4,5,6,3,4,5,6,3,4,5,6,7,9,9,9,8`; default
+0x40572e `0,9,1,10,9,9,9,2,9,9,9,3,4,5,6,9,7,9,9,9,9,8` (case 9 = idle). I.e. a wind-up shake for 管毅/张善相, three
+strikes in 尽命三锤. The cases are in engine_notes.md; the port runs them in `BattleActions._anim_strike`.
 
 ##### B3 F14. Choice box portrait (0x42def9) — MISSING, cosmetic [C]
 Op 0x12 choice: arg1 (0xFFFF → 0) is the person whose large portrait (sge 301 + face) is drawn in the choice window

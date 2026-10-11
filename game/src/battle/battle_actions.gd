@@ -5,7 +5,6 @@ extends RefCounted
 var st: BattleStage
 var _counter_depth := 0
 var _attack_start_actor: BUnit
-var strike_anim_repeats := 1      # 3 for 裴元庆's 尽命三锤 ([0x4d352e], animation table 0x42bf08)
 var tracing := false              # tests: record each Attack as [attacker slot, defender slot, strikes] in `trace`
 var trace: Array = []
 var _strikes_done := 0
@@ -13,10 +12,6 @@ var _strikes_done := 0
 ## Sound ids from the engine (wave player 0x47467a call sites): hit 0x23 / critical 0x24 (0x40437b),
 ## no-damage 0x1e / 0x1f (0x4043fa), level-up 0x0b (0x4074ff), equipment level-up 0x0d (0x4084db),
 ## retreat 0x10 (0x441814), vanish 0x11 (0x441be8), appear 0x2a / 0x0f (0x4570ee).
-const SE_SWING := ""
-const SE_HIT := "se35"
-const SE_CRIT := "se36"
-const SE_MISS := "se30"
 const SE_DIE := "se16"
 const SE_HEAL := "se19"
 const SE_LEVELUP := "se11"
@@ -693,35 +688,103 @@ func _apply_damage(u: BUnit, dmg: int) -> void:
 	st.refresh_units()
 
 
+## The map attack animation (0x4044e9): 23 steps of one tick (50 ms), each running a case of the switch at
+## 0x40465d; steps 0..21 take their case from a table (0x42beae): attacker 管毅 (0) or 张善相 (204) → 0x42bef2 (a
+## wind-up shake first), else while 尽命三锤 runs ([0x4d352e] = 1) → 0x42bf08 (three strikes), else 0x40572e.
+## Cases: 0 the standing frame, 1 / 3 attack frame 0 / 1, 2 the wind-up (frame 0, an archer frame 1 and 8 ticks
+## more; on a critical SE 33 and 6 ticks of growing glow), 10 the swing sound (SE 37 − table 0x4400df[family]),
+## 4 the strike (frame 2; the target flashed, SE 35 / 30 for damage / none, +1 on a critical), 5 frame 3 with the
+## target flashed again (yellow on a critical, 0x43053e), 6 and 7 frame 3 with the target's plain reaction, 8 the
+## end, 9 nothing. The numbers and the reaction poses are the port's.
+const ANIM_TABLE := 0x40572e
+const ANIM_TABLE_WINDUP := 0x42bef2
+const ANIM_TABLE_TRIPLE := 0x42bf08
+const TRIPLE_STRIKE := 0x4d352e
+const ANIM_TICK := 0.05
+
+
+static func anim_table(att: BUnit) -> int:
+	if att.pid == 0 or att.pid == 204:
+		return ANIM_TABLE_WINDUP
+	return ANIM_TABLE_TRIPLE if Mem.r8(TRIPLE_STRIKE) == 1 else ANIM_TABLE
+
+
+## 0x4400a2: table 0x4400df by family (0 for the archers 弓兵, 弓骑兵 and 箭车; 0 past family 26).
+static func swing_kind(att: BUnit) -> int:
+	var f := att.family()
+	return Mem.r8(0x4400df + f) if f >= 0 and f <= 0x1a else 0
+
+
 func _anim_strike(att: BUnit, targets: Array[BUnit], hits: Array[bool], dmgs: Array[int], crit: bool) -> void:
 	if Game.autoplay:
 		return
-	if att.node:
-		for k in strike_anim_repeats:
-			await att.node.play_attack(att.dir, 0.07 if not crit else 0.1)
-	var any_hit := false
-	for i in targets.size():
-		var t := targets[i]
-		if t.node == null:
-			continue
-		if hits[i]:
-			any_hit = true
-			t.node.set_pose(UnitSprite.Pose.HURT, t.dir)
-			t.node.flash = 0.7
-			st.hud.popup_number(("暴击 " if crit else "") + str(dmgs[i]), t.pos, Color(1, 0.3, 0.2) if crit else Color(1, 1, 1))
-		else:
-			t.node.set_pose(UnitSprite.Pose.DEFEND, t.dir)
-			st.hud.popup_number("格挡", t.pos, Color(0.6, 0.9, 1))
-	if any_hit:
-		Audio.play_se(SE_CRIT if crit else SE_HIT)
-		await wait(0.18)
-	else:
-		Audio.play_se(SE_MISS)
-		await wait(0.3)
-	for t in targets:
-		if t.node:
-			t.node.flash = 0.0
-			t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
+	var table := anim_table(att)
+	var archer := swing_kind(att) == 0
+	var damaged := not targets.is_empty() and hits[0] and dmgs[0] > 0
+	var shown := false
+	for i in 23:
+		var c := Mem.r8(table + i) if i < 22 else 9
+		var n := att.node
+		match c:
+			0:
+				if n:
+					n.attack_frame(att.dir, -1)
+			1, 3:
+				if n:
+					n.attack_frame(att.dir, 0 if c == 1 else 1)
+			2:
+				if n:
+					n.attack_frame(att.dir, 1 if archer else 0)
+				if crit:
+					Audio.play_se("se33")
+					for k in 6:
+						await wait(ANIM_TICK)
+						if n:
+							n.flash = (k / 2 + 1) / 15.0     # 0x4303c0 levels 1, 1, 2, 2, 3, 3
+				if archer:
+					await wait(ANIM_TICK * 8)
+			10:
+				Audio.play_se("se%d" % (37 - swing_kind(att)))
+			4:
+				if n:
+					n.attack_frame(att.dir, 2)
+				Audio.play_se("se%d" % ((35 if damaged else 30) + (1 if crit else 0)))
+				for k in targets.size():
+					var t := targets[k]
+					if t.node == null:
+						continue
+					t.node.set_pose(UnitSprite.Pose.HURT if hits[k] else UnitSprite.Pose.DEFEND, t.dir)
+					t.node.flash_color = Color.WHITE
+					t.node.flash = 0.8 if hits[k] and dmgs[k] > 0 else 0.0
+					if not shown:
+						if hits[k]:
+							st.hud.popup_number(("暴击 " if crit else "") + str(dmgs[k]), t.pos, Color(1, 0.3, 0.2) if crit else Color(1, 1, 1))
+						else:
+							st.hud.popup_number("格挡", t.pos, Color(0.6, 0.9, 1))
+				shown = true
+			5:
+				if n:
+					n.attack_frame(att.dir, 3)
+				for k in targets.size():
+					var t := targets[k]
+					if t.node and hits[k] and dmgs[k] > 0:
+						t.node.flash_color = Color(1, 1, 4.0 / 15) if crit else Color.WHITE
+						t.node.flash = 0.8
+			6, 7:
+				if n:
+					n.attack_frame(att.dir, 3)
+				for t in targets:
+					if t.node:
+						t.node.flash = 0.0
+			8:
+				if n:
+					n.set_pose(UnitSprite.Pose.STAND, att.dir)
+				for t in targets:
+					if t.node:
+						t.node.flash = 0.0
+						t.node.flash_color = Color.WHITE
+						t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
+		await wait(ANIM_TICK)
 
 
 ## End of a unit's action (0x442718 with 6): moved and finished, shown greyed. Then the path skills of the
