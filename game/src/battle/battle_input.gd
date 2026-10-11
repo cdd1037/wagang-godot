@@ -272,9 +272,10 @@ func pick_unit(cells: Array[Vector2i], ok: Callable) -> BUnit:
 	return null
 
 
-## 攻击 (0x43dada). 连续攻击 (effect 90): after the first attack, if the attacker stands and is not 乱, 怯 or 迷,
-## the event scene is polled and the fallen removed (0x4d2ab2), and one more target may be picked; cancelling it
-## ends the action.
+## 攻击 (0x43dada). 引导攻击 (effect 46, 0x43db4e): while the target falls, the next one in reach is attacked at
+## once. 连续攻击 (effect 90): after the first attack, if the attacker stands and is not 乱, 怯 or 迷, the event
+## scene is polled and the fallen removed (0x4d2ab2), and one more target may be picked; cancelling it ends the
+## action.
 func _do_attack(u: BUnit) -> bool:
 	var again := false
 	while true:
@@ -283,6 +284,13 @@ func _do_attack(u: BUnit) -> bool:
 			return again
 		Mem.w8(BattleActions.STRIKE, 0)        # cave 0x407651, then the attack wrapper 0x4d7808
 		await st.actions.attack_cmd(u, t)
+		while t.hp == 0 and u.has_effect(46):
+			var nt := st.actions.guided_target(u)
+			if nt == null:
+				break
+			Mem.w8(BattleActions.STRIKE, 0)
+			await st.actions.attack_cmd(u, nt)
+			t = nt
 		if again or not u.has_effect(90) or not u.active() or (u.status & (BUnit.ST_CONFUSION | BUnit.ST_FEAR | BUnit.ST_LOST)):
 			return true
 		await st.checkpoint()
@@ -342,7 +350,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			st.view.set_area_cells(st.actions.strategy_area(u, s, c))
 			var hr := 100
 			if not tg.is_empty():
-				hr = Rules.strat_hit(u, tg[0], s, st.view.terrain_at(tg[0].pos), st.weather(), 0, true)
+				hr = Rules.strat_hit(u, tg[0], s, st.view.terrain_at(tg[0].pos), st.weather(), true)
 			var ok := await st.ui.menu.choose(["执行（成功率 %d%%）" % hr, "取消"], Vector2(-1, -1), true)
 			st.view.set_area_cells([])
 			if ok == 0:

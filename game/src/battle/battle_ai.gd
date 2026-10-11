@@ -13,7 +13,14 @@ var layer_b: Dictionary = {}     # cell -> score
 var best := 0
 var dest := Vector2i(-1, -1)
 var choice_strategy := -1
-var choice_target: BUnit
+var _choice_target: BUnit
+## The decision's target unit, kept in [0x4b2c28] (0xff = none, as Prepare resets it, 0x43a4a3), which 0x436586
+## also prefers.
+var choice_target: BUnit:
+	get: return _choice_target
+	set(v):
+		_choice_target = v
+		Mem.w8(BattleActions.PREFERRED, v.slot if v else 0xff)
 var forbidden := Vector2i(-1, -1)
 var retreat := false
 var usable_strats: Array[int] = []
@@ -172,7 +179,7 @@ func _prepare() -> void:
 					layer_b[c] = int(layer_b.get(c, 0)) + 50
 	usable_strats.clear()
 	if not (u.status & BUnit.ST_SEAL):
-		for s in st.actions.known_strategies(u):
+		for s in st.actions.learned_strategies(u):
 			# Usable (0x4390ef) also asks 0x41fec9, which does not depend on the target
 			if st.actions.strategy_mp(s) <= u.mp and st.actions.cast_refusal(u, s) == "":
 				usable_strats.append(s)
@@ -603,9 +610,8 @@ func _physical_attack() -> void:
 		await st.commands.siege(u, t, hs)
 		return
 	await st.actions.attack_cmd(u, t)          # 0x4d6b9b / 0x43acf5: the attack wrapper 0x4d7808
-	if not t.active() and u.active() and u.has_effect(46):
-		for c in st.actions.attack_cells(u, u.pos):
-			var x := st.unit_at(c)
-			if x and x.active() and x.is_enemy_of(u):
-				await st.actions.attack_cmd(u, x)
-				break
+	# 引导攻击 (effect 46, 0x43ac44): one more attack when the target fell, on the next one in reach
+	if t.hp == 0 and u.has_effect(46):
+		var x := st.actions.guided_target(u)
+		if x != null:
+			await st.actions.attack_cmd(u, x)

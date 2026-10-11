@@ -175,9 +175,17 @@ On a phone drag the map with a finger; tapping a cell shows its unit or terrain 
   terrain more easily, and some weapons grow stronger in town as the story goes on (宿痕).
 * Defeated enemies sometimes leave 辰屑 (a crafting material the story uses).
 
+**General rules worth knowing.** Units of the 格斗 classes (武师, 教头, 团练) grow quicker, 燕云骑 tougher, 战车
+harder-hitting and 狄骑 both, by 15 % for each ally of the same family on the 8 cells around them (组阵). 反应 and
+士气 equipment adds a percentage of the stat. A unit carrying 笼屉 eats a 馒头 when it has lost 100 troops or more
+(yours from the bag), 天玉玲珑铠 hits harder for each blow its wearer took since the enemy's last turn, a 引导攻击
+weapon goes on to the next target in reach whenever the target falls, and 孙子兵法 lets its holder cast the
+strategies of the units beside it. 轩辕宝鉴 and 天闻录 train the weapon or the armour every turn.
+
 Units that run out of troops retreat; some characters have scripted retreat lines. Experience comes from fighting
-and casting; at 100 EXP a unit levels up. From level 20 (and again from 40) a promotion item raises the unit to
-the next class. Weapons and armour gain levels with use.
+and casting; at 100 EXP a unit levels up ("X升为N级。", and "学会了策略「…」！" for a new strategy). Officers well above
+the army's average level gain less troops and MP from a level-up. From level 20 (and again from 40) a promotion
+item raises the unit to the next class. Weapons and armour gain levels with use.
 
 Many battles have scripted events: reinforcements, ambushes, weather changes, objectives that change mid-battle,
 traps, and duels triggered when two particular units stand next to each other.

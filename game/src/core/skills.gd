@@ -60,3 +60,36 @@ static func beside(pid: int, u: BUnit) -> bool:
 ## |dx| + |dy| as 0x4db541 computes it (on bytes).
 static func distance(a: Vector2i, b: Vector2i) -> int:
 	return (absi(a.x - b.x) + absi(a.y - b.y)) & 0xff
+
+
+static var _cells := {}
+static var _cells_gen := -1
+
+
+## 0x435884: the unit on cell c in the battlefield's occupancy grid (state 2, a fallen one too until it is
+## removed; the lowest slot if several), or null. Cells outside the map ([0x4b422c] / [0x4b422d]) hold none.
+## The cell → slot table is rebuilt only when BUnit.gen says who stands where may have changed.
+static func unit_in_cell(c: Vector2i) -> BUnit:
+	if c.x < 0 or c.y < 0 or c.x >= Mem.r8(Mem.MAP_WH) or c.y >= Mem.r8(Mem.MAP_WH + 1):
+		return null
+	if _cells_gen != BUnit.gen:
+		_cells.clear()
+		for s in range(114, -1, -1):
+			var a := Mem.UNITS + s * Mem.UNIT_SIZE
+			if Mem.r16(a) != 0xffff and Mem.r8(a + 0xc) == BUnit.STATE_ON_MAP:
+				_cells[Vector2i(Mem.r8(a + 6), Mem.r8(a + 7))] = s
+		_cells_gen = BUnit.gen
+	var s: int = _cells.get(c, -1)
+	return null if s < 0 else BUnit.at(s)
+
+
+## 0x477adc: in a battle (scene mode 3, 0x40b922), the first unit slot whose state is not 0 that holds person
+## `pid`, else null.
+static func battle_unit(pid: int) -> BUnit:
+	if Mem.r8(0x4ac63c) != 3 or pid < 0:
+		return null
+	for s in 115:
+		var a := Mem.UNITS + s * Mem.UNIT_SIZE
+		if Mem.r8(a + 0xc) != 0 and Mem.r32(a) == pid:
+			return BUnit.at(s)
+	return null

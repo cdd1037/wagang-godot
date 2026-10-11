@@ -238,18 +238,16 @@ func attack(att: BUnit, def: BUnit) -> void:
 func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 	var counter := _counter_depth > 0
 	var special := Rules.special_running()
-	if not counter:
-		# combat object 0x4927f0 (0x4061fc): attacker and defender slot, read by the scripts' 攻防 tests
-		Mem.w8(0x4927f0, att.slot)
-		Mem.w8(0x4927f1, def.slot)
+	# combat object 0x4927f0 (0x4061fc, for a counterattack too): attacker and defender slot, read by the scripts'
+	# 攻防 tests, and the target list at +0x10 (0xff after the last)
+	Mem.w8(0x4927f0, att.slot)
+	Mem.w8(0x4927f1, def.slot)
 	var code := area_code(att)
 	var targets: Array[BUnit] = [def]
 	targets.append_array(secondary_targets(att, def, code))
-	if not counter:
-		# the target list at +0x10 (0xff after the last)
-		for i in targets.size():
-			Mem.w8(0x492800 + i, targets[i].slot)
-		Mem.w8(0x492800 + targets.size(), 0xff)
+	for i in targets.size():
+		Mem.w8(0x492800 + i, targets[i].slot)
+	Mem.w8(0x492800 + targets.size(), 0xff)
 	await view().ensure_visible(def.pos)
 	face(att, def.pos)
 	face(def, att.pos)
@@ -295,6 +293,7 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			hits.append(hit or dmg > 0)
 			dmgs.append(dmg)
 			mps.append(t.mp if Mem.r32(T_NUMU) == 1 else 0)     # 怒目: the whole MP, hit or not (0x4d8150)
+			Mem.w32(Rules.PREV_TARGET, i)
 		if step:
 			await _technique_banner()
 			if Mem.r32(T_GAIMA) == 1:
@@ -321,9 +320,13 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			_apply_damage(t, dmgs[i])
 			if killed:
 				fallen.append(t)
-			elif dmgs[i] > 0 and t.pid == 24 and Mem.r8(Mem.EV + 4 * 3223) >= 3:
-				# 谢映登's 贯石 (0x4da0a7): the damage also comes off his MP (its low byte)
-				Mem.w8(t.addr + 0x14, maxi((t.mp & 0xff) - dmgs[i], 0))
+			elif dmgs[i] > 0:
+				if t.pid == 24 and Mem.r8(Mem.EV + 4 * 3223) >= 3:
+					# 谢映登's 贯石 (0x4da0a7): the damage also comes off his MP (its low byte)
+					Mem.w8(t.addr + 0x14, maxi((t.mp & 0xff) - dmgs[i], 0))
+				# 笼屉 (effect 62 使用馒头) once the unit is 100 or more below its maximum (mod 0x4d681c)
+				if t.hp + 100 <= t.max_hp() and t.has_effect(62):
+					await eat_bun(t)
 			if att.slot < 15:
 				best_exp = maxi(best_exp, _phys_exp(att, t, killed))
 		if step:
@@ -554,6 +557,7 @@ func counter_attack(att: BUnit, def: BUnit) -> void:
 	var depth := _counter_depth
 	if not (depth == 0 or (depth == 1 and _attack_start_actor and _attack_start_actor.has_effect(40))):
 		return
+	Mem.w8(PREFERRED, att.slot)      # 0x406431, for the range test 0x436586
 	if def.active() and att.active() and not (def.status & BUnit.ST_CONFUSION) and not att.has_effect(44) \
 			and can_attack(def, att):
 		_counter_depth += 1
@@ -563,6 +567,26 @@ func counter_attack(att: BUnit, def: BUnit) -> void:
 		_counter_depth -= 1
 	else:
 		Mem.w32(T_SHA, 0)
+
+
+## [0x4b2c28]: the unit 0x436586 returns when it is among the units it collects (the AI's choice target; the
+## attacker in the counterattack's range test, 0x406431; the striker in 0x4d7551).
+const PREFERRED := 0x4b2c28
+
+
+## 引导攻击 (effect 46) after a kill: the next target in reach of the attacker's cell (0x436586 with the attack range
+## code): of the living units of the other side group on the range's cells in its order, the one in [0x4b2c28]
+## if it is there, else the last; null if none.
+func guided_target(u: BUnit) -> BUnit:
+	var found: BUnit = null
+	for c in attack_cells(u, u.pos):
+		var x := st.unit_on(c)
+		if x == null or (x.slot < 35) == (u.slot < 35) or x.hp == 0:
+			continue
+		found = x
+		if x.slot == Mem.r8(PREFERRED):
+			break
+	return found
 
 
 ## The attacker's line before a critical strike (0x405821): with chance 25 %, while a 绝招 runs always, except
@@ -601,27 +625,42 @@ func exp_mult(u: BUnit) -> int:
 	return 100 + u.person.equip_bonus(8)
 
 
-## The statuses a strike with damage gives target `def` (0x405889; not to a target with effect 57, 0x4d724c).
-## 李世民's 梦魇 (67, 0x4d8caf): 迷失 on the targets of the strike in order, up to the first of a higher level.
+## The statuses a strike with damage gives target `def` (0x405889; not to a target with effect 57, 0x4d724c), in
+## the original's order, which is that of its rolls: effect 35 and 玄术骑 (50) 混乱, effect 36 中毒, 力士 (45) 麻痹,
+## effect 37's six statuses, 李世民's 梦魇 (67, 0x4d8caf: 迷失 on the targets of the strike in order, up to the
+## first of a higher level), 震天骑 (38) 迷失, effect 34 麻痹 (cave 0x40913d), effect 38 穷计.
 func _on_hit_effects(att: BUnit, def: BUnit, targets: Array[BUnit]) -> void:
 	var c := att.cls()
-	if (att.has_effect(35) or c == 50) and Rules.chance(60):
+	if att.has_effect(35) and Rules.chance(60):
+		def.status |= BUnit.ST_CONFUSION
+	if c == 50 and Rules.chance(60):
 		def.status |= BUnit.ST_CONFUSION
 	if att.has_effect(36):
 		def.status |= BUnit.ST_POISON
-	if (c == 45 or att.has_effect(34)) and Rules.chance(60):
+	if c == 45 and Rules.chance(60):
 		def.status |= BUnit.ST_PARALYSIS
-	if c == 38 and Rules.chance(60):
-		def.status |= BUnit.ST_LOST
-	if att.has_effect(38):
-		def.status |= BUnit.ST_SEAL
 	if att.has_effect(37):
-		def.status |= [BUnit.ST_POISON, BUnit.ST_CONFUSION, BUnit.ST_PARALYSIS, BUnit.ST_SEAL][Rules.rand(4)]
+		_random_statuses(att, def)
 	if att.pid == 67:
 		for t in targets:
 			if t.level() > att.level():
 				break
 			t.status |= BUnit.ST_LOST
+	if c == 38 and Rules.chance(60):
+		def.status |= BUnit.ST_LOST
+	if att.has_effect(34) and Rules.chance(60):
+		def.status |= BUnit.ST_PARALYSIS
+	if att.has_effect(38):
+		def.status |= BUnit.ST_SEAL
+
+
+## Effect 37 随机属性攻击 (mod 0x4d0c6e): six rolls, each on (L·a + b) mod 256 % with L the attacker's weapon level:
+## 麻痹 5L+15, 穷计 4L+4, 混乱 L+1, 中毒 L+6, 怯力 2L+2, 迷失 3L+3 (tables 0x4d0b60 / 0x4d0b68 / 0x4d0b70).
+func _random_statuses(att: BUnit, def: BUnit) -> void:
+	var lv := att.person.weapon_lvl
+	for k in 6:
+		if Rules.chance((lv * [5, 4, 1, 1, 2, 3][k] + [15, 4, 1, 6, 2, 3][k]) & 0xff):
+			def.status |= [BUnit.ST_PARALYSIS, BUnit.ST_SEAL, BUnit.ST_CONFUSION, BUnit.ST_POISON, BUnit.ST_FEAR, BUnit.ST_LOST][k]
 
 
 func _apply_damage(u: BUnit, dmg: int) -> void:
@@ -806,26 +845,31 @@ func gain_exp(u: BUnit, e: int) -> void:
 		return
 	if not Game.autoplay:
 		st.hud.popup_number("经验 +%d" % e, u.pos, Color(0.6, 1, 0.6))
-	var total := p.exp + e
-	while total >= 100 and p.level < 70:
-		total -= 100
-		if Mem.r32(0x55e1c0) == 4:
-			p.bonus_counter = 5     # mod option: every level-up gets the +1 grade bonus
+	await set_exp(p, p.exp + e)
+
+
+## SetExp (0x408950) with show, as the battle calls it: from a level under 70, a level-up per 100 points, also
+## past 70 while the rest is 100 or more (the mod's option [0x55e1c0] == 4 gives each the +1 grade bonus,
+## 0x4d0331); then the rest is the experience, or 0xff (MAX) from level 70.
+func set_exp(p: Person, total: int) -> void:
+	if p.level >= 70:
+		return
+	while total >= 100:
+		if Mem.r8(0x55e1c0) == 4:
+			p.bonus_counter = 5
 		var g := p.level_up(1)
-		u.hp = mini(u.hp + g[5], u.max_hp())
-		u.mp = mini(u.mp + g[6], u.max_mp())
-		Audio.play_se(SE_LEVELUP)
 		await _show_level_up(p, g)
+		total -= 100
 	p.exp = 0xff if p.level >= 70 else total
 
 
+## LevelUp's show part (0x4074cf): in a battle the unit's pose 11 (0x45778f(pid, 0xb, 0, 0)), SE 11, the report.
 func _show_level_up(p: Person, g: Array) -> void:
-	var names := ["攻击", "防御", "精神", "爆发", "士气", "兵力", "策略"]
-	var lines := "%s 的等级上升到 %d！\n" % [p.name, p.level]
-	for i in 7:
-		if g[i] > 0:
-			lines += "%s +%d　" % [names[i], g[i]]
-	await st.ui.popup(lines, 0.0 if not Game.demo else 1.2)
+	if st.in_battle():
+		await st.op_unit_status({"args": [p.id, 11, 0, 0]})
+	Audio.play_se(SE_LEVELUP)
+	for t in p.level_up_texts(g):
+		await st.ui.popup(t, 0.0 if not Game.demo else 1.2)
 
 
 func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
@@ -847,11 +891,23 @@ func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
 	gain = gain * exp_mult(u) / 100
 	if lvl >= 9:
 		gain = 1
+	await add_equip_exp(p, weapon, gain)
+
+
+## 0x4082d6: `amount` experience for the weapon or the armour. 100 a level, 150 for a treasure (250 from its level
+## 9), up to level 3, a treasure's 10; the threshold is that of the starting level. At the top the experience is
+## 0xff (MAX).
+func add_equip_exp(p: Person, weapon: bool, amount: int) -> void:
+	var iid := p.weapon if weapon else p.armor
+	if iid < 0:
+		return
+	var lvl := p.weapon_lvl if weapon else p.armor_lvl
+	var cur := p.weapon_exp if weapon else p.armor_exp
 	var it := Game.item(iid)
 	var treasure := bool(it.get("treasure", false))
 	var maxl := 10 if treasure else 3
 	var thr := 100 + (50 if treasure else 0) + (100 if treasure and lvl == 9 else 0)
-	var total := cur + gain
+	var total := cur + amount
 	var up := false
 	while total >= thr and lvl < maxl:
 		lvl += 1
@@ -869,20 +925,42 @@ func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
 
 
 # ------------------------------------------------------------------ strategies (§5)
-## The battle 策略 list (0x465d40): the strategies whose learn level for the class is reached. 秦琼 (8) as 统军 (43)
-## learns the strategies from 0x29 on by class 35's table (mod), which adds 补给 and 救护.
+## The strategies whose learn level for the person's class is reached, by id: the AI's usable-strategy list
+## (0x43844a, before its MP test) and the 武将情报 page (0x4658c0).
+func learned_strategies(u: BUnit) -> Array[int]:
+	var out: Array[int] = []
+	for sd in Game.strategies_db:
+		if not sd.get("loaded_by_exe", true):
+			continue
+		var lv := int(sd.get("learn_level_by_class", {}).get(str(u.cls()), 0))
+		if lv > 0 and lv <= u.level():
+			out.append(int(sd["id"]))
+	return out
+
+
+## The battle 策略 list (0x465a40): the strategies whose learn level for the class is reached, by id. 秦琼 (8) as
+## 统军 (43) learns the strategies from 0x29 on by class 35's table (mod 0x4da280), which adds 补给 and 救护. With
+## 策略模仿 (effect 51) also those that the units on the 4 cells beside the caster (any side, 0x4359f5 / 0x435884)
+## have learned for their own class and level.
 func known_strategies(u: BUnit) -> Array[int]:
 	var out: Array[int] = []
+	var copied := {}
+	if u.has_effect(51):
+		for d in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+			var o := Skills.unit_in_cell(u.pos + d)
+			if o != null:
+				for s in learned_strategies(o):
+					copied[s] = true
 	var c := str(u.cls())
-	for s in Game.strategies_db:
-		if not s.get("loaded_by_exe", true):
+	for sd in Game.strategies_db:
+		if not sd.get("loaded_by_exe", true):
 			continue
-		var lv: Dictionary = s.get("learn_level_by_class", {})
+		var lv: Dictionary = sd.get("learn_level_by_class", {})
 		var k := c
-		if u.cls() == 43 and (u.pid & 0xff) == 8 and int(s["id"]) >= 0x29:
+		if u.cls() == 43 and (u.pid & 0xff) == 8 and int(sd["id"]) >= 0x29:
 			k = "35"
-		if lv.has(k) and int(lv[k]) > 0 and int(lv[k]) <= u.level():
-			out.append(int(s["id"]))
+		if (lv.has(k) and int(lv[k]) > 0 and int(lv[k]) <= u.level()) or copied.has(int(sd["id"])):
+			out.append(int(sd["id"]))
 	return out
 
 
@@ -1100,6 +1178,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 				t.status |= BUnit.ST_POISON
 			elif s in [35, 36]:
 				t.status |= BUnit.ST_PARALYSIS
+			await _strategy_bun(t, dmg)
 		return _strat_exp(u, t, killed, true)
 	match s:
 		23, 24: _buff(t, 3, false)
@@ -1186,6 +1265,8 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		_apply_damage(t, dmg)
 		if t.hp == 0:
 			await unit_fell(t)
+		else:
+			await _strategy_bun(t, dmg)
 	elif amount < 0:
 		t.hp -= amount
 		Audio.play_se(SE_HEAL)
@@ -1258,6 +1339,45 @@ func _play_strategy_effect(s: int, target: Vector2i, targets: Array[BUnit]) -> v
 
 
 # ------------------------------------------------------------------ items
+## 馒头, the item 笼屉 (effect 62 使用馒头) eats.
+const BUN := 0x57
+
+
+## 笼屉 after strategy damage (0x4224a8, mod 0x4dca83): a unit that survives a loss eats a 馒头, a red one only once
+## it is 100 or more below its maximum, any other at once.
+func _strategy_bun(t: BUnit, dmg: int) -> void:
+	if dmg > 0 and t.hp > 0 and t.has_effect(62) and (t.colour != 0 or t.hp + 100 <= t.max_hp()):
+		await eat_bun(t)
+
+
+## 笼屉's 馒头 (0x41dc43(0x57, slot, 0, free)): a red unit eats one from the bag if there is one (0x40db3e, removed
+## by 0x40d955), any other unit one for free. It heals as the item does (0x43c42e).
+func eat_bun(t: BUnit) -> void:
+	var free := t.colour != 0
+	if not free and Game.stack_count(BUN) <= 0:
+		return
+	var h := heal_value(BUN, t)
+	t.hp += h
+	Audio.play_se(SE_HEAL)
+	if not Game.autoplay:
+		st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
+	if not free:
+		Game.remove_item_id(BUN)
+	st.refresh_units()
+
+
+## What a 恢复HP / 恢复MP item (types 63 / 64) restores (0x43c42e): its value, at most what is missing; a value of
+## 0xff fills it.
+func heal_value(iid: int, t: BUnit) -> int:
+	var it := Game.item(iid)
+	var v := int(it.get("value", 0))
+	if int(it.get("type", 0)) == 64:
+		var mm := t.max_mp() - t.mp
+		return mm if v == 0xff or (mm >= 0 and mm < v) else v
+	var mh := t.max_hp() - t.hp
+	return mh if v == 0xff or (mh >= 0 and mh < v) else v
+
+
 func usable_items() -> Array:
 	var out := []
 	for e in Game.bag_entries():
@@ -1289,11 +1409,11 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> void:
 	Audio.play_se(SE_HEAL)
 	match int(it.get("type", 0)):
 		63:
-			var h := mini(v, t.max_hp() - t.hp)
+			var h := heal_value(iid, t)
 			t.hp += h
 			st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 		64:
-			var m := mini(v, t.max_mp() - t.mp)
+			var m := heal_value(iid, t)
 			t.mp += m
 			st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
 		65: t.status &= ~0x48
@@ -1301,19 +1421,27 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> void:
 		67: t.status &= ~0x7e
 		68: t.status &= ~0x24
 		69:
+			# 太保令 (mod 0x4d2d5a): the five stat words +2 (at most 9999) and the abilities +2 (at most 100), no buff;
+			# the unit's poses 11 and 7 (0x45778f)
 			for i in 5:
-				t.set_buff(i, 6)
+				p.set_stat_word(i, Person._min_add(p.get_stat_word(i), 2, 9999))
+			for i in 5:
+				p.set_raw(i, Person._min_add(p.get_raw(i), 2, 100))
+			await st.op_unit_status({"args": [p.id, 11, 0xff, 0xff]})
+			await st.op_unit_status({"args": [p.id, 7, 0, 0]})
 		70, 71, 72, 73, 74:
 			var si: int = [0, 2, 1, 3, 4][int(it["type"]) - 70]
 			p.set_stat_word(si, mini(p.get_stat_word(si) + v, 9999))
 			p.set_raw(si, mini(p.get_raw(si) + v, 100))
 			await st.ui.popup("%s 的能力上升了！" % p.name, 0.0 if not Game.demo else 1.0)
 		75:
+			# 仙人果 (0x41d3d9 with mod 0x4d030d): counted per person (0x55a400), the +1 grade bonus for the next
+			# five stats, its value as experience through SetExp, then 兵力 and 策略 to full
+			Mem.w8(0x55a400 + p.id, (Mem.r8(0x55a400 + p.id) + 1) & 0xff)
 			p.bonus_counter = 5
-			var g := p.level_up(1)
+			await set_exp(p, p.exp + v)
 			t.hp = t.max_hp()
 			t.mp = t.max_mp()
-			await _show_level_up(p, g)
 		76:
 			p.cls = p.cls + 1
 			await st.ui.popup("%s 晋升为 %s！" % [p.name, p.class_name_str()], 0.0 if not Game.demo else 1.0)

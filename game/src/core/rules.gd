@@ -102,7 +102,7 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 		return 0
 	if def.status & BUnit.ST_CONFUSION:
 		return 100
-	var h := band_curve(att.agi(), def.agi())
+	var h := band_curve(att.formation_agi(), def.formation_agi())     # 组阵 agility (0x43b5f3 / 0x43b5fe)
 	if att.has_effect(39):
 		h = mini(h + att.effect_value(39), 100)
 	if def.has_effect(53):
@@ -142,7 +142,8 @@ static func crit_rate(att: BUnit, def: BUnit) -> int:
 
 
 ## DoubleRate (0x405ce6 with the mod's caves 0x407bc8 / 0x4334f8 / 0x4075e0): 100 with effect 84, also in a
-## counterattack; else none in a counterattack; 100 in 双雷引's second phase ([0x55ac54] == 2); else the curve.
+## counterattack; else none in a counterattack; 100 in 双雷引's second phase ([0x55ac54] == 2); else the curve of
+## both units' 组阵 agility.
 static func double_rate(att: BUnit, def: BUnit, counter: bool) -> int:
 	if att.has_effect(84):
 		return 100
@@ -150,8 +151,8 @@ static func double_rate(att: BUnit, def: BUnit, counter: bool) -> int:
 		return 0
 	if Mem.r32(0x55ac54) == 2:
 		return 100
-	var a := att.agi()
-	var d := maxi(def.agi(), 1)
+	var a := att.formation_agi()
+	var d := maxi(def.formation_agi(), 1)
 	if a >= 3 * d:
 		return 100
 	if a >= 2 * d:
@@ -191,12 +192,16 @@ static func class_matchup(af: int, df: int, dmg: int) -> int:
 	return dmg
 
 
-## mode bit0 = counterattack, bit1 = secondary target.
+## CalcDamage (0x43bc4b). mode bit0 = counterattack, bit1 = secondary target. A and D are the 组阵 attack and
+## defence (0x4d98eb, 0x4d98a2). `real` = the strike's own calculation, made after its hit roll passed: it counts
+## the hit for 怀恨攻击 first.
 static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bool, mode: int) -> int:
+	if real:
+		_count_hit()
 	var ta := terrain_effect(att, t_att)
 	var td := terrain_effect(def, t_def)
-	var A := att.atk() * ta / 10
-	var D := def.def() * td / 10
+	var A := att.formation_atk() * ta / 10
+	var D := def.formation_def() * td / 10
 	if special_running() and att.pid == 17:
 		D = 0       # 裴元庆's 尽命三锤 ignores defence (0x4d3501)
 	var dmg: int
@@ -224,7 +229,8 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 			for k in d:
 				dmg = dmg * 110 / 100
 		if mode == 0:
-			var g := att.grudge if att.has_effect(87) else 0
+			# 怀恨攻击 (mod 0x4d0d2e): ×(10 + the attacker's own hit counter) / 10
+			var g := Mem.r8(BUnit.GRUDGE + att.slot) if att.has_effect(87) else 0
 			dmg = dmg * (10 + g) / 10
 		else:
 			if mode != 2:
@@ -241,6 +247,20 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 	if Game.god and def.slot < 35:
 		return 0
 	return dmg
+
+
+## The index of the target the strike's loop (0x405e03) processed last ([0x55a6cc], set at 0x406173 after each).
+const PREV_TARGET := 0x55a6cc
+
+
+## 怀恨攻击's hit count (mod 0x4d3389 → 0x4d0cf5): +1, at most 0xff, for the slot at entry [0x55a6cc] of the
+## combat object's target list. That is the previous target of the loop: the target itself on a one-target strike,
+## the one before it (or the last of the previous strike, for the first) on an area strike.
+static func _count_hit() -> void:
+	var s := Mem.r8(0x492800 + (Mem.r32(PREV_TARGET) & 0xff))
+	var c := Mem.r8(BUnit.GRUDGE + s)
+	if c != 0xff:
+		Mem.w8(BUnit.GRUDGE + s, c + 1)
 
 
 ## CalcDamage's last step (mod 0x4dc9e0), on every result, a missed hit's 0 included: 【术】舍命 (the person in
@@ -363,8 +383,9 @@ const ZHANBEI_USED := 0x55af00
 
 ## StratHitRate (0x43b73f). 杜如晦 (185, 【术】杜断, mod 0x4d4abc): +20 (at most 100) on the curve when he stands next
 ## to U on its side, where U is the target in the real roll and the AI's evaluation, and the caster in the
-## player's forecast (`forecast`, 0x4404bd).
-static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, leader_slot := 0, forecast := false) -> int:
+## player's forecast (`forecast`, 0x4404bd). 狂澜 against slot 0 or the enemy commander (BattleStage.BOSS) starts
+## from 0 but still takes the modifiers after it, so it can end above 0.
+static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, forecast := false) -> int:
 	if target.pid == 0x89:
 		return 0
 	if s == 21 and target.colour != 0 and target.pid < 0xd2:
@@ -385,9 +406,7 @@ static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int,
 	elif s in STRAT_HIT_1_2:
 		h = h / 2
 	elif s == 9:
-		if target.slot == 0 or target.slot == leader_slot:
-			return 0
-		h = h / 3
+		h = 0 if target.slot == 0 or target.pid == Mem.r16(BattleStage.BOSS) else h / 3
 	if s == 20 and caster.family() == 12:
 		h = h * 3 / 2
 	if caster.has_effect(52):

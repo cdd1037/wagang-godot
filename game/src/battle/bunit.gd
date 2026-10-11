@@ -21,6 +21,11 @@ const F_MOVED := 0x04
 const F_ACTED := 0x02
 const F_PASS := 0x80
 
+## 怀恨攻击's hit counters (u8 per slot, saturating at 0xff; mod 0x4d0cf5 / 0x4d0d2e / 0x4d0d0e).
+const GRUDGE := 0x55a500
+const AROUND: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, -1), Vector2i(-1, 1)]
+
 const STATE_NONE := 0
 const STATE_HIDDEN := 1
 const STATE_ON_MAP := 2
@@ -28,7 +33,6 @@ const STATE_ON_MAP := 2
 var slot := 0
 var node: UnitSprite
 static var gen := 0     # bumped whenever who stands where may have changed (BattleStage.unit_at's cache)
-var grudge := 0
 var extra: Dictionary = {}
 
 var addr: int:
@@ -220,6 +224,41 @@ func agi() -> int:
 
 func morale() -> int:
 	return stat(4)
+
+
+## 组阵 (mod 0x4d995d): the units on the 8 cells around this one (0x435884) of the same side group (slots < 35
+## or ≥ 35), the same family and neither 混乱 nor 迷失.
+func formation_count() -> int:
+	var n := 0
+	var fam := family()
+	for d in AROUND:
+		var o := Skills.unit_in_cell(pos + d)
+		if o != null and (o.slot < 35) == (slot < 35) and o.family() == fam \
+				and o.status & (ST_CONFUSION | ST_LOST) == 0:
+			n += 1
+	return n
+
+
+## v + 15 % of it per formation neighbour when the class is one of `classes` (no 9999 cap after it).
+func _formation(v: int, classes: Array) -> int:
+	if cls() in classes:
+		v += v * 15 * formation_count() / 100
+	return v
+
+
+## The attack, defence and agility the physical formulas use (0x4d98eb, 0x4d98a2, 0x4d9818): with 组阵 attack for
+## 狄骑 and 战车 (46, 47), defence for 燕云骑 and 狄骑 (39, 46), agility for 武师, 教头 and 团练 (18..20). CalcDamage
+## takes the first two, HitRate and DoubleRate the agility of both units; the other users keep the plain getters.
+func formation_atk() -> int:
+	return _formation(atk(), [46, 47])
+
+
+func formation_def() -> int:
+	return _formation(def(), [39, 46])
+
+
+func formation_agi() -> int:
+	return _formation(agi(), [18, 19, 20])
 
 
 ## MovePoints (0x43f74f): 0 when paralysed; move buff >= 4 → +2 (at most 255), < 3 → −2 (at least 0).

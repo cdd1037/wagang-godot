@@ -52,10 +52,8 @@ Many MISSING rows are several sites of one feature. The list below merges them i
 dormant in the shipped game or left out on purpose; those are marked.
 
 **Answer to "has the port reached feature parity?": no.** The story scripts, the map, the base CCZ battle rules,
-most of the mod's formula changes, its battle commands (group 2) and its character skills (group 3) are ported.
-Missing:
-* several mod rule changes (group 4);
-* shops, and a few information windows and settings (group 5).
+the mod's formula changes, its battle commands (group 2), its character skills (group 3) and the general battle
+rules (group 4) are ported. Missing: shops, and a few information windows and settings (group 5).
 
 ## Skill owners
 
@@ -335,32 +333,47 @@ Corrections to the batch reports, found while porting:
     * The port only ever hits one target.
     * → B1 F13, B2 §H. **Done with group 2.** The AI does not yet weigh the extra targets when it picks one.
 29. **反应/士气 equipment bonus is a percentage of the stat, not a flat add.** This affects hit, double and crit
-    rates. → B2 §C.
+    rates. → B2 §C. **Done** (`Person.stat`; the bonus is a percentage of the plain stat word).
 30. **组阵 formation bonuses:** +15 % per adjacent same-family ally. Attack for classes 46/47, defence for 39/46,
-    agility for 18–20. → B4 §C, B1 F10.
+    agility for 18–20. → B4 §C, B1 F10. **Done** (`BUnit.formation_*`, used by CalcDamage, HitRate and
+    DoubleRate only).
 31. **Item-effect rules:**
     * effect 57 blocks every on-hit status → B1 F4 (**done with group 3**);
-    * effect 37 uses six independent rolls → B1 F5;
-    * 笼屉 (effect 62) eats a 馒头 after ≥ 100 damage → B1 F8, B3 F2;
-    * 怀恨攻击 (effect 87) hit counters → B4 §E, B5 F12;
+    * effect 37 uses six independent rolls → B1 F5 (**done**; the on-hit statuses now roll in the original's
+      order, effect 34 after 震天骑);
+    * 笼屉 (effect 62) eats a 馒头 after ≥ 100 damage → B1 F8, B3 F2 (**done**: physical hits from 100 down for
+      both sides; after a strategy a red unit from 100 down, any other at once; red units eat from the bag, others
+      free);
+    * 怀恨攻击 (effect 87) hit counters → B4 §E, B5 F12 (**done**, in Mem 0x55a500; the count goes to the entry
+      [0x55a6cc] of the target list, so on an area strike to the previous target);
     * effect 84 doubles in counters too → B1 F16 (**done with group 3**);
     * effect 86 cost −1 and effect 34 cost 1 → B5 F10 (**done with group 3**);
-    * 太保令 permanent +2 → B2 §Q.
+    * 太保令 permanent +2 → B2 §Q (**done**).
 32. **Level-up:**
     * HP/MP catch-up penalty for party members above the average level;
     * the default message is only "X升为N级。" (details behind the 升级显示能力成长 option);
     * "学会了策略「…」！" messages.
-    * → B2 §E/§F.
+    * → B2 §E/§F. **Done**, with the unit's HP / MP growth inside LevelUp (0x4e0100), the unit capped when a
+      maximum drops (0x4d6710), the HP / MP jitter rolls that are drawn and thrown away, gains as new − old, and the
+      grade bonus as the one global count [0x4cf2b8]. The option itself is group 5's 环境设定; the port reads
+      byte [0x4dbe25] (0 by default).
 33. **Original-code gaps found on the way:**
     * critical-hit shouts → B1 F2 (**done with group 2**);
-    * 引导攻击 (effect 46) for player attacks → B5 row 0x43db51;
-    * 策略模仿 (effect 51) → B6 F5;
-    * 狂澜 against the army leader keeps applying modifiers, and no caller passes `leader_slot` → B4 extra notes;
-    * SetExp keeps levelling past 70 → B2 notes;
-    * the empty-cell terrain popup → B5 row 0x4559ba;
-    * per-phase experience in Regen (0x43cf26, player colour only): 轩辕宝鉴 (effect 22) and 天闻录 (effect 23) give
-      the weapon / armour value × level / 100 experience points, effect 64 the same in EXP (found with group 3;
-      not yet specified in detail).
+    * 引导攻击 (effect 46) for player attacks → B5 row 0x43db51 (**done**: the player's attack chains while the
+      target falls, the AI's attacks once more; both take 0x436586's pick, the last unit of the range or the one in
+      [0x4b2c28]);
+    * 策略模仿 (effect 51) → B6 F5 (**done**, in the 策略 menu list; the AI's list and the 武将情报 page keep the
+      plain class list, as the original's do);
+    * 狂澜 against the army leader keeps applying modifiers, and no caller passes `leader_slot` → B4 extra notes
+      (**done**: the commander is R+0x3d06, kept in Mem 0x496c96);
+    * SetExp keeps levelling past 70 → B2 notes (**done**);
+    * the empty-cell terrain popup → B5 row 0x4559ba (**moved to group 5**: a window that needs the strategy
+      element icons, as 地形情报一览 does);
+    * per-phase experience in Regen (0x43cf26, red units only): effect 64 for the person, 轩辕宝鉴 (22) for the
+      weapon, 天闻录 (23) for the armour, each value × ((100 + EXP bonus) mod 256) / 100 (**done**).
+    * Also: a counterattack rewrites the combat object 0x4927f0 (0x4064f1 → 0x4061fc), as eex.md says; the port
+      kept the first attacker there. 恢复HP / 恢复MP items of value 0xff fill up (0x43c42e): 鸡腿 healed at most 255.
+      仙人果 gives its value as experience through SetExp and counts in 0x55a400.
 
 ### 5. Shops, menus and windows
 
@@ -393,6 +406,9 @@ Corrections to the batch reports, found while porting:
     * 版本情报;
     * 部队情报一览 as a sortable list with a 我军/敌军 switch.
 40. **Cosmetic:**
+    * the empty-cell terrain popup (from group 4): a left click on an empty cell in the player phase shows a 3×2
+      box with the terrain picture and name, "可以恢复" or "无法移动", and the four strategy element icons, greyed
+      where that element cannot be cast (0x45576d) → B5 row 0x4559ba;
     * choice-box portrait (op 0x12 arg1) → B3 F14;
     * SE 2 on 不能对自己使用 → B3 F15;
     * cursor "(x:y) terrain" readout → B5;

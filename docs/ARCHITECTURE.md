@@ -67,7 +67,11 @@ Important locations:
 | 0x48b350 | sortie list (u32 person ids, 0xffff-terminated) |
 | 0x4b0783 | the bag (item slots) |
 | 0x4b3c80 | duel object |
-| 0x4927f0 / 0x4927f1 | attacker / defender slot of the latest attack (the scripts' 攻防 tests); +0x608 the strike counter |
+| 0x4927f0 / 0x4927f1 | attacker / defender slot of the latest attack, a counterattack too (the scripts' 攻防 tests); +0x10 the target list; +0x608 the strike counter |
+| 0x496c96 | the battle's enemy commander (u16 R+0x3d06, `BattleStage.boss_pid`) |
+| 0x4b2c28 | the AI's choice target, which the target finder 0x436586 prefers (`BattleActions.PREFERRED`) |
+| 0x4cf2b8 | the level-up grade bonus count, one for everyone (`Person.bonus_counter`) |
+| 0x55a500 | 怀恨攻击's hit counter per unit slot (`BUnit.GRUDGE`); [0x55a6cc] the strike loop's last target index |
 | 0x48baec | the loaded battle map's number, 0xff / 0xffff in towns (battle or town person getters, `core/skills.gd`) |
 | 0x55ac1c..0x55ac68 | the mod's 【技】 technique flags (rules.md §12.1) |
 | 0x55ee00..0x55ee07 | 并蒂's hit counters |

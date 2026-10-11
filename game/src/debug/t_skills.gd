@@ -245,7 +245,7 @@ func _strategies() -> void:
 	_check(h == 60, "curve 60 (%d)" % h)
 	var dr := _unit(1, 185, Vector2i(5, 4))
 	_check(Rules.strat_hit(c, t, 0, 0, 0) == 60, "杜断: the real roll looks at the target")
-	_check(Rules.strat_hit(c, t, 0, 0, 0, 0, true) == 80, "杜断 in the forecast: the caster")
+	_check(Rules.strat_hit(c, t, 0, 0, 0, true) == 80, "杜断 in the forecast: the caster")
 	dr.clear(1)
 	var de := _unit(36, 185, Vector2i(5, 8))
 	_check(Rules.strat_hit(c, t, 0, 0, 0) == 80, "杜断 next to the target on its side")

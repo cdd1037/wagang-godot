@@ -109,7 +109,7 @@ func _data_tests() -> void:
 	# names lose their ASCII digits (0x407757)
 	var pp := Person.view(5, "间谍3")
 	_check(InfoWindow.display_name(pp) == "间谍", "digits stripped: %s" % InfoWindow.display_name(pp))
-	# strategies: the same rule as the battle's known_strategies
+	# strategies: the same rule as the AI's list (learned_strategies)
 	var acts := BattleActions.new(null)
 	for pid in range(0, 40):
 		var p := Game.person(pid)
@@ -119,7 +119,7 @@ func _data_tests() -> void:
 		bu.reset(4)
 		bu.pid = pid
 		var a := InfoWindow.strategies_of(p.cls, p.level)
-		var b := acts.known_strategies(bu)
+		var b := acts.learned_strategies(bu)
 		if a != b:
 			_check(false, "strategies of pid %d: %s vs %s" % [pid, a, b])
 			break

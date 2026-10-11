@@ -133,33 +133,50 @@ u16 a, u16 b (unknown, raw), 16 equipment ids, 16 consumable ids (0xff = end). 1
 ## 2. Character growth
 
 ### 2.1 Level up (0x4073b9 LevelUp(n, show); patched heavily) [C]
+Byte +0x2a of the person is the party-membership byte (0 = member; the port calls it `fixed_growth_flag`).
 ```
 n = min(n, 255 - level)
 bonus_stat = rand(5)                                  # mod: only used for person id 10 (盛彦师)
 for i in 0..6:
     g = class.growth[i]                               # e3[2+i]
+    j = (member and bonus_counter == 0) ? jitter(g) : g     # 0x433510 → 0x448b09, for i 5 and 6 too (rolls
+                                                            #   drawn, the result is not used)
     if i <= 4:
-        if person.fixed_growth_flag == 0 and bonus_counter == 0: g = jitter(g)   # 0x448b09
         grade = ability_grade(raw_ability[i])          # 0x4072fc: ≥100→5, ≥90→4, ≥80→3, ≥70→2, ≥60→1, else 0
-        if bonus_counter > 0: bonus_counter -= 1; grade += 1      # [0x4cf2b8], set to 5 by 仙人果-like events
-        g = (grade + g) >> 1
-    else if person.fixed_growth_flag == 0 and person.mp_base != 1:
-        g -= catchup_penalty(i)                        # 0x4d806a (only for fixed_growth_flag==0; unused by data)
+        if bonus_counter > 0: bonus_counter -= 1; grade += 1      # [0x4cf2b8], one global count, set to 5 by 仙人果
+        g = (grade + j) >> 1                                       #   and the mod's SetExp option
+    else if member and person.mp_base != 1:
+        g -= catchup_penalty(i)                        # mod 0x4d65f5 → 0x4d806a (signed; may go negative)
     repeat n times:
         if person.id == 10 and i <= 4 and bonus_stat == i: g += 1; bonus_stat = 5
         if i <= 4 and g == 0: g = 1
-        AddStat(i, g)                                  # 0x406e17
-unit.hp = min(unit.hp + class.growth[5], MaxHP); unit.mp = min(unit.mp + class.growth[6], MaxMP)   # 0x4e0100
+        old = value(i); new = AddStat(i, g)            # 0x406e17
+        gains[i] = new != 0 ? new - old : 0            # 0x433430 / 0x407497: the last repetition's change
+unit = 0x43e4d6(person)  (without one: the record of slot 114, where the search stopped)
+unit.hp = min(unit.hp + class.growth[5], MaxHP)               # 0x4e0100, unpenalised, once per call
+unit.mp low byte = min(unit.mp + class.growth[6], MaxMP)
 level += n; if level >= 70: exp = 0xff
+if show: in a battle the unit's pose 11 (0x45778f(pid, 0xb, 0, 0)); SE 11; the report (below)
 ```
+catchup_penalty(i) (0x4d806a): L = level, q = i == 5 ? (L + 490) / max(hp_base, 1) : L / max(mp_base, 1); over
+the player slots 0..14 up to the first empty one, count the units in state 2 and sum their levels; none → 0;
+avg = ceil(sum / count); L ≤ avg → 0; else q == 0 ? L − avg : ceil((L − avg) / q).
 jitter(g) (0x448b09): `if chance(50): g += 1; if chance(50): g -= 2` (unsigned byte arithmetic).
-AddStat (0x406e17): i 0..4 → stat_word[i] = min(+g, 9999); 5 → hp_base = max(1, min(+g, 9999));
-6 → mp_base = max(1, min(+g, 255)) unless mp_base == 1; 7/8 → mod 0x4d67d0; 10..14 → raw byte = min(+g, 120).
+AddStat (0x406e17) returns the new value: i 0..4 → stat_word[i] = min(+g, 9999); 5 → hp_base = min(+g, 9999);
+6 → mp_base = min(+g, 255) (a result of 0 becomes 1; the sums are signed), unless mp_base == 1 (then it returns g);
+after 5 / 6 mod 0x4d6710 lowers the battle unit's HP / MP (0x477adc) to the new maximum; 7/8 → mod 0x4d67d0;
+10..14 → raw byte = min(+g, 120).
+Report (0x4074cf, mod 0x4dbe29): byte [0x4dbe25] == 0 (the default; the 环境设定 option 升级显示能力成长 sets it)
+→ message "%s升为%u级。" (style 2); else "%s升为%u级。\n\n" and seven lines 攻击 / 防御 / 精神 / 反应 / 士气 / HP MAX /
+MP MAX + "增加了 %d。" (HP / MP below 0: "减少了 %d。"), built by 0x43efc3 (style 0). Then for each strategy 0..0x43
+whose learn level for the class equals the new level: "学会了策略「%s」！" (style 2).
 
 ### 2.2 Derived stats [C]
 * Person stat s (0..4): `GetStat_s = min(stat_word[s] + equip_bonus(s), 9999)` (0x407126 atk, 0x407157 def,
   0x407188 spirit, 0x4071b9 agility, 0x4071ea morale), with the mod's hooks: 宿痕 in towns, the 连理 auras and
-  并蒂 in battles — see §12.2.
+  并蒂 in battles — see §12.2. For agility and morale the equipment bonus is a percentage (cave 0x469341, table
+  0x46235d = 1,1,1,5,5,…: entry 5 → `stat_word[s] · equip_bonus(s) / 100`), as the items' "+%d%%" says
+  (八卦宣花斧 反应 +25 %, 瓦面金装锏 士气 +20 %). The 装备 dialog's comparison (0x4692fd) uses it too.
 * MaxHP = min(hp_base + equip_bonus(5), 9999) (0x40721b); MaxMP = min(mp_base + equip_bonus(6), 255) (0x40724a).
 * Move = min(class.move + equip_bonus(7), 255) (0x40727b).
 * Battle-unit stat (0x43f4fe.. on unit struct) applies buff level byte unit[0x18+s] (s=0..4):
@@ -196,7 +213,7 @@ CalcDamage(att_unit, def_person, real, mode):
       dmg = class_matchup(att_family, def_family, dmg)     # jump table 0x4d2140 [TODO]
       ... effect 45 骑兵攻击 / 88 步兵攻击 bonuses (+effect_value %) vs table 0x43f4ac[def_family] ==0 / ==2
       if has_effect(att, 89 冲锋攻击): dmg = 0x4d8d95(dmg, att, def)        [TODO]
-      if mode == 0: dmg = dmg * (10 + (has_effect(att,87 怀恨攻击) ? grudge[att] : 0)) / 10
+      if mode == 0: dmg = dmg * (10 + (has_effect(att,87 怀恨攻击) ? grudge[att.slot] : 0)) / 10
       else:
           if mode != 2: dmg = dmg*3 >> 2          # counter-attack
           dmg = max(dmg,1)
@@ -208,6 +225,14 @@ CalcDamage(att_unit, def_person, real, mode):
 mode = (counter ? 1 : 0) + (not first target ? 2 : 0) (0x405e78..0x405ea7).
 Critical (0x405ef8): `if chance(crit_rate(att)) : dmg = dmg*3/2` (0x405f38), crit_rate = 0x405d69 [TODO];
 if target has effect 57 化解攻击效果 the critical damage becomes 0.
+
+怀恨攻击's counters grudge[] = u8 0x55a500[slot] (mod): CalcDamage with real, once its hit roll passed (0x43bd2c →
+0x4d3389 → 0x4d0cf5), adds 1 (at most 0xff) to grudge[target_list[[0x55a6cc]]], where [0x55a6cc] is the index of
+the target the strike loop 0x405e03 handled last (0x406173) — the target itself on a one-target strike, the one
+before it on an area strike (the last of the previous strike for the first). The enemy phase start clears 0..34
+(0x44e914 → 0x4d0d0e), the player phase start 35..114 (0x44ee15), op 0x44 all.
+组阵 (mod 0x4d995d): n = the units on the 8 cells around U in the occupancy grid (0x435884) with U's side group
+(slot < 35 or ≥ 35), U's family and neither 混乱 nor 迷失; the stat + stat·15·n/100 (no cap after it).
 
 ### 4.1 Class matchup (兵种相克) — mod jump table 0x4d2140[attacker_family] (applied to dmg after base) [C]
 | attacker family | vs defender family | factor |
@@ -276,7 +301,8 @@ Counter (0x40639a)
 DoubleCheck (0x406181 with the mod's cave 0x407600 and 0x4d88df): [0x55ac54] == 2 and strike counter 0 → yes;
 strike counter > 0 → no; chance(DoubleRate) → yes; else yes if byte [0x55ac68] == 1 (抽屉枪), which is then cleared.
 (The original's "no double in a counterattack" test is skipped.)
-DoubleRate (0x405ce6, caves 0x407bc8 / 0x4334f8 / 0x4075e0): `a = Agi(att), d = Agi(def)`; effect 84 主动连击 → 100,
+DoubleRate (0x405ce6, caves 0x407bc8 / 0x4334f8 / 0x4075e0): `a = Agi(att), d = Agi(def)` (0x4d9818: 组阵 agility
+for classes 18..20); effect 84 主动连击 → 100,
 also in a counterattack; during a counterattack → 0; [0x55ac54] == 2 → 100;
 `a >= 3d → 100; a >= 2d → (a-2d)*80/d + 20; a >= d → (a-d)*18/d + 2; else 1`.
 The mod's attack wrapper and its techniques (0x4d7808, the strike step 0x433373) are in §12.1.
@@ -288,6 +314,9 @@ counter if def.HP > 0 and not (def.status & 8 confused) and not has_effect(att, 
            and att.pos in attack_range(def)        # 0x436586 with def's class range code (0x43f8be)
 then depth += 1; Attack(def, att)                    # damage mode has counter bit → ×3/4, no double
 ```
+Before the range test the counter writes the attacker's slot to [0x4b2c28] (0x406431), which 0x436586 returns when
+it is in range. The counterattack's Attack rebuilds the combat object (0x4061fc): +0 / +1 become the counter's
+attacker / defender, and the target list starts with the first attacker.
 Per strike (0x405e03 → 0x405744 → 0x405889): every target gets its own hit roll inside CalcDamage; the first
 target, if its HP > 0, then rolls the critical whether or not it was hit; the others crit with it. A critical is
 preceded by the attacker's shout (0x405821): chance(25) is rolled; while a 绝招 runs 程咬金 never shouts and everyone
@@ -311,10 +340,15 @@ After a command that finished the unit: 再移动 (effect 82, 0x4d27a0: clear th
 the kill rewards (0x4dcb09). A command that does not finish (a cancelled picker, "MP未满") returns to the menu; a
 cancelled menu undoes the move. The move UI (0x43d538) records the unit's pid in [0x4cf310] and its walk in
 0x4cfc00 / [0x4cfbfc] (path[0] = start … path[n] = end), cleared after each command (0x43e21c).
-* 攻击 (0x43dada): with 连续攻击 (effect 90), once: if the attacker stands and is not 乱/怯/迷, poll the event scene
-  and remove the fallen (0x4d2ab2), then pick another target; a cancel ends the action.
+* 攻击 (0x43dada): while the target falls and the attacker has 引导攻击 (effect 46, 0x43db4e), the next target from
+  0x436586 (as in §10.5) is attacked at once; then with 连续攻击 (effect 90), once: if the attacker stands and is
+  not 乱/怯/迷, poll the event scene and remove the fallen (0x4d2ab2), then pick another target; a cancel ends the
+  action.
 * 策略 (0x43dc21): under 穷计 SE 2 and "正处于穷计状态。". With 连续策略 (effect 83, 0x4d0d71) the first cast sets
-  [0x4d0d61], the list reopens and costs double (0x425ad0); a cancel then ends the action.
+  [0x4d0d61], the list reopens and costs double (0x425ad0); a cancel then ends the action. The list (0x465a40):
+  strategies 0..0x43 whose learn level for the class is ≠ 0 and ≤ the level, by id; with 策略模仿 (effect 51) also
+  those that the units on the 4 cells beside the caster (any side) have learned for their own class and level. The
+  AI's list (0x43844a) and the 武将情报 page (0x4658c0) take the class's table only.
 * 绝招, 围攻, 交给: docs/mod_patches.md B5 F1–F3 (as ported, with the corrections in its group 2 section).
 
 ---------------------------------------------------------------------------------------------------
@@ -373,7 +407,8 @@ per-strategy factor (table 0x43bc07 → 0x43bb6b):
    ×9/10: 烈焰 炎雷 惊涛 潮汐 飞沙 龙挂 飓风 塌方 暗鬼 流言 说词 毒烟
    ×4/5 : 炼狱 海啸 地裂 谎报 乡歌 大喝 骂阵 伪书 瘴雾 陷阱 封印
    ×3/5 : 赤链 暗算 威慑 挑拨 濠壑          ×1/2: 伪令
-   狂澜 : 0 vs unit index 0 or the army leader, else ×1/3
+   狂澜 : 0 vs unit index 0 or the enemy commander (pid == u16 R+0x3d06, 0x406630), else ×1/3; with 0 it goes on
+          through the modifiers below, so effect 52 and 杜断 can lift it
    =100 (no further modifiers): 暗杀 八阵 all heals/cures/buffs 战备 白虎
 if s == 20 and family(caster) == 12: h = h*3/2
 if has_effect(caster, 52 辅助策略命中): h = min(h + val, 100)
@@ -410,10 +445,17 @@ the level drifts back toward 3 each turn [G: decay at turn start, see §7].
 Status bits unit[0x1e]: 0x02 麻痹 (paralysed: cannot move), 0x04 封/穷计 (no strategies), 0x08 混乱 (confused:
 auto-hit by physical & most strategies, no counter), 0x10 中毒 (poison), 0x20/0x40 other (0x40 set by class-38 震天骑
 attacks, 60%), 0x01 ?.
-Physical-attack on-hit effects (0x405889, after damage, if target alive): effect 35 混乱攻击 → 混乱 60%;
-class 50 (玄术骑) attacker → 混乱 60%; effect 36 中毒攻击 → 中毒 100%; class 45 (力士) → 麻痹 60%; effect 37
-随机属性攻击 → random status (0x4d0c6e); class 38 (震天骑) → 0x40 60%; effect 34 恶移麻痹 → 麻痹 60%;
+Physical-attack on-hit effects (0x405889, on damage or MP damage ≠ 0, not to a target with effect 57), in this
+order (the order of the rolls): effect 35 混乱攻击 → 混乱 60%; class 50 (玄术骑) attacker → 混乱 60%; effect 36
+中毒攻击 → 中毒 100%; class 45 (力士) → 麻痹 60%; effect 37 随机属性攻击 (mod 0x4d0c6e) → six rolls with L = the
+attacker's weapon level, each chance((L·a + b) & 0xff): 麻痹 5L+15, 穷计 4L+4, 混乱 L+1, 中毒 L+6, 怯力 2L+2,
+迷失 3L+3; 李世民's 梦魇 (0x4d8caf); class 38 (震天骑) → 0x40 60%; effect 34 恶移麻痹 → 麻痹 60% (cave 0x40913d);
 effect 38 封杀策略 → 封 100%; person 204 (0xcc) special → 中毒.
+After the HP loss, if the target lives (physical 0x405bb0 → mod 0x4d681c, after 贯石): with HP + 100 ≤ MaxHP and
+effect 62 使用馒头 (笼屉) it eats a 馒头 (item 0x57, 0x41dc43): a unit of the player's colour from the bag if there
+is one, any other free. After strategy damage (0x4224a8): any other colour eats at once; the player's colour only
+with HP + 100 ≤ MaxHP (mod 0x4dca83), from the bag. 恢复HP / 恢复MP items heal their value, at most what is
+missing; value 0xff fills up (0x43c42e).
 
 ### 5.5 Heal strategies (0x42378d → amount 0x43c548(target; s, caster, preview)) [C]
 ```
@@ -563,9 +605,11 @@ enemy non-damage / ally target: La<Lt ? min((Lt-La)*4+10,100) : max(sat_sub(10,(
 weather (target side 2): 20
 e = e * exp_mult / 100 ; awarded = max over targets
 ```
-### 8.3 Level up (SetExp 0x408950(total))
-`if level >= 70: no gain. while total >= 100: LevelUp(1) (§2.1); total -= 100. exp = level >= 70 ? 0xff : total.`
-(mod option [0x55e1c0]==4 gives the +1 grade bonus counter (=5) on every level-up.)
+### 8.3 Level up (SetExp 0x408950(total, show))
+`if level >= 70: no gain. while total >= 100: LevelUp(1, show) (§2.1); total -= 100. exp = level >= 70 ? 0xff : total.`
+The level is only tested on entry, so a large total keeps levelling past 70. (mod option byte [0x55e1c0] == 4 gives
+the +1 grade bonus counter (= 5) on every level-up.) Battle experience, Regen and 仙人果 call it with show = 1.
+仙人果 (type 75, 0x41d3d9): 0x55a400[pid] += 1, bonus counter = 5, SetExp(exp + value, 1), then HP and MP to full.
 ### 8.4 Weapon / armor exp
 Weapon (0x40397d, attacker): `(damage>0 ? (La > Lt ? 2 : 3) : 1) * exp_mult/100`; armor (0x403a85, defender, only
 player-side units 0x43ff54): `(damage>0 ? (La < Lt ? 3 : 4) : 1) * exp_mult(defender)/100`; mod: if the item is already
@@ -635,7 +679,9 @@ if terrain in {城池 25%, 关隘 20%, 鹿砦 20%, 村庄 15%, 兵营 20%}: heal
 if has_effect(18 每回合恢复HP): heal += MaxHP / value          (紫霞神绶 value 5 → +20%)
 heal = min(heal, MaxHP - HP)
 mp = (has_effect(19 每回合恢复MP) ? value : 0) + mod 0x4d7eb1 (effect 82)  ; mp = min(mp, MaxMP - MP)
-player-side only (0x43ff54): effect 64 → +value*exp_mult/100 character exp; effect 22 → weapon exp; effect 23 → armor exp
+player's colour only (0x43ff54): m = (exp_mult & 0xff); effect 64 → value·m/100 character exp; effect 22 (轩辕宝鉴)
+  → weapon exp; effect 23 (天闻录) → armor exp (values & 0xff)
+show the changes (0x450984); HP += heal; MP += mp; SetExp(exp + e, 1); 0x4082d6(weapon, we); 0x4082d6(armour, ae)
 ```
 
 
@@ -946,7 +992,10 @@ Arrival (0x440252): if U.target == 0xff and U.pos == target point and U.ai ∈ {
 PhysicalAttack (0x43aafb): skipped if flag 0x80, code 4, flag 2, or the person's weapon cannot attack (0x407907);
 target = choice.target if it is in U's attack range from the new cell (else the last unit found in range — quirk);
 face it (0x435829), attack (0x441488(1, target, 0xff) → §4 sequence; mod hook 0x4d6b80/0x4d7808). If the target died
-and U has effect 46 引导攻击: pick a unit in range the same way and attack again. Finally U.flags |= 2|4.
+and U has effect 46 引导攻击 (0x43ac44): 0x436586 from U's cell with its range code picks the next one, once, and U
+attacks it. 0x436586 collects the living units of the other side group on the range's cells in the shape's order
+and returns the one in [0x4b2c28] (the AI's choice, 0xff after Prepare; the counter's attacker) if it is among
+them, else the last. Finally U.flags |= 2|4.
 Unit flags (unit[+0xd]): 0x04 = moved, 0x02 = action finished (the phase loop skips units with either; §9.1 had them
 swapped), 0x80 = scripted move (go to the target ignoring enemies, never attacks; set by op 0x55 [G]).
 

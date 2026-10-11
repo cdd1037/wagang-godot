@@ -58,7 +58,11 @@ var armor_exp: int:
 var accessory: int:
 	get: return _item_slot(0x34)
 	set(v): Mem.w8(base + 0x34, NONE if v < 0 else v)
-var bonus_counter := 0
+## [0x4cf2b8], one count for everyone: the next level-ups' +1 grade, one per stat (set to 5 by 仙人果 and by the
+## mod's SetExp option).
+var bonus_counter: int:
+	get: return Mem.r8(0x4cf2b8)
+	set(v): Mem.w8(0x4cf2b8, v)
 
 
 func _item_slot(off: int) -> int:
@@ -322,8 +326,12 @@ func equip_item(slot: int, iid: int, lvl: int) -> void:
 # ------------------------------------------------------------------ derived stats
 ## Stat getters (0x407120..0x40720d) = min(stat word + equipment, 9999), with the mod's hooks: outside battles
 ## the 宿痕 rules replace the stat word (_scar); in battles the 连理 auras and 王君珂's 并蒂 scale the result.
+## 反应 and 士气 equipment is a percentage (mod 0x469341, table 0x46235d): word · bonus / 100 of the plain stat
+## word, as the items' "+%d%%" says.
 func stat(s: int) -> int:
 	var b := equip_bonus(s)
+	if s == 3 or s == 4:
+		b = get_stat_word(s) * b / 100
 	if not Skills.in_battle():
 		if s == 0:
 			Mem.w32(0x55ee04, 0)       # the attack getter clears 并蒂's hit counters in towns (0x4dbcf6)
@@ -470,7 +478,10 @@ static func ability_grade(r: int) -> int:
 	return 0
 
 
-## Level-up by n levels (0x4073b9). Returns per-stat gains [atk,def,spi,agi,mor,hp,mp].
+## LevelUp (0x4073b8) by n levels, as the mod patches it. Returns what each stat [atk, def, spi, agi, mor, hp, mp]
+## changed by on the last repetition (0x407497: new − old, 0 when the new value is 0). The HP and MP growth of a
+## party member drops by the catch-up penalty; their jitter rolls are drawn but not used (0x433510: they go to a
+## register only the five stats keep). Then the person's unit gets the class's HP and MP growth (0x4e0100).
 func level_up(n := 1) -> Array:
 	n = mini(n, 255 - level)
 	var gains := [0, 0, 0, 0, 0, 0, 0]
@@ -482,26 +493,93 @@ func level_up(n := 1) -> Array:
 	var lucky := Rules.rand(5)
 	for i in 7:
 		var g := int(growth.get(gkeys[i], 0))
+		var jittered := g
+		if fixed_growth_flag == 0 and bonus_counter == 0:
+			jittered = _jitter(g)
 		if i <= 4:
-			if fixed_growth_flag == 0 and bonus_counter == 0:
-				g = _jitter(g)
 			var grade := ability_grade(get_raw(i))
 			if bonus_counter > 0:
 				bonus_counter -= 1
 				grade += 1
-			g = (grade + g) >> 1
+			g = (grade + jittered) >> 1
+		elif fixed_growth_flag == 0 and mp_base != 1:
+			g -= _catchup_penalty(i)     # mod 0x4d65f5
 		for k in n:
 			if id == 10 and i <= 4 and i == lucky:
 				g += 1
 				lucky = 5
 			if i <= 4 and g == 0:
 				g = 1
-			gains[i] += g
-			_add_stat(i, g)
+			var old := _stat_value(i)
+			var nv := _add_stat(i, g)
+			gains[i] = nv - old if nv != 0 else 0
+	# the unit of the person (0x43e4d6; without one the loop leaves the last slot's record): HP and MP + the class
+	# growth, at most the new maximum, MP on its low byte
+	var s := Skills.unit_slot(id)
+	var ua := Mem.unit_addr(s if s >= 0 else 114)
+	var h := Mem.r32(ua + 0x10) + int(growth.get("hp", 0))
+	Mem.w32(ua + 0x10, mini(h, max_hp()))
+	var m := (Mem.r16(ua + 0x14) + int(growth.get("mp", 0)))
+	Mem.w8(ua + 0x14, (max_mp() if m > max_mp() else m) & 0xff)
 	level = level + n
 	if level >= 70:
 		exp = 0xff
 	return gains
+
+
+## The mod's catch-up penalty on a party member's HP (i = 5) or MP (6) growth (0x4d806a): with the average level
+## of the player units on the map (slots 0..14 up to the first empty one, rounded up) below this person's level L,
+## the gap divided by q, rounded up, where q = (L + 490) / HP base or L / MP base; the gap itself when q is 0.
+func _catchup_penalty(i: int) -> int:
+	var L := level
+	var q := (L + 490) / maxi(hp_base, 1) if i == 5 else L / maxi(mp_base, 1)
+	var count := 0
+	var sum := 0
+	for slot in 15:
+		var a := Mem.unit_addr(slot)
+		var pid := Mem.r32(a)
+		if pid >= 0xffff:
+			break
+		if Mem.r8(a + 0xc) == BUnit.STATE_ON_MAP:
+			count += 1
+			sum += Mem.r8(Mem.person_addr(pid) + 0x2c)
+	if count == 0:
+		return 0
+	var avg := (sum + count - 1) / count
+	if avg >= L:
+		return 0
+	return L - avg if q == 0 else (L - avg + q - 1) / q
+
+
+## LevelUp's report when it is called with `show`, as SetExp is in battles (0x4074cf, mod 0x4dbe29): "X升为N级。";
+## with the 环境设定 option 升级显示能力成长 (byte [0x4dbe25]) also the seven changes `g` (0x43efc3); then
+## "学会了策略「…」！" for each strategy whose learn level for the class is the new level (0x407525).
+func level_up_texts(g: Array) -> Array[String]:
+	var out: Array[String] = []
+	var head := "%s升为%d级。" % [name, level]
+	if Mem.r8(0x4dbe25) != 0:
+		var names := ["攻击", "防御", "精神", "反应", "士气", "HP MAX", "MP MAX"]
+		var t := head + "\n"
+		for i in 7:
+			var down: bool = i >= 5 and g[i] < 0
+			t += "\n%s%s了 %d。" % [names[i], "减少" if down else "增加", -g[i] if down else g[i]]
+		out.append(t)
+	else:
+		out.append(head)
+	for sd in Game.strategies_db:
+		if not sd.get("loaded_by_exe", true):
+			continue
+		var lv: Dictionary = sd.get("learn_level_by_class", {})
+		if int(lv.get(str(cls), 0)) == level:
+			out.append("学会了策略「%s」！" % sd.get("name", "?"))
+	return out
+
+
+## The value AddStat changes (0x42706b): a stat word, the HP base or the MP base.
+func _stat_value(i: int) -> int:
+	if i <= 4:
+		return get_stat_word(i)
+	return hp_base if i == 5 else mp_base
 
 
 func _jitter(g: int) -> int:
@@ -512,11 +590,30 @@ func _jitter(g: int) -> int:
 	return g
 
 
-func _add_stat(i: int, g: int) -> void:
+## AddStat (0x406e17) for i 0..6, returning the new value: a stat word at most 9999, the HP base at most 9999 and
+## the MP base at most 255, on the signed sums of 0x47fa89 (a base that comes to 0 is 1). An MP base of 1 does not
+## change, and g comes back. A lower maximum also lowers the battle unit's HP / MP (mod 0x4d6710).
+func _add_stat(i: int, g: int) -> int:
 	if i <= 4:
-		set_stat_word(i, mini(get_stat_word(i) + g, 9999))
-	elif i == 5:
-		hp_base = maxi(1, mini(hp_base + g, 9999))
-	elif i == 6:
-		if mp_base != 1:
-			mp_base = maxi(1, mini(mp_base + g, 255))
+		var r := _min_add(get_stat_word(i), g, 9999)
+		set_stat_word(i, r & 0xffff)
+		return r
+	if i == 5:
+		var v := _min_add(hp_base, g, 9999)
+		if v == 0:
+			v = 1
+		hp_base = v & 0xffffffff
+		var u := Skills.battle_unit(id)
+		if u != null and u.hp > max_hp():
+			Mem.w32(u.addr + 0x10, max_hp())
+		return v
+	if mp_base == 1:
+		return g
+	var w := _min_add(mp_base, g, 255)
+	if w == 0:
+		w = 1
+	mp_base = w & 0xff
+	var bu := Skills.battle_unit(id)
+	if bu != null and bu.mp > max_mp():
+		Mem.w32(bu.addr + 0x14, max_mp())
+	return w

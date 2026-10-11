@@ -24,6 +24,9 @@ const PATH_LEN := 0x4cfbfc
 const PATH := 0x4cfc00
 ## 连续策略: set after a first cast by a unit with effect 83; strategies then cost double (0x4d0d71, 0x425ad0).
 const SECOND_CAST := 0x4d0d61
+## The enemy commander (u16 R+0x3d06 of the script reader 0x492f90, from op 0x45; 0xffff = none): double
+## experience for its defeat, and 狂澜 cannot hit it (0x43b73f).
+const BOSS := 0x496c96
 
 var view: BattleView
 var hud: BattleHUD
@@ -33,7 +36,11 @@ var sortie: Array[int] = []       # persons chosen to sortie (0x48b350 list)
 var turn := 0
 var turn_limit := 0
 var level_offset := 0
-var boss_pid := -1
+var boss_pid: int:
+	get:
+		var v := Mem.r16(BOSS)
+		return -1 if v == 0xffff else v
+	set(v): Mem.w16(BOSS, 0xffff if v < 0 else v)
 var leader_pid := -1
 var climate := 0
 var weather_level := 1
@@ -65,6 +72,7 @@ const WEATHER_NAMES := ["晴", "阴", "雨", "暴雨", "雪"]
 
 func _ready() -> void:
 	super._ready()
+	boss_pid = -1
 	view = BattleView.new()
 	add_child(view)
 	view.long_press_ok = func(c: Vector2i) -> bool: return unit_at(c) != null
@@ -719,8 +727,9 @@ func move_path() -> Array[Vector2i]:
 
 
 # ------------------------------------------------------------------ per-phase effects (§9)
-## Phase start of side a..b (0x44ed93 / 0x44e851, after the event poll): status recovery and buff decay,
-## 战备 reset, the 暗杀 countdown of the other side, poison, regeneration.
+## Phase start of side a..b (0x44ed93 / 0x44e851, after the event poll): status recovery and buff decay, the
+## other side's 怀恨攻击 counters cleared (0x4d0d0e), 战备 reset, the 暗杀 countdown of the other side, poison,
+## regeneration.
 func _phase_start_effects(a: int, b: int) -> void:
 	for i in range(a, b):
 		var u := units[i]
@@ -730,6 +739,10 @@ func _phase_start_effects(a: int, b: int) -> void:
 		await _status_recovery(u)
 		_buff_decay(u)
 		Mem.w32(0x55ee00, Mem.r32(0x55ee04))       # 并蒂: the hit counts of the last phase (0x4d1e21)
+	if a == 0:
+		Mem.fill(BUnit.GRUDGE + 35, 80, 0)          # 0x44ee15
+	else:
+		Mem.fill(BUnit.GRUDGE, 35, 0)               # 0x44e914
 	Mem.fill(Rules.ZHANBEI_USED + a, b - a, 0)     # 战备 may be cast again (0x44ed93 / 0x44e851)
 	if a == 0:
 		await _assassination_countdown(35, 115)    # 0x4364c6
@@ -743,7 +756,7 @@ func _phase_start_effects(a: int, b: int) -> void:
 	for i in range(a, b):
 		var u := units[i]
 		if u.active():
-			_regen(u)
+			await _regen(u)
 	refresh_units()
 
 
@@ -895,6 +908,10 @@ func _buff_decay(u: BUnit) -> void:
 		u.set_buff(i, b)
 
 
+## Regen (0x43cddd): terrain and effect-18 HP, effect-19 MP (with effect 82's drain), at most what is missing.
+## A red unit (0x43ff54) also gets experience each phase: effect 64 for the person, 轩辕宝鉴 (22) for the weapon
+## and 天闻录 (23) for the armour, each its value × ((100 + EXP bonus) mod 256) / 100 (0x4072bd), through SetExp
+## and 0x4082d6.
 func _regen(u: BUnit) -> void:
 	var heal := 0
 	var t := view.terrain_at(u.pos)
@@ -906,14 +923,26 @@ func _regen(u: BUnit) -> void:
 	heal = mini(heal, u.max_hp() - u.hp)
 	if heal > 0:
 		u.hp += heal
-	if u.colour == 0:
-		Mem.w32(0x55ee04, 0)           # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
 	var mp := u.effect_value(19) if u.has_effect(19) else 0
 	if u.has_effect(82):
 		mp += _drain_mp(u, u.effect_value(82))
 	mp = mini(mp, u.max_mp() - u.mp)
 	if mp > 0:
 		u.mp += mp
+	if u.colour != 0:
+		return
+	var p := u.person
+	var mult := (100 + (p.equip_bonus(8) & 0xff)) & 0xff
+	var e := (p.effect_value(64) & 0xff) * mult / 100 if p.has_effect(64) else 0
+	Mem.w32(0x55ee04, 0)               # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
+	var we := (p.effect_value(22) & 0xff) * mult / 100 if p.has_effect(22) else 0
+	var ae := (p.effect_value(23) & 0xff) * mult / 100 if p.has_effect(23) else 0
+	if e > 0:
+		await actions.gain_exp(u, e)
+	if we > 0:
+		await actions.add_equip_exp(p, true, we)
+	if ae > 0:
+		await actions.add_equip_exp(p, false, ae)
 
 
 ## Effect 82 in the MP regeneration (0x4d7efa): up to its value of MP from each unit of the other side in the 3×3
