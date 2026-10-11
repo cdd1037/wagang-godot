@@ -7,8 +7,9 @@ extends RefCounted
 ## Person selectors 0x400..0x402 mean the current (event-triggering / acting) unit.
 
 static func _pid(st: BattleStage, pid: int) -> int:
-	if pid >= 0x400 and pid <= 0x402 and st.current_unit:
-		return st.current_unit.pid
+	if pid >= 0x400 and pid <= 0x402:
+		# 0x45602b: the current unit's person, none (0xffff) when it is off the map or at HP 0
+		return st.current_unit.pid if st.current_unit and st.current_unit.active() else 0xffff
 	return pid
 
 
@@ -37,6 +38,8 @@ static func get_attr(st: BattleStage, pid: int, attr: int) -> int:
 
 static func set_attr(st: BattleStage, pid: int, attr: int, op: int, v: int) -> void:
 	pid = _pid(st, pid)
+	if pid == 0xffff or pid > 0x400 or attr > 15:
+		return
 	if attr == 8:
 		# mod 0x4d67d0 / 0x406fc0: the person's battle-unit MP (no unit → nothing). Op 2 goes through SetStat
 		# with max(GetStat(8) − v, 0) = 0, GetStat(8) being 0.
@@ -63,20 +66,5 @@ static func set_attr(st: BattleStage, pid: int, attr: int, op: int, v: int) -> v
 		if u.hp <= 0 and u.state == BUnit.STATE_ON_MAP:
 			await st.actions.unit_defeated(u)
 		return
-	var p := Game.person(pid)
-	if p == null:
-		return
-	var cur := get_attr(st, pid, attr)
-	var nv := cur
-	match op:
-		0: nv = v
-		1: nv = cur + v
-		2: nv = maxi(cur - v, 0)
-	match attr:
-		0, 1, 2, 3, 4: p.set_stat_word(attr, mini(nv, 9999))
-		5: p.hp_base = clampi(nv, 1, 9999)
-		6: p.mp_base = clampi(nv, 1, 255)
-		9:
-			if nv > p.level: p.level_up(nv - p.level)
-			else: p.level = maxi(nv, 1)
-		10, 11, 12, 13, 14: p.set_raw(attr - 10, mini(nv, 120))
+	PersonAttrs.set_attr(pid, attr, op, v)
+	st.refresh_units()

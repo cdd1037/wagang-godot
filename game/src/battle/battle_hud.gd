@@ -12,6 +12,7 @@ var popups: Array = []     # [{text, pos(world), t, color}]
 var _tpop := {}            # the terrain box of an empty cell: {"rect" (screen), "cell", "t"}
 var icon_over := {}        # an item icon over a cell: {"tex", "cell", "off" (px from the cell's corner)}
 var _reward := {}          # the reward screen: {"wipe" 0..1, "lines": [[text, y, size, colour]], "bars": [[tex, name, y]]}
+var _seq := {}             # 开始作战 / 胜利条件 (0x44bac2 / 0x44bd27): {"wipe" 0..1, "lines": [[text, y, size, colour, shadows]]}
 
 
 func _init() -> void:
@@ -57,6 +58,98 @@ func goal_banner(text: String) -> void:
 	await phase_banner(text)
 
 
+const SYS_WHITE := Color8(0xff, 0xff, 0xff)    # system palette 0x12
+const SYS_LIGHT := Color8(0xcc, 0xcc, 0xcc)    # 0x15
+const SYS_GREY := Color8(0x99, 0x99, 0x99)     # 0x18
+const SYS_RED := Color8(0xff, 0x00, 0x00)      # 0x28
+const SYS_DARK_RED := Color8(0xc3, 0x00, 0x00) # 0x2a
+
+
+## The map darkens from both edges to the middle (0x451cea(0x1f), a dither of palette 0x1f) and stays so.
+func _seq_dim() -> void:
+	_seq = {"wipe": 0.0, "lines": []}
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void:
+		_seq["wipe"] = v
+		queue_redraw(), 0.0, 1.0, 0.4)
+	await tw.finished
+
+
+## op 0x5a (0x416c97 → 0x44bac2): "开始作战" over the darkened map, bold, 48 px (64 in a view 720 wide or more) with
+## shadows at +2 (0x18) and +1 (0x15), held 20 ticks; then the map comes back.
+func start_banner() -> void:
+	if Game.autoplay:
+		return
+	var vs := get_viewport_rect().size
+	var was := visible
+	visible = true
+	await _seq_dim()
+	var sz := 64 if vs.x >= 720 else 48
+	_seq["lines"].append(["开始作战", (vs.y + sz) / 2 - 8, sz, SYS_WHITE, [SYS_GREY, SYS_LIGHT], true])
+	queue_redraw()
+	await stage.wait(1.0)
+	_seq = {}
+	visible = was
+	queue_redraw()
+
+
+## op 0x1a (0x413c0e → 0x44bd27): over the darkened map the heading "胜利条件" (red 0x28 over 0x2a, 32 / 48 / 64 px by
+## the view's width: < 720, < 960, wider) at the top + 72, 20 ticks; each line of the text (at most 28 bytes, two
+## spaces in front) 16 + h px further down, white over 0x18 / 0x15, 20 ticks each; then "限制回合数%3u" (the turn
+## limit) 64 + h px below, 20 ticks; then 2 s that a click ends, and the map comes back. Also before the field.
+func goal_sequence(text: String, limit: int) -> void:
+	if Game.autoplay:
+		return
+	var vs := get_viewport_rect().size
+	var h := 32 if vs.x < 720 else (48 if vs.x < 960 else 64)
+	var was := visible
+	visible = true
+	await _seq_dim()
+	var y := 72.0 + h
+	_seq["lines"].append(["胜利条件", y, h, SYS_RED, [SYS_DARK_RED], false])
+	queue_redraw()
+	await stage.wait(1.0)
+	for line in text.split("\n"):
+		y += 16 + h
+		_seq["lines"].append(["  " + _clip_bytes(line, 28), y, h, SYS_WHITE, [SYS_GREY, SYS_LIGHT], false])
+		queue_redraw()
+		await stage.wait(1.0)
+	y += 64 + h
+	_seq["lines"].append(["限制回合数%3d" % limit, y, h, SYS_WHITE, [SYS_GREY, SYS_LIGHT], false])
+	queue_redraw()
+	await stage.wait(1.0)
+	await stage.ui.wait_or_click(2.0)
+	_seq = {}
+	visible = was
+	queue_redraw()
+
+
+## At most n bytes of the GBK text (2 per character above ASCII).
+static func _clip_bytes(s: String, n: int) -> String:
+	var used := 0
+	for i in s.length():
+		used += 1 if s.unicode_at(i) < 0x80 else 2
+		if used > n:
+			return s.substr(0, i)
+	return s
+
+
+func _draw_seq(vs: Vector2) -> void:
+	var w := vs.x / 2 * float(_seq["wipe"])
+	draw_rect(Rect2(0, 0, w, vs.y), Color(0, 0, 0, 0.5))
+	draw_rect(Rect2(vs.x - w, 0, w, vs.y), Color(0, 0, 0, 0.5))
+	var f := Assets.font()
+	for l in _seq["lines"]:
+		var sz: int = l[2]
+		var s := str(l[0])
+		var x := (vs.x - f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x) / 2 if bool(l[5]) else 40.0
+		var shadows: Array = l[4]
+		for k in shadows.size():
+			var o := float(shadows.size() - k)
+			draw_string(f, Vector2(x + o, float(l[1]) + o), s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, shadows[k])
+		draw_string(f, Vector2(x, float(l[1])), s, HORIZONTAL_ALIGNMENT_LEFT, -1, sz, l[3])
+
+
 func show_picture(t: Texture2D) -> void:
 	_picture = t
 	queue_redraw()
@@ -95,6 +188,8 @@ func _draw() -> void:
 		draw_texture_rect(icon_over["tex"], Rect2(p, Vector2(32, 32)), false, Color(1, 1, 1, float(icon_over.get("alpha", 1.0))))
 	if not _reward.is_empty():
 		_draw_reward(vs)
+	if not _seq.is_empty():
+		_draw_seq(vs)
 	if not _epanel.is_empty():
 		_draw_equip_panel(vs)
 	# phase banner

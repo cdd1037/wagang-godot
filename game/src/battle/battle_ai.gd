@@ -79,7 +79,10 @@ func run_phase(a: int, b: int) -> void:
 		else:
 			skipped[pick.slot] = true
 		st.refresh_units()
-		# 0x44e8e7: units left at HP 0 leave the map; the event scene is polled when the unit has acted
+		# 0x44eb4d: when the unit has acted, the event scene is polled while it is on the map (0x45b5fe); then
+		# units left at HP 0 leave the map (0x44cc03) and the scene is polled again
+		if acted:
+			await st.actor_poll(pick)
 		await st.remove_dead()
 		if acted and not st._battle_finished():
 			await st.checkpoint()
@@ -102,6 +105,7 @@ func act(unit: BUnit) -> bool:
 	if not u.active():
 		return false
 	var mv := 100 if (u.flags & BUnit.F_PASS) else u.move_points()
+	st.current_unit = u        # 0x43ad83
 	forbidden = Vector2i(-1, -1)
 	var tslot := Mem.r8(u.addr + 8)
 	if tslot != 0xff and (tslot >= 115 or st.units[tslot].state != BUnit.STATE_ON_MAP):
@@ -153,7 +157,8 @@ func act(unit: BUnit) -> bool:
 	_arrival()
 	# act
 	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
-		if choice_strategy >= 0 and choice_target != null and choice_target.active():
+		if choice_strategy >= 0 and choice_target != null and choice_target.active() \
+				and FlowGoals.may_hit(flow_goal, choice_target):
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
 			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
 		else:
@@ -293,7 +298,7 @@ func _cell_score(c: Vector2i) -> void:
 	v = mini(255, v + _terrain_score(c))
 	if c == u.pos and atk == 0:
 		v = mini(255, v + 1)
-	if c == forbidden:
+	if c == forbidden or FlowGoals.avoids(u, c):
 		v = 0
 	layer_b[c] = v
 	if v > best:
@@ -608,7 +613,7 @@ func _flow_walk(mv: int) -> void:
 	_flood(u.pos, mv, true, func(_n: Vector2i) -> bool: return false)
 	dest = u.pos
 	for c in grid:
-		if c != u.pos and st.unit_at(c, u) != null:
+		if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c):
 			continue
 		if int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
 			dest = c
@@ -658,11 +663,11 @@ func _physical_attack() -> void:
 	if u.mode == 4 or (u.flags & BUnit.F_PASS):
 		return
 	var t := choice_target
-	if t == null or not t.active() or not st.actions.can_attack(u, t):
+	if t == null or not t.active() or not st.actions.can_attack(u, t) or not FlowGoals.may_hit(flow_goal, t):
 		t = null
 		for c in st.actions.attack_cells(u, u.pos):
 			var x := st.unit_at(c)
-			if x and x.active() and x.is_enemy_of(u):
+			if x and x.active() and x.is_enemy_of(u) and FlowGoals.may_hit(flow_goal, x):
 				t = x
 	if t == null:
 		return

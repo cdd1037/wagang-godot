@@ -201,7 +201,7 @@ func battle_loop() -> void:
 				if u.node:
 					u.node.greyed = false
 		turn += 1
-		Mem.w8(0x4b3d0a, turn)       # ctx+2 (0x44e851); ctx+1 is the battle-over flag
+		Mem.w8(0x4b3d0a, turn - 1)   # ctx+2 (0x44e851) holds turn − 1; ctx+1 is the battle-over flag
 		if OS.get_environment("WG_SAVETEST") != "" and turn == 2:
 			Game.save_game(18, save_state())     # not one of the player's slots 0-9
 			var alive := 0
@@ -210,17 +210,31 @@ func battle_loop() -> void:
 			print("SAVETEST saved turn %d, %d active units, hero hp %d" % [turn, alive, units[0].hp])
 			get_tree().quit()
 			return
-		if Game.god and Game.autoplay and turn > 12:
+		var tp := OS.get_environment("WG_TRACE_PID")
+		if tp != "":
+			# debug: where person tp's unit is at each round start
+			var x := unit_by_pid(int(tp))
+			print("    [pid %s] turn %d: %s" % [tp, turn, "no unit" if x == null else "slot %d state %d hp %d/%d at %s" % [
+					x.slot, x.state, x.hp, x.max_hp(), x.pos]])
+		if Game.god and Game.autoplay and turn > 12 and FlowGoals.sparing.is_empty():
 			# debug flow-test cheat: clear the field so scripted victory can trigger. Units on the map fall as
-			# in combat (HP 0, EV[10]; the phase start's poll sees them before remove_dead), so the scripts'
-			# kill sections run (S_13's 杨素 has to reach HP 0 three times); hidden ones just go.
+			# in combat (HP 0, EV[10]), and as after a fall in combat the scene is polled while they are still
+			# on the map, once per fallen unit (a poll runs one section), so every kill section gets its turn
+			# (S_13's 杨素第一次死 restores 杨素, who has to reach HP 0 three times); hidden ones just go. A
+			# pending duel's foe goes too: the duels are optional, and S_28 / S_39 need every enemy gone.
+			var fell := 0
 			for e in range(35, 115):
 				if units[e].active():
 					await actions.unit_fell(units[e])
+					fell += 1
 				elif units[e].exists() and units[e].state == BUnit.STATE_HIDDEN:
 					units[e].hp = 0
 					units[e].state = 3
 			refresh_units()
+			for k in fell:
+				if _battle_finished():
+					break
+				await checkpoint()
 		if Game.god and Game.autoplay and turn > 60:
 			# flow-test: the victory needs a scripted move the autoplay AI never makes (e.g. a duel
 			# that only starts when the hero reaches a certain enemy) — go to the aftermath
@@ -258,6 +272,15 @@ func checkpoint() -> void:
 	await vm.poll()
 	refresh_units()
 	_in_checkpoint = false
+
+
+## 0x45b5fe(i), after a command or AI action: unit i becomes the current unit (the selectors 0x400..0x402; the
+## original also hands the scripts its pid and cell) and, if it is still on the map (any HP) and the battle goes on,
+## the event scene is polled.
+func actor_poll(u: BUnit) -> void:
+	current_unit = u
+	if u.state == BUnit.STATE_ON_MAP and not _battle_finished():
+		await checkpoint()
 
 
 # ------------------------------------------------------------------ deployment ops
@@ -328,6 +351,8 @@ func _entry_from(e: Array, enemy: bool) -> Dictionary:
 	d["x"] = v.call(i + 1)
 	d["y"] = v.call(i + 2)
 	d["dir"] = v.call(i + 3)
+	if enemy and int(d["dir"]) > 3:
+		d["dir"] = 2              # 0x449b27 → 0x449ae8: 0xffff or any facing above 3 is 2
 	var lv: int = v.call(i + 4)
 	d["lv"] = 0 if lv == 0xffff else lv
 	var promo: int = v.call(i + 5)
@@ -459,6 +484,7 @@ func trimmed_mean_level() -> int:
 func create_battlefield(id: int) -> void:
 	map_id = id
 	ui.clear_strips()            # the battle's status pane shows the cursor cell instead (mod 0x4d1c10)
+	ui.meter.visible = false     # 0x476715 draws resource 2 only outside battles
 	Mem.w32(Skills.MAP_NO, id & 0xff)   # 0x44c2e3: the battle map's number (battle mode for the person getters)
 	Mem.set_ev(10, 0)            # mod 0x44ccc8: no unit has fallen yet
 	view.load_map(id)
@@ -571,13 +597,15 @@ func _set_ai(u: BUnit, ai_mode: int, ai_person: int, ax: int, ay: int) -> void:
 ## so the colour stays; the AI code and target and the flags are kept.
 func _unit_reenter(u: BUnit, x: int, y: int, d: int) -> void:
 	var colour := u.colour
-	_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), x, y, d, false)
+	# UnitInit tells this call site (0x459417) by its return address: no 出阵数 for the re-entry
+	_unit_init(u, u.pid, 0 if u.slot < 15 else (2 if u.slot < 35 else 1), x, y, d, false, false)
 	u.colour = colour
 
 
 ## UnitInit (0x44274c): person, colour (0x449b7b), facing, position and state, full HP/MP, neutral buffs, no
-## status. It leaves the AI code and target ([8]..[0xa]), the order byte and the flags as they are.
-func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: bool) -> void:
+## status. It leaves the AI code and target ([8]..[0xa]), the order byte and the flags as they are. A party
+## member's 出阵数 (+0x27) counts up, except on op 0x55's re-entry (`sortie` false).
+func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: bool, sortie := true) -> void:
 	u.state = BUnit.STATE_HIDDEN
 	u.pid = pid
 	var kind := 0
@@ -599,28 +627,38 @@ func _unit_init(u: BUnit, pid: int, flags: int, x: int, y: int, d: int, hidden: 
 	u.status = 0
 	var p := u.person
 	if Game.is_member(pid):
-		Mem.w8(p.base + 0x27, mini(Mem.r8(p.base + 0x27) + 1, 255))
+		if sortie:
+			Mem.w8(p.base + 0x27, mini(Mem.r8(p.base + 0x27) + 1, 255))
 	else:
 		for off in [0x27, 0x28, 0x29]:
 			Mem.w8(p.base + off, 0)
 
 
-## Nearest free cell the unit can stand on (0x43f040).
+## The free cell nearest c for u (0x43f040): c itself, then its neighbours N, E, S, W; the same around c + N, then
+## c + N + E, then c + E; else the first cell (row by row) with the smallest |dx| + |dy| on the whole map. Free: on
+## the map, no other unit, terrain u can enter (move table ≠ 0xff).
 func nearest_free(c: Vector2i, u: BUnit) -> Vector2i:
-	for r in range(0, 12):
-		for dy in range(-r, r + 1):
-			for dx in range(-r, r + 1):
-				if absi(dx) + absi(dy) != r:
-					continue
-				var p := c + Vector2i(dx, dy)
-				if not view.in_bounds(p):
-					continue
-				if unit_at(p, u) != null:
-					continue
-				if Rules.move_cost(u, view.terrain_at(p)) >= 999:
-					continue
-				return p
-	return c
+	var ok := func(p: Vector2i) -> bool:
+		return view.in_bounds(p) and unit_at(p, u) == null and Rules.move_cost(u, view.terrain_at(p)) < 255
+	var dirs := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+	var cur := c
+	for k in 4:
+		if ok.call(cur):
+			return cur
+		for d in dirs:
+			if ok.call(cur + d):
+				return cur + d
+		cur += dirs[k]
+	var best := c
+	var bd := 1 << 30
+	for y in view.map_h:
+		for x in view.map_w:
+			var p := Vector2i(x, y)
+			var dist := absi(x - c.x) + absi(y - c.y)
+			if dist < bd and ok.call(p):
+				best = p
+				bd = dist
+	return best
 
 
 ## The active unit on cell c (the lowest slot if several), other than `exclude`. Looked up in a cell → unit
@@ -1066,9 +1104,15 @@ func op_test_unit_in_area(ins: Dictionary) -> bool:
 	return false
 
 
-## op 0x2e: p2's unit in one of the 8 cells around p1's; loose == 0 also needs mutual attack ability.
+## op 0x2e (0x411a54 → 0x45afca): p2's unit in one of the 8 cells around p1's; loose == 0 also needs mutual attack
+## ability. p1 is a person, never a selector: 0x400 and above match nothing (S_27's "1025 212 1" is never true).
+## A selector p2 (≥ 0x200) ignores `loose`.
 func op_test_adjacent(ins: Dictionary) -> bool:
 	var loose := arg(ins, 2)
+	if arg(ins, 0) >= 0x400:
+		return false
+	if arg(ins, 1) >= 0x200:
+		loose = 1
 	for ua in units_for(arg(ins, 0)):
 		for ub in units_for(arg(ins, 1)):
 			if ua == ub:
@@ -1082,23 +1126,26 @@ func op_test_adjacent(ins: Dictionary) -> bool:
 	return false
 
 
-## op 0x41: number of units of `side` (rect_flag 1 → inside the rectangle, else whole map) compared with n.
+## op 0x41 (0x41149d → 0x44c8e6): number of units of `side` in state 2, whatever their HP (rect_flag 1 → inside
+## x1..x2, y1..y2 as given, a reversed rectangle counting nobody; else the whole map) compared with n. Sides 0–6
+## as side_match; any other counts nobody.
 func op_test_units_in_area(ins: Dictionary) -> bool:
 	var side := arg(ins, 0)
 	if side == 0xffff:
 		side = 6
 	var rect := arg(ins, 3) == 1
-	var x0 := mini(arg(ins, 4), arg(ins, 6))
-	var x1 := maxi(arg(ins, 4), arg(ins, 6))
-	var y0 := mini(arg(ins, 5), arg(ins, 7))
-	var y1 := maxi(arg(ins, 5), arg(ins, 7))
+	var x0 := arg(ins, 4)
+	var x1 := arg(ins, 6)
+	var y0 := arg(ins, 5)
+	var y1 := arg(ins, 7)
 	var cnt := 0
-	for u in units:
-		if not u.active() or not side_match(u, side):
-			continue
-		if rect and (u.pos.x < x0 or u.pos.x > x1 or u.pos.y < y0 or u.pos.y > y1):
-			continue
-		cnt += 1
+	if side <= 6:
+		for u in units:
+			if u.state != BUnit.STATE_ON_MAP or not side_match(u, side):
+				continue
+			if rect and (u.pos.x < x0 or u.pos.x > x1 or u.pos.y < y0 or u.pos.y > y1):
+				continue
+			cnt += 1
 	return Game.compare(cnt, arg(ins, 1), arg(ins, 2))
 
 
@@ -1161,7 +1208,7 @@ func show_victory() -> void:
 
 func op_battle_goal_text(ins: Dictionary) -> void:
 	goal_text = sarg(ins, 0)
-	await hud.goal_banner(goal_text)
+	await hud.goal_sequence(goal_text, turn_limit)
 
 
 ## op 0x49: the battle is over (both outcomes) — leave the turn loop.
@@ -1180,7 +1227,7 @@ func op_ui_0e(_ins: Dictionary) -> void:
 
 
 func op_ui_5a(_ins: Dictionary) -> void:
-	pass
+	await hud.start_banner()
 
 
 ## op 0x54 (0x415771): in a battle, units at HP 0 leave the map (0x44cc03).
@@ -1287,37 +1334,45 @@ func _apply_restore() -> void:
 
 
 # ------------------------------------------------------------------ unit ops (§10.6.1)
-## op 0x4c: reveal a hidden/off-map unit (mode 0: by person; mode 1: player slot).
+## op 0x4c (0x414f42 → 0x4570ee), in a battle only: a hidden unit (state 1) appears at its deployment entry —
+## mode 0 the first unit of the person and the entry with that person (none → nothing), mode 1 player slot `slot`
+## and entry `slot`. It is placed on the nearest free cell (0x43f040), the map centres on it, SE 15, then a 4-tick
+## hold. Its HP stays. (The wipe-in with SE 42 is dead code in this exe: its check 0x4573c1 never holds.)
 func op_unit_op_4c(ins: Dictionary) -> void:
+	if not in_battle():
+		return
 	var mode := arg(ins, 0)
 	if mode == 0xffff:
 		mode = 0
 	var u: BUnit = null
+	var d := {}
 	if mode == 0:
 		var pid := arg(ins, 1)
 		for x in units:
 			if x.exists() and x.pid == pid and x.state != 0:
 				u = x
 				break
-	else:
+		if u:
+			d = _entry_of(u)
+	elif mode == 1:
 		var sl := arg(ins, 2)
 		if sl < 15:
 			u = units[sl]
-	if u == null or not u.exists() or u.state != BUnit.STATE_HIDDEN:
+			if sl < deploy.size():
+				d = deploy[sl]
+	if u == null or not u.exists() or u.state != BUnit.STATE_HIDDEN or d.is_empty():
 		return
-	var d := _entry_of(u)
-	var c := Vector2i(int(d.get("x", u.pos.x)), int(d.get("y", u.pos.y))) if not d.is_empty() else u.pos
+	await _appear(u, Vector2i(int(d.get("x", u.pos.x)), int(d.get("y", u.pos.y))))
+
+
+## 0x4570ee's live branch: place on the nearest free cell (state 2), centre, SE 15, hold 4 ticks.
+func _appear(u: BUnit, c: Vector2i) -> void:
 	u.pos = nearest_free(c, u)
 	u.state = BUnit.STATE_ON_MAP
-	u.hp = maxi(u.hp, 1)
-	await view.center_on(u.pos)
-	Audio.play_se("se42")
 	refresh_units()
-	if u.node and not Game.autoplay:
-		u.node.fade = 0.0
-		var tw := u.node.create_tween()
-		tw.tween_property(u.node, "fade", 1.0, 0.4)
-		await tw.finished
+	await view.center_on(u.pos)
+	Audio.play_se("se15")
+	await wait(0.2)
 
 
 func _entry_of(u: BUnit) -> Dictionary:
@@ -1393,28 +1448,41 @@ func op_unit_op_4e(ins: Dictionary) -> void:
 		_set_ai(u, ai_mode, arg(ins, 8), arg(ins, 9), arg(ins, 10))
 
 
-## op 0x4f: unit p1 turns to `dir` or toward p2.
+## op 0x4f (0x415f65 → 0x457428): p1's unit (the first with that person, on the map) turns to `dir` (p2 = 0xffff)
+## or toward p2's unit (also on the map; 0x4351da: vertical when |dx| < |dy|, else horizontal). Only when that changes
+## its facing: with scroll (0xffff → 1) the map centres on it and 8 ticks pass, SE 6, the turn, then with wait
+## (0xffff → 1) 8 more ticks. Otherwise nothing at all.
 func op_unit_op_4f(ins: Dictionary) -> void:
-	var u := unit_by_pid(arg(ins, 0))
+	var p1 := arg(ins, 0)
+	if p1 >= 0x400:
+		return
+	var u := unit_by_pid(p1)
 	if u == null or u.state != BUnit.STATE_ON_MAP:
 		return
+	var d := arg(ins, 2) & 3
 	var p2 := arg(ins, 1)
+	if p2 != 0xffff:
+		var t2 := unit_by_pid(p2)
+		if t2 == null or t2.state != BUnit.STATE_ON_MAP:
+			return
+		var dd := t2.pos - u.pos
+		if absi(dd.x) < absi(dd.y):
+			d = 0 if dd.y < 0 else 2
+		else:
+			d = 3 if dd.x < 0 else 1
+	if d == u.dir:
+		return
 	var scroll := arg(ins, 4)
 	var wt := arg(ins, 5)
-	if scroll != 0:
-		await view.ensure_visible(u.pos)
+	if scroll == 1 or scroll == 0xffff:
+		await view.center_on(u.pos)
 		await wait(0.4)
-	if p2 != 0xffff:
-		var t := unit_by_pid(p2)
-		if t and t.state == BUnit.STATE_ON_MAP:
-			actions.face(u, t.pos)
-	else:
-		u.dir = arg(ins, 2) & 3
-		if u.node:
-			u.node.dir = u.dir
-			u.node.queue_redraw()
 	Audio.play_se("se06")
-	if wt != 0:
+	u.dir = d
+	if u.node:
+		u.node.dir = d
+		u.node.queue_redraw()
+	if wt == 1 or wt == 0xffff:
 		await wait(0.4)
 
 
@@ -1424,13 +1492,15 @@ func op_unit_op_4f(ins: Dictionary) -> void:
 ## 8 turning on the spot (right, left, then up, down; SE 6 twice); 9 six weak beats of 8 ticks (SE 8); 10 a start:
 ## hurt frame 4 px up for 3 ticks, then normal (SE 8); 11 two turns, then cheer; 12 one turn.
 func op_unit_status(ins: Dictionary) -> void:
+	if arg(ins, 1) == 0xffff:
+		return                     # 0x416129: kind 0xffff does nothing
 	var u := unit_by_pid(arg(ins, 0))
 	if u == null or u.state != BUnit.STATE_ON_MAP or u.node == null:
 		return
 	var kind := arg(ins, 1) & 0xff
 	var pre := arg(ins, 2)
 	var post := arg(ins, 3)
-	await view.ensure_visible(u.pos)
+	await view.center_on(u.pos)    # 0x45503f: the camera follows each animated unit
 	if pre != 0 and kind != 0 and kind != 11:
 		await wait(0.4)
 	var n := u.node
@@ -1532,22 +1602,24 @@ func _script_move(u: BUnit, goal: Vector2i, d: int) -> void:
 	refresh_units()
 
 
-## RemoveUnit (0x441744): unit leaves the map (state 3). Non-silent: player units (kind 0, pid < 49)
-## speak their retreat line (text #650+pid) if their retreat-line flag (U+0x20) is set.
-func remove_unit(u: BUnit, silent: bool) -> void:
+## RemoveUnit (0x441744 → 0x4419b6): the unit leaves the map (state 3).
+## * silent (op 0x31; op 0x53 over an area with a7 ≠ 0): SE 6, MOV frame 6 for 4 ticks, SE 17, then the first image
+##   of the special sheet drawn 4 px shorter each tick for 12 ticks. No retreat line, no 撤退数.
+## * otherwise a player unit (colour 0, person < 49) with its retreat-line flag (U+0x20) speaks its line (text
+##   #650+pid) first. With `variant` ≠ 0, or for 管毅 (person 0), the camera centres on it and the defeat
+##   animation plays: MOV frame 9 blinking 4 × (3, 3) and 6 × (1, 1) ticks, SE 22, 16 ticks to white, 16 to nothing
+##   (about 3.4 s). Else SE 16 and two blinks of 3 ticks. A party member's 撤退数 (+0x29) counts up.
+## It does not change the current unit.
+func remove_unit(u: BUnit, silent: bool, variant := 0) -> void:
 	if u.state != BUnit.STATE_ON_MAP:
 		return
-	current_unit = u
 	if not silent and Mem.r8(u.addr + 0x20) != 0 and u.colour == 0 and u.pid < 49:
 		var line := Game.text(650 + u.pid)
 		if line != "":
 			await view.ensure_visible(u.pos)
 			await ui.dialog.talk(Game.person_face(u.pid), u.person.name, line, _dialog_top(u.pid))
 	if u.node and not Game.autoplay:
-		Audio.play_se("se16")
-		var tw := u.node.create_tween()
-		tw.tween_property(u.node, "fade", 0.0, 0.35)
-		await tw.finished
+		await _removal_animation(u, silent, variant)
 	u.state = 3
 	u.status = 0
 	u.extra.erase("dying")
@@ -1557,7 +1629,7 @@ func remove_unit(u: BUnit, silent: bool) -> void:
 			Mem.w8(ASSASSIN_LINK + k, 0xff)
 	Mem.w8(ASSASSIN_MARK + u.slot, 0)
 	Mem.w8(ASSASSIN_LINK + u.slot, 0xff)
-	if Game.is_member(u.pid):
+	if not silent and Game.is_member(u.pid):
 		var pb := u.person.base
 		Mem.w8(pb + 0x29, mini(Mem.r8(pb + 0x29) + 1, 255))
 	for o in units:
@@ -1565,6 +1637,48 @@ func remove_unit(u: BUnit, silent: bool) -> void:
 			o.mode = 1
 			Mem.w8(o.addr + 8, 0xff)
 	refresh_units()
+
+
+func _removal_animation(u: BUnit, silent: bool, variant: int) -> void:
+	var n := u.node
+	const T := 0.05
+	if silent:
+		await view.ensure_visible(u.pos)
+		Audio.play_se("se06")
+		n.show_frame(UnitSprite.Sheet.MOV, 6, false)
+		await wait(4 * T)
+		Audio.play_se("se17")
+		n.show_frame(UnitSprite.Sheet.SPC, 0, false)
+		for k in 12:
+			n.clip_h = 48 - 4 * k
+			n.queue_redraw()
+			await wait(T)
+	elif variant != 0 or u.pid == 0:
+		await view.center_on(u.pos)
+		n.show_frame(UnitSprite.Sheet.MOV, 9, false)
+		for r in [[4, 3], [6, 1]]:
+			for i in int(r[0]):
+				n.visible = false
+				await wait(int(r[1]) * T)
+				n.visible = true
+				await wait(int(r[1]) * T)
+		Audio.play_se("se22")
+		n.flash_color = Color.WHITE
+		for k in 16:
+			n.flash = (k / 2 + 1) / 8.0
+			await wait(T)
+		for k in 16:
+			n.fade = 1.0 - (k + 1) / 16.0
+			await wait(T)
+	else:
+		await view.ensure_visible(u.pos)
+		Audio.play_se("se16")
+		for i in 2:
+			n.visible = false
+			await wait(3 * T)
+			n.visible = true
+			await wait(3 * T)
+	n.visible = false
 
 
 ## op 0x31 (battle): mode 0 → remove person's unit silently; else every unit of `side` in the rectangle.
@@ -1575,12 +1689,38 @@ func op_actor_select(ins: Dictionary) -> void:
 		await remove_unit(u, true)
 
 
-## op 0x53: unit retreats (with its retreat line).
+## op 0x53 (0x41557b): mode 0 → RemoveUnit(person's unit on the map; 0x400..0x402 the current unit, 0x45602b) with
+## the animation variant a7; else 0x45a80f: the units of `side` in the rectangle, cell by cell (y1..y2, then
+## x1..x2, as given and clipped to the map; state 2, whatever the HP), RemoveUnit silent when a7 ≠ 0.
 func op_unit_op_53(ins: Dictionary) -> void:
-	var mode := arg(ins, 0)
-	var tg := _targets_mode(0 if mode == 0 else 2, arg(ins, 1), 0, arg(ins, 2), arg(ins, 3), arg(ins, 4), arg(ins, 5), arg(ins, 6))
+	var a7 := arg(ins, 7)
+	if a7 == 0xffff:
+		a7 = 0
+	if arg(ins, 0) == 0:
+		var pid := arg(ins, 1)
+		var u: BUnit = null
+		if pid >= 0x400 and pid <= 0x402:
+			u = current_unit if current_unit and current_unit.active() else null
+		else:
+			u = unit_by_pid(pid)
+		if u and u.state == BUnit.STATE_ON_MAP:
+			await remove_unit(u, false, a7)
+		return
+	var side := arg(ins, 6)
+	if side == 0xffff:
+		side = 6
+	var at := {}
+	for o in units:
+		if o.state == BUnit.STATE_ON_MAP and not at.has(o.pos):
+			at[o.pos] = o
+	var tg: Array[BUnit] = []
+	for y in range(arg(ins, 3), mini(arg(ins, 5), view.map_h - 1) + 1):
+		for x in range(arg(ins, 2), mini(arg(ins, 4), view.map_w - 1) + 1):
+			var o: BUnit = at.get(Vector2i(x, y))
+			if o and side_match(o, side):
+				tg.append(o)
 	for u in tg:
-		await remove_unit(u, false)
+		await remove_unit(u, a7 != 0)
 
 
 ## op 0x1b: retreat-line flag of the person's unit.
@@ -1590,7 +1730,8 @@ func op_op_1b(ins: Dictionary) -> void:
 		Mem.w8(u.addr + 0x20, 1 if arg(ins, 1) != 0 else 0)
 
 
-## op 0x55: a retreated unit (state 3) re-enters at (x, y) with full HP/MP.
+## op 0x55 (0x41591c → 0x4591a1): a retreated unit (state 3) re-enters at (x, y) with full HP/MP: SE 15, then the
+## map centres on it. (The appear animation check 0x4573c1 never holds in this exe, so there is no wipe-in.)
 func op_unit_move(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
 	if mode == 0xffff:
@@ -1608,9 +1749,9 @@ func op_unit_move(ins: Dictionary) -> void:
 		return
 	var d := arg(ins, 5)
 	_unit_reenter(u, arg(ins, 3), arg(ins, 4), 2 if d == 0xffff else d)
-	await view.center_on(u.pos)
-	Audio.play_se("se42")
 	refresh_units()
+	Audio.play_se("se15")
+	await view.center_on(u.pos)
 
 
 ## op 0x52 (battle): selectors 0x400..0x402 mean the current unit.
@@ -1767,37 +1908,48 @@ func _revert_terrain(c: Vector2i, patch: int, scroll: int) -> void:
 		return
 
 
-## op 0x6b: effect animation at a cell.
+var _mcall_loaded := -1        # op 0x6b: the MCALL animation loaded for the next effect 109
+
+
+## op 0x6b (0x41405b): effect 0xffff does nothing. A scroll argument ≠ 0 (0xffff too) centres the map on the cell.
+## The rest only when the cell's centre is on screen: an effect < 100 plays Xben[effect] there; 109 plays the MCALL
+## animation loaded before (0x421879) and holds 4 ticks; any other ≥ 100 only loads MCALL{effect % 100} (0x4217ff),
+## drawing nothing (S_41's 199 × "104 1" only scroll).
 func op_op_6b(ins: Dictionary) -> void:
 	var c := Vector2i(arg(ins, 0), arg(ins, 1))
 	var eff := arg(ins, 2)
-	if arg(ins, 3) != 0 and arg(ins, 3) != 0xffff:
+	if eff == 0xffff:
+		return
+	if arg(ins, 3) != 0:
 		await view.center_on(c)
-	if Game.autoplay:
+	var p := view.cell_center(c) - view.camera.position
+	var vs := view.view_size()
+	if p.x < 0 or p.y < 0 or p.x >= vs.x or p.y >= vs.y:
+		return
+	if eff >= 100 and eff != 109:
+		_mcall_loaded = eff % 100
 		return
 	var e: EffectPlayer = null
 	if eff < 100:
 		e = EffectPlayer.create("xben", eff)
-		if e:
-			e.position = view.cell_center(c)
-			view.fx_layer.add_child(e)
-	elif eff < 109:
-		e = EffectPlayer.create("mcall", eff - 100)
-		if e:
-			e.position = view.cell_center(c)
-			view.fx_layer.add_child(e)
-	if e:
-		await e.done
+	elif _mcall_loaded >= 0:
+		e = EffectPlayer.create("mcall", _mcall_loaded)
+		_mcall_loaded = -1
+	if e == null or Game.autoplay:
+		return
+	e.position = view.cell_center(c)
+	view.fx_layer.add_child(e)
+	await e.done
+	if eff == 109:
+		await wait(0.2)
 
 
-## op 0x30 in a battle: place a person's unit at (x, y) (0x4570ee with coordinates).
+## op 0x30 in a battle: place a person's unit at (x, y) through 0x4570ee (SE 15, centred, 4-tick hold).
 func op_actor_appear(ins: Dictionary) -> void:
 	var u := unit_by_pid(arg(ins, 0) & 0xfff)
 	if u == null:
 		return
-	u.pos = nearest_free(Vector2i(arg(ins, 1), arg(ins, 2)), u)
-	u.state = BUnit.STATE_ON_MAP
-	refresh_units()
+	await _appear(u, Vector2i(arg(ins, 1), arg(ins, 2)))
 
 
 func wait(sec: float) -> void:
@@ -1807,25 +1959,37 @@ func wait(sec: float) -> void:
 
 
 # ------------------------------------------------------------------ misc battle ops (Ghidra)
-## op 0x15: floating message at the unit (0x459777).
+## op 0x15 (0x413911 → 0x459777), in a battle only and not with p2 = 0xffff: a line in the portrait window, as op
+## 0x14's unit lines (the text ends at "\n&"). It is p1's when p1's unit (any state) is on the map, else p2's,
+## pointing at p2's unit when that one is on the map; the map centres on the unit.
 func op_unit_say(ins: Dictionary) -> void:
-	var u := unit_by_pid(arg(ins, 1) if arg(ins, 1) != 0xffff else arg(ins, 0))
-	if u == null or not u.active():
+	if not in_battle() or arg(ins, 1) == 0xffff:
 		return
-	await view.ensure_visible(u.pos)
-	hud.popup_number(sarg(ins, 2), u.pos, Color(1, 1, 0.6))
-	await wait(0.9)
+	var text := sarg(ins, 2)
+	var cut := text.find("\n&")
+	if cut >= 0:
+		text = text.substr(0, cut)
+	var speaker := arg(ins, 0)
+	var u := unit_by_pid(speaker)
+	if u == null or u.state != BUnit.STATE_ON_MAP:
+		speaker = arg(ins, 1)
+		u = unit_by_pid(speaker)
+	if u and u.state == BUnit.STATE_ON_MAP:
+		await view.center_on(u.pos)
+	await unit_say(speaker, text)
 
 
-## op 0x51 (0x41626a): battle won — every unit on the map is fully healed, status/buffs cleared.
+## op 0x51 (0x41626a): battle won — every unit on the map (whatever its HP) gets full HP, its moved / acted flags
+## cleared (drawn in colour again) and its statuses but bits 0 and 7 cleared (0x418da0). MP and buffs stay (the
+## stores at 0x4162e7 are NOPped).
 func op_op_51(_ins: Dictionary) -> void:
 	for u in units:
 		if u.exists() and u.state == BUnit.STATE_ON_MAP:
-			for i in 6:
-				u.set_buff(i, 3)
-			u.status = 0
+			u.flags = u.flags & ~(BUnit.F_MOVED | BUnit.F_ACTED)
+			u.status = u.status & ~0x7e
 			u.hp = u.max_hp()
-			u.mp = u.max_mp()
+			if u.node:
+				u.node.greyed = false
 	refresh_units()
 
 
@@ -1880,12 +2044,12 @@ func op_op_5c(ins: Dictionary) -> bool:
 	return true
 
 
-## op 0x5d (0x417068): turn limit — mode 0 set (only if > current turn + 1), 1 add.
+## op 0x5d (0x417068): turn limit — mode 0 set (refused when turn + 1 >= v, 0x4170ef), 1 add.
 func op_op_5d(ins: Dictionary) -> bool:
 	var mode := arg(ins, 0)
 	var v := arg(ins, 1) & 0xff
 	if mode == 0:
-		if v <= turn:
+		if v <= turn + 1:
 			return false
 		turn_limit = v
 	elif mode == 1:
@@ -2002,9 +2166,12 @@ func op_op_6d(ins: Dictionary) -> bool:
 	if u == null:
 		return false
 	if reenter:
-		if u.state == 3:
+		# 0x4591a1: a retreated unit with a deployment entry re-enters (SE 15, the map centres on it)
+		if u.state == 3 and not _entry_of(u).is_empty():
 			_unit_reenter(u, x, y, arg(ins, 6) if arg(ins, 6) != 0xffff else 2)
 			refresh_units()
+			Audio.play_se("se15")
+			await view.center_on(u.pos)
 	elif u.state == BUnit.STATE_ON_MAP:
 		await _script_move(u, Vector2i(x, y), arg(ins, 6))
 	return true

@@ -214,106 +214,132 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 76 | 跳转 | goto | 8144 | 3129 | 111 | 04 | Goto: ptr += (signed)arg, relative to the end of this instruction. At depth > 0 the current nesting level is left (parent continues at the target). Used for loops/breaks; targets can be in other sections. | 1 | 4d027d |
 | 69 | 提示 | popup | 10048 | 821 | 114 | 05 | Notice/popup box: 0x4335d0(3, text) → message box style 3 (0x42f699). Mod: text starting with "\|" is shown in the battle-object panel (0x4b3d08.0x4d6366). | 1 | 413a05 |
 | 08 | 设定结果 | set_result | 9422 | 116 | 117 | 2e | GS+2 (u16) = arg (0x40d277); if the screen mode object 0x4ac63c reports mode 2 also calls 0x426ba3. Used in story files with 0/1 (probably "screen/scene result" or "allow menu" flag – meaning not fully resolved). | 1 | 41431e |
-| 50 | 战场状态 | unit_status | 0 | 8761 | 58 | 02 46 26 26 | (not yet analysed) |  | 416129 |
+| 50 | 战场状态 | unit_status | 0 | 8761 | 58 | 02 46 26 26 | Unit action 0x45778f(person, kind, pre, post): kinds 0–12 (§ BattleStage.op_unit_status); the map centres on the unit (0x45503f) first; kind 0xffff does nothing. [C, audit 2026-10-11] |  | 416129 |
 | 24 | 音效 | play_sound | 5933 | 2038 | 117 | 09 | Sound effect: arg 0..254 → 0x4b69b8.play(arg+2) (wave list Se*.wav); 0xFF = stop sound (and GS byte via 0x418d20(0xFF)). | 1 | 41581c |
 | 6E | 概率测试 | test_random | 4781 | 2125 | 100 | 04 | Random test (clamped to 100): 0x47fb32(arg) – true with probability arg %. | T | 410f85 |
 | 17 | 地名显示 | place_name | 4914 | 0 | 59 | 05 | Mod: show place-name / caption banner (e.g. "第七回合", "潞州监狱  牢房") via 0x40bb78(text) after expansion. | 1 | 4d0fbf |
 | 4D | 战场状态变化 | unit_change | 0 | 4563 | 58 | 41 02 04 04 04 04 04 03 2f 18 30 04 04 | args: mode(0 person/1 player-slot/2 rect), person, slot?, x1, y1, x2, y2, side(0xFFFF→6 all), status(0/1/2→status idx 0/3/6, 0xFFFF none), arg0x18, arg0x30, hp_delta, mp_delta. Applies 0x4b5df0.0x45aa5c(person, value, what, 1) (what 0..5 = status-ailment bytes +0x18..+0x1d, 6 = ?, 7 = HP, 8 = MP; shows effect 0x479a01) to one unit or (mode 2, via 0x45ade5) to all units of side in the rectangle. Battle only. | 1 | 4150e7 |
-| 4C | 战场指令4C | unit_op_4c | 0 | 4165 | 58 | 40 02 04 | (not yet analysed) |  | 414f42 |
-| 1C | 淡出 | fade_out | 4080 | 58 | 117 | — | (not yet analysed) |  | 413ebd |
-| 26 | 测试武将区域 | test_unit_in_area | 0 | 3995 | 57 | 02 04 04 04 04 | (not yet analysed) |  | 411c36 |
-| 27 | 场景切换 | change_scene | 3746 | 58 | 117 | 2d 0c 1a 1c 15 | (not yet analysed) |  | 413d13 |
-| 1D | 淡入 | fade_in | 3744 | 58 | 117 | — | (not yet analysed) |  | 413ee2 |
-| 2D | 测试点击 | test_clicked | 3738 | 0 | 57 | 02 | (not yet analysed) |  | 4119e7 |
+| 4C | 战场指令4C | unit_op_4c | 0 | 4165 | 58 | 40 02 04 | Battle only: a hidden unit (state 1) appears at its deployment entry (mode 0 by person, entry with that person required; mode 1 slot / entry `slot`): nearest free cell (0x43f040), map centres, SE 15, 4 ticks; HP unchanged. The wipe-in (SE 42) is dead code. [C, audit 2026-10-11] |  | 414f42 |
+| 1C | 淡出 | fade_out | 4080 | 58 | 117 | — | Fade in from black (10 steps, then 3 ticks). [C, audit 2026-10-11] |  | 413ebd |
+| 26 | 测试武将区域 | test_unit_in_area | 0 | 3995 | 57 | 02 04 04 04 04 | Unit (person or selector) on the map with HP ≠ 0 inside the rectangle (0x45b4a5). [C, audit 2026-10-11] |  | 411c36 |
+| 27 | 场景切换 | change_scene | 3746 | 58 | 117 | 2d 0c 1a 1c 15 | Scene change (§ op table); the story actors stay (cleared only by 0x2f, 0x11, battle init, load); portraits and captions reset only on entering mode 1. [C, audit 2026-10-11] |  | 413d13 |
+| 1D | 淡入 | fade_in | 3744 | 58 | 117 | — | Fade to black: palette 10..245 in 11 one-tick steps, toolbar hidden. [C, audit 2026-10-11] |  | 413ee2 |
+| 2D | 测试点击 | test_clicked | 3738 | 0 | 57 | 02 | Click test: GS+0 & 0x20 and event slot 1 (the clicked actor) == arg. [C, audit 2026-10-11] |  | 4119e7 |
 | 0C | 中止 | exit_section | 3470 | 227 | 69 | — | Abort the running section body immediately (like return); next poll re-selects. | 8 | 4143a4 |
-| 2F | 指令2F | op_2f | 3515 | 0 | 59 | — | (not yet analysed) |  | 413652 |
-| 4F | 战场指令4F | unit_op_4f | 0 | 3286 | 58 | 02 02 2b 26 26 26 | (not yet analysed) |  | 415f65 |
-| 4B | 指令4B | op_4b | 1880 | 1029 | 100 | 04 04 04 2b 26 | (not yet analysed) |  | 415e31 |
-| 64 | 单挑动作 | duel_action | 0 | 2768 | 42 | 26 4c | (not yet analysed) |  | 4177b6 |
-| 4E | 战场指令4E | unit_op_4e | 0 | 2337 | 58 | 2c 02 04 04 04 04 03 07 02 04 04 | (not yet analysed) |  | 4146d4 |
-| 53 | 战场指令53 | unit_op_53 | 0 | 2296 | 58 | 2c 02 04 04 04 04 03 26 | (not yet analysed) |  | 41557b |
-| 65 | 单挑动作2 | duel_action2 | 0 | 2062 | 41 | 26 4d 26 | (not yet analysed) |  | 417826 |
-| 36 | 测试属性 | test_attr | 0 | 1945 | 58 | 02 23 04 24 | (not yet analysed) |  | 4112e9 |
-| 38 | 属性变更 | set_attr | 941 | 839 | 95 | 02 23 34 04 | (not yet analysed) |  | 412006 |
-| 55 | 战场移动 | unit_move | 0 | 1734 | 45 | 40 02 04 04 04 2b | (not yet analysed) |  | 41591c |
+| 2F | 指令2F | op_2f | 3515 | 0 | 59 | — | Story: resets the actor table (0x426c32 → 0x426bd5) and [0x49cee4] = 0xffff. [C, audit 2026-10-11] |  | 413652 |
+| 4F | 战场指令4F | unit_op_4f | 0 | 3286 | 58 | 02 02 2b 26 26 26 | Unit turn (0x457428): to `dir` or toward p2's unit (vertical when |dx| < |dy|); only when the facing changes: centre + 8 ticks (scroll), SE 6, turn, 8 ticks (wait). [C, audit 2026-10-11] |  | 415f65 |
+| 4B | 指令4B | op_4b | 1880 | 1029 | 100 | 04 04 04 2b 26 | Battle: player deployment entry k. Story: with [0x55e9d4] ≠ 0 the mod table 0x55e9d8 (x, y, u16 0xff00 | hidden, which ends the list at the next entry); with 0 nothing that lasts. [C, audit 2026-10-11] |  | 415e31 |
+| 64 | 单挑动作 | duel_action | 0 | 2768 | 42 | 26 4c | 单挑 single-fighter action (0x448524), side = (arg ≠ 0); acts 0–15 (duel.md). [C, audit 2026-10-11] |  | 4177b6 |
+| 4E | 战场指令4E | unit_op_4e | 0 | 2337 | 58 | 2c 02 04 04 04 04 03 07 02 04 04 | SetAI (0x459d8b) for a person, or for the units of `side` in the rectangle (0x459e79). [C, audit 2026-10-11] |  | 4146d4 |
+| 53 | 战场指令53 | unit_op_53 | 0 | 2296 | 58 | 2c 02 04 04 04 04 03 26 | mode 0: RemoveUnit(person's unit on the map; 0x400..0x402 = current unit) with animation variant a7 (≠ 0 or person 0: defeat animation); else 0x45a80f: units of `side` in the rectangle (cell by cell, as given, clipped; state 2, any HP) removed, silently when a7 ≠ 0. rules.md §10.6. [C, audit 2026-10-11] |  | 41557b |
+| 65 | 单挑动作2 | duel_action2 | 0 | 2062 | 41 | 26 4d 26 | 单挑 exchange (0x448394 → 0x44620b …), with the wind-up 0x445e14. [C, audit 2026-10-11] |  | 417826 |
+| 36 | 测试属性 | test_attr | 0 | 1945 | 58 | 02 23 04 24 | Attribute test; all uses are attr 7 (the unit's HP; 0x477adc finds a unit in any state but 0, none → 0xff). [C, audit 2026-10-11] |  | 4112e9 |
+| 38 | 属性变更 | set_attr | 941 | 839 | 95 | 02 23 34 04 | Attribute set / add / subtract (0x412006): see PersonAttrs.set_attr (abilities added through a dword read become 120, attr 9 and 15 do nothing, subtraction stops at 0). [C, audit 2026-10-11] |  | 412006 |
+| 55 | 战场移动 | unit_move | 0 | 1734 | 45 | 40 02 04 04 04 2b | Retreated unit (state 3) re-enters: UnitInit at (x, y) (no 出阵数 for this call site 0x459417), SE 15, map centres; the wipe-in check 0x4573c1 never holds. [C, audit 2026-10-11] |  | 41591c |
 | 13 | 测试选择 | test_choice | 1392 | 126 | 82 | 04 | Test last choice: Reader+0x2038 == arg. | T | 411fa5 |
 | 3D | 获得物品 | get_item | 856 | 605 | 93 | 17 49 26 02 | args: item (0xFFFF or > 0x67: nothing), level (0xFFFF→0), flag, person. Level 0 for a weapon/armour = automatic from the party level L (0x40c14f: mean of the 15 highest levels of persons 0..25 in the party): normal (L mod 18)/6+1 below 48 else 3, treasures L/7+1 ≤ 10; at or above the item's maximum (3, treasures 10) the item is fully grown (exp 0xFF). Outside a battle: message "得到了…" (0x42f699(2)) then into the bag (0x40d79c / 0x40da45 for consumables); in a battle 0x45991b(item, level, flag, person, 1). Unique items (+0x18) are recorded via 0x41a1b0(item+3, 1). | 1 | 4143c2 |
-| 40 | 测试阵营 | test_side | 0 | 1443 | 58 | 48 | (not yet analysed) |  | 4116ee |
+| 40 | 测试阵营 | test_side | 0 | 1443 | 58 | 48 | Phase test: ctx+0x10 (0 player, 1 friend, 2 enemy). [C, audit 2026-10-11] |  | 4116ee |
 | 21 | 地图标记 | map_mark | 0 | 1346 | 22 | 04 04 10 26 26 | Fire on a map cell (battle only): args x, y, mode, scroll (0xffff→0), silent (0xffff→0). Mode 0 sets fire: ChangeTerrain(x, y, terrain 0x1a 火, patch 0, scroll, silent) as op 0x58; mode 1 puts it out: undo of the recorded patch-0 change at (x, y) (0x4567c1, see rules.md §10.6). | 1 | 413efb |
-| 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | (not yet analysed) |  | 417315 |
-| 63 | 单挑对话2 | duel_say2 | 0 | 1248 | 41 | 26 05 26 | (not yet analysed) |  | 417701 |
-| 3A | 资源变更 | set_resource | 927 | 109 | 54 | 28 34 04 | (not yet analysed) |  | 4149f7 |
-| 41 | 测试区域部队 | test_units_in_area | 0 | 927 | 55 | 03 04 24 3f 04 04 04 04 | (not yet analysed) |  | 41149d |
+| 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | Caption (rules.md §13): a1 = 0 clears, a2 new line, a3 holds; the first caption after a mode-1 scene darkens the strip y 360..440 over 0.5 s. [C, audit 2026-10-11] |  | 417315 |
+| 63 | 单挑对话2 | duel_say2 | 0 | 1248 | 41 | 26 05 26 | 单挑 speech bubble (0x4431af); empty text erases it. [C, audit 2026-10-11] |  | 417701 |
+| 3A | 资源变更 | set_resource | 927 | 109 | 54 | 28 34 04 | Resource: kind 0 gold (≤ 9,999,999), 1 GS+6, 2 GS+0x12 (0..100, drawn as the status window's third pane 0x476715; add / sub animate in 5 × 3 ticks with a blinking arrow, 0x40d2a9 / 0x40d3ae). [C, audit 2026-10-11] |  | 4149f7 |
+| 41 | 测试区域部队 | test_units_in_area | 0 | 927 | 55 | 03 04 24 3f 04 04 04 04 | Count of `side` units in state 2 (any HP), in the rectangle as given or the whole map, compared with n; side 0–6, others count nobody. [C, audit 2026-10-11] |  | 41149d |
 | 3B | 加入/离队 | join | 810 | 90 | 57 | 02 0e 3e | Join/leave (person, mode 0xffff→0xff, arg 0xffff→0) → mod 0x4d5000 (mode 1) / 0x40c28c. Does nothing in a battle (scene mode 3, 0x4149be), e.g. S_29's and S_36's leaves. | 1 | 4148fe |
 | 58 | 指令58 | op_58 | 0 | 875 | 48 | 42 43 44 04 04 26 26 | Terrain change / undo (battle): see rules.md §10.6 (0x58 terrain_change). | 1 | 4166eb |
 | 18 | 标题显示 | title_text | 789 | 0 | 58 | 05 | Show title banner text via 0x40bb48 (e.g. chapter sub-title "命运的疆陲", duel caption "枪兵  对  管毅"). | 1 | 413b09 |
 | 12 | 选择 | choice | 621 | 59 | 82 | 05 02 | Choice menu: arg0 = up to 3 options separated by "\n" (prefixed "1." "2." "3."), arg1 = (0xFFFF→0) person whose large portrait (sge 301+face) the choice window shows (0x42def9; 管毅 in 673 of 680 uses). Result index+1 stored in Reader+0x2038. | 1 | 411db9 |
-| 15 | 战场对话 | unit_say | 0 | 657 | 58 | 02 02 05 | (not yet analysed) |  | 413911 |
-| 25 | 测试武将位置 | test_unit_at | 0 | 630 | 52 | 02 04 04 | (not yet analysed) |  | 411b50 |
+| 15 | 战场对话 | unit_say | 0 | 657 | 58 | 02 02 05 | A line in the battle portrait window (as op 0x14), for p1's unit or else p2's; map centres on it. Battle only; p2 = 0xffff does nothing. [C, audit 2026-10-11] |  | 413911 |
+| 25 | 测试武将位置 | test_unit_at | 0 | 630 | 52 | 02 04 04 | Unit (person or selector) at (x, y) (0x45b371). [C, audit 2026-10-11] |  | 411b50 |
 | 48 | 战场装备设定 | battle_equipment | 0 | 517 | 55 | 02 3b 49 3c 49 3d | args: person, weapon code, weapon level, armour code, armour level, accessory code (0xFFFF→0). Stored in the person's ally/enemy deployment entry (slots 15..114) at +0x14/+0x18/+0x1c/+0x20/+0x21 and applied when the battle starts (0x44cc85 → 0x4429f9 per slot): code 0 = default equipment for the class and level (0x407fe7), 1 = take off, ≥ 2 = item code−2 (weapon) / code+0x24 (armour) / code+0x33 (accessory) if it is that kind of item and the class may use it (0x407dec); level 0 = automatic. | 1 | 412dd6 |
 | 74 | 设定扩展值 | set_4ce004 | 471 | 2 | 55 | 26 | Mod: u32 @0x4ce004 = arg: saving allowed (≠ 0) or not. 保存 says 目前不可存盘。 while it is 0 (0x4d009f); loading a game sets it to 1 (0x4d0c29). | 1 | 4d00c9 |
-| 1F | 镜头移动 | scroll_to | 0 | 472 | 31 | 04 04 | (not yet analysed) |  | 414257 |
-| 06 | 出场选择(战中) | battle_select_units | 462 | 0 | 53 | 2e 04 38 38 38 38 38 39 39 39 39 39 | (not yet analysed) |  | 415b45 |
-| 6B | 指令6B | op_6b | 0 | 447 | 12 | 04 04 4b 26 | (not yet analysed) |  | 41405b |
-| 28 | 指令28 | op_28 | 446 | 0 | 57 | 36 | (not yet analysed) |  | 4174a2 |
+| 1F | 镜头移动 | scroll_to | 0 | 472 | 31 | 04 04 | Map centres on (x, y) (0x45503f), waiting for the scroll. [C, audit 2026-10-11] |  | 414257 |
+| 06 | 出场选择(战中) | battle_select_units | 462 | 0 | 53 | 2e 04 38 38 38 38 38 39 39 39 39 39 | Sortie set-up: forced persons into 0x4b09f0[5], flags 0x4b0a04[5], max (0 → 1) into 0x4b09ec; flag ≠ 0 shows the toolbar with 出征 (mod 0x4d0bc9), 0 closes it. [C, audit 2026-10-11] |  | 415b45 |
+| 6B | 指令6B | op_6b | 0 | 447 | 12 | 04 04 4b 26 | Map effect: scroll arg ≠ 0 centres; only with the cell on screen: < 100 Xben[effect], 109 plays the MCALL loaded before (+ 4 ticks), other ≥ 100 only loads MCALL{effect % 100}. [C, audit 2026-10-11] |  | 41405b |
+| 28 | 指令28 | op_28 | 446 | 0 | 57 | 36 | 1: toolbar created but not shown ([0x55ac02] = 0); 0: toolbar destroyed. [C, audit 2026-10-11] |  | 4174a2 |
 | 0D | 场景结束 | next_scene | 112 | 299 | 111 | — | Calls 0x42c858(0); marks "advance to next scene" – the current block finishes, then the scene index is incremented and the body terminates. | 7 | 4143ae |
-| 66 | 单挑动作3 | duel_action3 | 0 | 389 | 38 | 26 4e 26 | (not yet analysed) |  | 4178c6 |
-| 2E | 测试相邻 | test_adjacent | 0 | 364 | 57 | 02 02 26 | (not yet analysed) |  | 411a54 |
-| 3F | 测试回合 | test_turn | 0 | 353 | 53 | 04 24 | (not yet analysed) |  | 411652 |
-| 5B | 指令5B | op_5b | 0 | 311 | 29 | 04 04 04 04 26 | (not yet analysed) |  | 416cbb |
+| 66 | 单挑动作3 | duel_action3 | 0 | 389 | 38 | 26 4e 26 | 单挑 special action kinds 0–2 (0x44711f / 0x4475be / 0x448004) with the wind-up 0x445e14. [C, audit 2026-10-11] |  | 4178c6 |
+| 2E | 测试相邻 | test_adjacent | 0 | 364 | 57 | 02 02 26 | p2's unit next to p1's (8 cells); loose == 0 also needs mutual attack. p1 ≥ 0x400 never matches; p2 ≥ 0x200 ignores loose. [C, audit 2026-10-11] |  | 411a54 |
+| 3F | 测试回合 | test_turn | 0 | 353 | 53 | 04 24 | Turn test: turn ([0x4b3d0a] + 1) ≥ / < / == n. [C, audit 2026-10-11] |  | 411652 |
+| 5B | 指令5B | op_5b | 0 | 311 | 29 | 04 04 04 04 26 | Target area: stored at ctx+0xc..0xf, ctx+8 = (flag == 0); the map centres on it and it blinks 3 × 10 ticks (0x45a0ce). [C, audit 2026-10-11] |  | 416cbb |
 | 75 | 字节变量赋值 | set_byte_var | 254 | 10 | 52 | 02 50 | Mod byte var: u8 @0x55a000[arg0] = arg1. | 1 | 4d100d |
-| 49 | 界面49 | ui_49 | 0 | 262 | 58 | — | (not yet analysed) |  | 415795 |
-| 37 | 测试资源 | test_resource | 252 | 0 | 20 | 28 04 24 | (not yet analysed) |  | 4118d4 |
-| 60 | 单挑对话 | duel_say | 0 | 232 | 42 | 26 05 4c | (not yet analysed) |  | 4175fc |
-| 6A | 指令6A | op_6a | 207 | 0 | 36 | — | (not yet analysed) |  | 416dfa |
-| 0E | 界面0E | ui_0e | 0 | 164 | 57 | — | (not yet analysed) |  | 415890 |
+| 49 | 界面49 | ui_49 | 0 | 262 | 58 | — | Battle over: ctx+1 = 2. [C, audit 2026-10-11] |  | 415795 |
+| 37 | 测试资源 | test_resource | 252 | 0 | 20 | 28 04 24 | Resource test, unsigned (0 ≥, 1 <, else ==); kind 1 reads GS+7. [C, audit 2026-10-11] |  | 4118d4 |
+| 60 | 单挑对话 | duel_say | 0 | 232 | 42 | 26 05 4c | 单挑 fighter appears (brightened MOV8, 15..0), optional action, then says the text. [C, audit 2026-10-11] |  | 4175fc |
+| 6A | 指令6A | op_6a | 207 | 0 | 36 | — | Game over: SE 40, GHAI #7, 2.5 s, "再玩一次吗？" (the original exits either way). [C, audit 2026-10-11] |  | 416dfa |
+| 0E | 界面0E | ui_0e | 0 | 164 | 57 | — | Battle lost: ctx+1 = 3 (0x455ffd); the main loop then runs the game over (0x42c0a2). [C, audit 2026-10-11] |  | 415890 |
 | 0A | 清除局部变量 | clear_flags | 105 | 43 | 102 | — | Clear flags 0..255, clear mod byte array @0x569f00[0..114], u16 @0x55ac06 = 0, @0x55e9d4 = 1. Used at the start of most files. | 1 | 415ad7 |
-| 59 | 指令59 | op_59 | 0 | 137 | 52 | 04 17 49 17 49 17 49 26 | (not yet analysed) |  | 41688b |
+| 59 | 指令59 | op_59 | 0 | 137 | 52 | 04 17 49 17 49 17 49 26 | Reward screen, gold (party level × 100 + 700 + base) and up to three items (rules.md §13). [C, audit 2026-10-11] |  | 41688b |
 | 04 | 测试是否 | test_yes_no | 133 | 0 | 54 | 26 | Ask the player "可以吗？" (Yes/No box via 0x42f699(1,"可以吗？")); true if answer == arg (1 = yes, 0 = no). | T | 411748 |
-| 19 | 胜利条件 | victory_cond_text | 0 | 124 | 58 | 05 | (not yet analysed) |  | 413bd1 |
-| 29 | 指令29 | op_29 | 120 | 0 | 24 | 02 04 04 | (not yet analysed) |  | 417143 |
-| 1A | 战斗目标 | battle_goal_text | 0 | 116 | 58 | 05 | (not yet analysed) |  | 413c0e |
-| 5F | 单挑开始 | duel_start | 0 | 116 | 42 | — | (not yet analysed) |  | 4175e8 |
-| 61 | 单挑结束 | duel_end | 0 | 116 | 42 | — | (not yet analysed) |  | 4176a8 |
-| 68 | 单挑设定 | duel_setup | 0 | 116 | 42 | 02 02 4f | (not yet analysed) |  | 417535 |
-| 20 | 指令20 | op_20 | 103 | 12 | 26 | 4a | (not yet analysed) |  | 416fd8 |
-| 46 | 友军出场设定 | battle_allies | 0 | 113 | 53 | 20 × [02 26 04 04 2b 3e 45 07 02 04 04] | (not yet analysed) |  | 4125c5 |
-| 71 | 特殊功能 | special_func | 92 | 11 | 61 | 04 | (not yet analysed) |  | 436436 |
-| 6D | 指令6D | op_6d | 0 | 95 | 39 | 40 02 04 02 04 04 2b 26 | (not yet analysed) |  | 410cfc |
+| 19 | 胜利条件 | victory_cond_text | 0 | 124 | 58 | 05 | Victory text into Reader+0x3d10 (shown by 胜利条件). [C, audit 2026-10-11] |  | 413bd1 |
+| 29 | 指令29 | op_29 | 120 | 0 | 24 | 02 04 04 | Story portrait: the classic 64×80 face at (x, y + 40), fading in over 15 ticks (at once while black); persons ≥ 0x400 ignored. [C, audit 2026-10-11] |  | 417143 |
+| 1A | 战斗目标 | battle_goal_text | 0 | 116 | 58 | 05 | Full-screen 胜利条件 sequence (0x44bd27): darkened map, red heading at top + 72, the text lines (20 ticks each), 限制回合数, 2 s; also before the field. [C, audit 2026-10-11] |  | 413c0e |
+| 5F | 单挑开始 | duel_start | 0 | 116 | 42 | — | 单挑 close: BGM back, the winner's EXP (duel.md §7). [C, audit 2026-10-11] |  | 4175e8 |
+| 61 | 单挑结束 | duel_end | 0 | 116 | 42 | — | 单挑 "胜 负" opening (0x448ff5). [C, audit 2026-10-11] |  | 4176a8 |
+| 68 | 单挑设定 | duel_setup | 0 | 116 | 42 | 02 02 4f | 单挑 set-up: both persons need a unit in any state but 0 (0x4495f8 / 0x477adc); backdrop, BGM 10, intro. [C, audit 2026-10-11] |  | 417535 |
+| 20 | 指令20 | op_20 | 103 | 12 | 26 | 4a | GS+0x11 = v == 0xff ? b & 0xe0 : (b & 0xf0) | v. [C, audit 2026-10-11] |  | 416fd8 |
+| 46 | 友军出场设定 | battle_allies | 0 | 113 | 53 | 20 × [02 26 04 04 2b 3e 45 07 02 04 04] | Friend deployment entries (as op 0x47). [C, audit 2026-10-11] |  | 4125c5 |
+| 71 | 特殊功能 | special_func | 92 | 11 | 61 | 04 | Special function table 0x43646b: id 0 random into EV[4088], id 5 Niuniu[0] = EV[2699]. [C, audit 2026-10-11] |  | 436436 |
+| 6D | 指令6D | op_6d | 0 | 95 | 39 | 40 02 04 02 04 04 2b 26 | Move a unit next to another (offsets > 40 negative) or, last arg 1, re-enter a retreated unit with a deployment entry there (0x4591a1: SE 15, map centres). [C, audit 2026-10-11] |  | 410cfc |
 | 11 | 剧本跳转 | goto_scenario | 63 | 8 | 20 | 37 | Jump to scenario: GS+7 = arg; ends the file → the next file loaded is scenario arg+1 (R/S by parity). | 9 | 415c67 |
 | 6F | 失去物品 | lose_item | 70 | 0 | 8 | 17 | Remove one item arg (items < 0x57: search inventory 0x4b0783 (3-byte entries), then persons' equipment slots +0x2e/+0x31/+0x34; 0x57..0x67: decrement stack count @0x4b09db[arg-0x57]). Returns 1 if something was removed. | T | 411046 |
-| 47 | 敌军出场设定 | battle_enemies | 0 | 68 | 58 | 80 × [02 26 26 04 04 2b 3e 45 07 02 04 04] | (not yet analysed) |  | 4129a4 |
-| 2A | 指令2A | op_2a | 59 | 0 | 21 | 02 04 04 | (not yet analysed) |  | 4171ff |
-| 44 | 战场初始化 | battle_init | 0 | 58 | 58 | — | (not yet analysed) |  | 412230 |
-| 45 | 战场设定 | battle_settings | 0 | 58 | 58 | 26 26 04 3e 32 02 32 02 47 22 | (not yet analysed) |  | 4122f1 |
-| 5A | 界面5A | ui_5a | 0 | 58 | 58 | — | (not yet analysed) |  | 416c97 |
-| 07 | 测试待处理事件 | test_pending | 52 | 0 | 52 | — | (not yet analysed) |  | 415c46 |
+| 47 | 敌军出场设定 | battle_enemies | 0 | 68 | 58 | 80 × [02 26 26 04 04 2b 3e 45 07 02 04 04] | Enemy deployment entries; levels at op time (trimmed mean 0x41885a + offset); a facing of 0xffff or > 3 is 2. [C, audit 2026-10-11] |  | 4129a4 |
+| 2A | 指令2A | op_2a | 59 | 0 | 21 | 02 04 04 | Story portrait moves at 4 px a tick. [C, audit 2026-10-11] |  | 4171ff |
+| 44 | 战场初始化 | battle_init | 0 | 58 | 58 | — | Battle init: flags 0..255 cleared, [0x55e9d4] = 0, grudge bytes, deployment entries reset, the sortie list copied. [C, audit 2026-10-11] |  | 412230 |
+| 45 | 战场设定 | battle_settings | 0 | 58 | 58 | 26 26 04 3e 32 02 32 02 47 22 | Battle settings (rules.md §9): turn limit, level offset, boss, protected leader, climate, weather. [C, audit 2026-10-11] |  | 4122f1 |
+| 5A | 界面5A | ui_5a | 0 | 58 | 58 | — | "开始作战" over the darkened map, 20 ticks (0x44bac2). [C, audit 2026-10-11] |  | 416c97 |
+| 07 | 测试待处理事件 | test_pending | 52 | 0 | 52 | — | Pending test (0x415c46). [C, audit 2026-10-11] |  | 415c46 |
 | 43 | 测试失败 | test_defeat | 0 | 46 | 46 | — | Counterpart of 0x42 for defeat (0x4b3d08.0x44c74d; event slot 6): the protected leader (op 0x45 a7) is among units 0..35 in state 3 / 4; or nobody is left: with 管毅 in unit 0 (person dword 0), no unit 0..15 in state 1 / 2 (HP not checked, so an ally in slot 15 counts: S_11 starts with our side hidden), else no colour-0 unit on the map (0x44c8e6 side 0); or the turn limit has passed. | T | 411d8e |
-| 5C | 指令5C | op_5c | 0 | 37 | 12 | 02 | (not yet analysed) |  | 416e17 |
-| 2B | 指令2B | op_2b | 36 | 0 | 20 | 02 | (not yet analysed) |  | 4172bb |
-| 52 | 指令52 | op_52 | 15 | 18 | 16 | 02 03 | (not yet analysed) |  | 414d15 |
-| 51 | 指令51 | op_51 | 0 | 26 | 14 | — | (not yet analysed) |  | 41626a |
-| 62 | 单挑62 | duel_62 | 0 | 26 | 14 | 26 | (not yet analysed) |  | 4176bc |
+| 5C | 指令5C | op_5c | 0 | 37 | 12 | 02 | The person's unit (state 2): map centres, it blinks 3 × (10 on, 10 off) ticks; 0 if none. [C, audit 2026-10-11] |  | 416e17 |
+| 2B | 指令2B | op_2b | 36 | 0 | 20 | 02 | Story portrait fades out over 16 ticks. [C, audit 2026-10-11] |  | 4172bb |
+| 52 | 指令52 | op_52 | 15 | 18 | 16 | 02 03 | Class change; each slot the person can no longer use (0x407907 with the mod's rules) is emptied, the item gone; in a battle 0x400..0x402 = current unit, graphics reloaded. [C, audit 2026-10-11] |  | 414d15 |
+| 51 | 指令51 | op_51 | 0 | 26 | 14 | — | After a victory: every unit in state 2 gets full HP, its moved / acted flags and statuses but bits 0 and 7 cleared; MP and buffs stay. [C, audit 2026-10-11] |  | 41626a |
+| 62 | 单挑62 | duel_62 | 0 | 26 | 14 | 26 | 单挑 result: [0x4cf61c] = 1 around 0x4490da(winner). [C, audit 2026-10-11] |  | 4176bc |
 | 3E | 装备设定 | set_equipment | 22 | 1 | 12 | 02 3b 49 3c 49 3d | Same arguments and codes as 0x48, applied at once; code 0 leaves the slot. Outside a battle a weapon code of 1 takes off every slot with a code (the original tests the weapon code for all three, 0x416319); in a battle the person's unit must exist and codes > 0x67 are ignored (0x4429f9). | 1 | 416319 |
-| 1B | 指令1B | op_1b | 0 | 18 | 13 | 02 27 | (not yet analysed) |  | 413c56 |
+| 1B | 指令1B | op_1b | 0 | 18 | 13 | 02 27 | Retreat-line flag U+0x20 of the first unit with state ≠ 0. [C, audit 2026-10-11] |  | 413c56 |
 | 42 | 测试胜利 | test_victory | 0 | 15 | 15 | — | True if the battle object 0x4b3d08 already flags victory, or the boss person configured for the battle (Reader+0x3d04 bit0, id at +0x3d06) is among enemy slots 35..115 in state 3/4 (defeated/retreated), or no enemy remains (0x44c8e6(5,…)==0). Sets event slot 5. | T | 411d63 |
-| 22 | 天气 | set_weather | 12 | 0 | 3 | 1b | (not yet analysed) |  | 4121ed |
-| 4A | 出场选择 | battle_prepare | 0 | 11 | 9 | 04 38 38 38 38 38 39 39 39 39 39 | (not yet analysed) |  | 415d92 |
-| 5D | 指令5D | op_5d | 0 | 8 | 4 | 34 04 | (not yet analysed) |  | 417068 |
-| 67 | 章节标题 | chapter_title | 5 | 0 | 5 | 04 05 | (not yet analysed) |  | 413b3d |
-| 0F | 画面模式 | screen_mode | 4 | 0 | 3 | 12 | (not yet analysed) |  | 4158af |
-| 6C | 指令6C | op_6c | 0 | 2 | 1 | 02 02 | (not yet analysed) |  | 410c3e |
+| 22 | 天气 | set_weather | 12 | 0 | 3 | 1b | Video (name table 0x555060). [C, audit 2026-10-11] |  | 4121ed |
+| 4A | 出场选择 | battle_prepare | 0 | 11 | 9 | 04 38 38 38 38 38 39 39 39 39 39 | Battle prepare: forced persons and flags into 0x4b09f0 / 0x4b0a04 (mod 0x4d53ae), then the sortie builder 0x41856a. [C, audit 2026-10-11] |  | 415d92 |
+| 5D | 指令5D | op_5d | 0 | 8 | 4 | 34 04 | Turn limit: mode 0 set (refused when turn + 1 ≥ v), 1 add. [C, audit 2026-10-11] |  | 417068 |
+| 67 | 章节标题 | chapter_title | 5 | 0 | 5 | 04 05 | Chapter title: GS+6 = max(n − 1, 0); n < 5: the part name card (隐龙篇 …), then the title card. [C, audit 2026-10-11] |  | 413b3d |
+| 0F | 画面模式 | screen_mode | 4 | 0 | 3 | 12 | Ending: Niuniu[v] = 1 (v < 3), sound stopped, credits picture GHAI #6 (5 s + up to 20 s), then the program ends (the port goes to the title). [C, audit 2026-10-11] |  | 4158af |
+| 6C | 指令6C | op_6c | 0 | 2 | 1 | 02 02 | Copy person bytes 0x11..0x34 except 0x26, 0x2a. [C, audit 2026-10-11] |  | 410c3e |
 | 10 | 空 | nop | 0 | 0 | 0 | — | No operation. | 1 | 41590d |
-| 35 | 武将状态 | actor_state | 0 | 0 | 0 | 02 13 | (not yet analysed) |  | 4135de |
-| 39 | 指令39 | op_39 | 0 | 0 | 0 | 02 04 | (not yet analysed) |  | 414b62 |
-| 3C | 指令3C | op_3c | 0 | 0 | 0 | 02 0e 3a | (not yet analysed) |  | 415cbf |
+| 35 | 武将状态 | actor_state | 0 | 0 | 0 | 02 13 | Unused: person byte +2 = arg. [C, audit 2026-10-11] |  | 4135de |
+| 39 | 指令39 | op_39 | 0 | 0 | 0 | 02 04 | Unused. [C, audit 2026-10-11] |  | 414b62 |
+| 3C | 指令3C | op_3c | 0 | 0 | 0 | 02 0e 3a | Unused: test person +0x2a == a1 (inverted when a2 == 0). [C, audit 2026-10-11] |  | 415cbf |
 | 54 | 界面54 | ui_54 | 0 | 0 | 0 | — | In a battle: units at HP 0 leave the map (0x44cc03). Unused by the scripts. | 1 | 415771 |
-| 56 | 指令56 | op_56 | 0 | 0 | 0 | 47 | (not yet analysed) |  | 414f03 |
-| 57 | 指令57 | op_57 | 0 | 0 | 0 | 22 | (not yet analysed) |  | 414ec4 |
-| 5E | 扩展5E | mod_5e | 0 | 0 | 0 | 04 | (not yet analysed) |  | 4d0000 |
+| 56 | 指令56 | op_56 | 0 | 0 | 0 | 47 | Unused. [C, audit 2026-10-11] |  | 414f03 |
+| 57 | 指令57 | op_57 | 0 | 0 | 0 | 22 | Unused: weather level = arg. [C, audit 2026-10-11] |  | 414ec4 |
+| 5E | 扩展5E | mod_5e | 0 | 0 | 0 | 04 | Unused (mod). [C, audit 2026-10-11] |  | 4d0000 |
 | 70 | 复制武将数据 | copy_person_byte | 0 | 0 | 0 | 02 02 04 | Copy one byte of the person record: person[arg1].byte[arg2] = person[arg0].byte[arg2] (arg2 < 0x48). | T | 41113a |
-| 72 | 跳回开头 | rewind | 0 | 0 | 0 | — | (not yet analysed) |  | 4d002e |
-| 73 | 测试合计 | test_sum | 0 | 0 | 0 | 02 04 24 26 26 26 26 26 | (not yet analysed) |  | 411207 |
+| 72 | 跳回开头 | rewind | 0 | 0 | 0 | — | Unused (mod). [C, audit 2026-10-11] |  | 4d002e |
+| 73 | 测试合计 | test_sum | 0 | 0 | 0 | 02 04 24 26 26 26 26 26 | Unused. [C, audit 2026-10-11] |  | 411207 |
+
+### 5.1 Audit of the engine's own ops (2026-10-11)
+
+The ops the table marked "not yet analysed" (74, about 44,700 uses) were checked against their handlers. The port
+followed the original for most; it now also does so for these:
+* **Victory / defeat (0x42 / 0x43):** the boss must be off the field (state 3 / 4, units 35..115), not merely at HP 0
+  or absent; the default defeat with 管毅 in unit 0 counts units 0..15 hidden or on the map whatever their HP, so
+  S_11 (our side hidden at first) is no longer lost at turn 1.
+* **Units:** op 0x53's animation variant and silent area removal (silent: SE 6 / SE 17 sinking image, no 撤退数;
+  defeat animation for variant ≠ 0 or 管毅; else SE 16 and two blinks), op 0x31 removes silently; ops 0x4c / 0x30 /
+  0x55 / 0x6d appear with SE 15, no wipe, and need a deployment entry; op 0x55 does not count 出阵数; op 0x4f turns
+  only when the facing changes (horizontal on ties); op 0x50 centres on the unit and ignores kind 0xffff; op 0x51
+  heals HP only and clears the moved / acted flags; the free-cell search is 0x43f040's (and refuses impassable
+  terrain, cost 255).
+* **Tests:** 0x41 counts units in state 2 whatever their HP; 0x2e never matches a selector as p1.
+* **Persons:** op 0x38 as PersonAttrs.set_attr (the dword read makes an ability add 120); op 0x52 empties any slot
+  the new class cannot use (the item is lost); op 0x6c copies up to 0x34.
+* **Story:** op 0x27 keeps the actors; captions reset and the caption band darkens only on entering mode 1; op 0x29
+  / 0x2a use the classic 64×80 face at y + 40, 15-tick fade, 4 px a tick; op 0x2b fades 16 ticks; op 0x4b ends the
+  出战位置 list with 0xff and does nothing while [0x55e9d4] is 0; a click on an actor while a section runs counts
+  for the next poll (R_16's 张千 has to be clicked during a 4-tick delay).
+* **Screens:** 开始作战 (0x5a), the 胜利条件 sequence (0x1a), the part-name and title cards (0x67, with GS+6), the game
+  over (0x6a: SE 40, 2.5 s, 再玩一次吗？), the ending credits (0x0f), the resource meter pane (0x3a kind 2), op 0x15
+  in the portrait window, op 0x6b's MCALL load / play and on-screen rule, op 0x5d's turn + 1 limit, op 0x47's facing.
+* Not reproduced: the original exits the program after an ending and after the game-over question (the port goes
+  to the title; 否 quits on desktop); the meter pane sits left of the port's top-bar buttons, not at (342, 25).
 
 ## 6. Memory map for script pokes (mod ops 0x77 / 0x78 / 0x79 / 0x75)
 

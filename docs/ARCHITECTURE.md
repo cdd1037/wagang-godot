@@ -134,9 +134,10 @@ through EV variables.
 * **Scene 1:** the turn loop (`battle_loop`) runs player, ally and enemy phases. At each phase start
   `checkpoint()` polls the event sections once (victory and defeat checks, reinforcements, scripted dialogue),
   then the recovery, 暗杀 countdown, poison and regeneration of that side follow (0x44ed93 / 0x44e851). A unit
-  whose HP reaches 0 in a command stays on the map until the command or AI action is over; then
-  `remove_dead()` (0x44cc03) takes it off and the events are polled again. EV[10] = 1 tells the scripts that a
-  unit fell (rules.md §9.1).
+  whose HP reaches 0 in a command stays on the map until the command or AI action is over. Then the acting unit
+  becomes the current unit and, while it is on the map, the events are polled (`actor_poll`, 0x45b5fe), so a
+  section can still see the fallen unit on the map at HP 0 (S_13's 杨素 revives). `remove_dead()` (0x44cc03) then
+  takes it off and the events are polled again. EV[10] = 1 tells the scripts that a unit fell (rules.md §9.1).
 * **Scene 2:** the aftermath.
 
 | Class | Responsibility |

@@ -633,13 +633,16 @@ round n:
       for units 0..34 (player 0-14 AND friendly 15-34), one unit after the other: phase-start skills (mod
       0x401118, §12.3), StatusRecovery (0x43c7d6), BuffDecay (0x43c975)
       clear 0x55af00[0..34]; 暗杀 countdown of units 35..114 (0x4364c6); Poison(side 0) (0x44df61); Regen (0x43cddd) for 0..34
-      player input loop (0x44e0d9): after each command remove HP-0 units (0x44cc03), then the script poll
+      player input loop (0x44e0d9): after each command the commanded unit is the current unit (0x44e452) and,
+      while it is on the map and the battle goes on, the script is polled (0x45b5fe); if the command did something,
+      remove HP-0 units (0x44cc03), then the script poll
   FRIEND PHASE (ctx[0x10]=1): script poll; AI-controlled units among 0..34 act (0x43ad1c)
   ENEMY PHASE (ctx[0x10]=2): events, script poll, remove HP-0 units; for units 35..114: StatusRecovery, BuffDecay;
       clear 0x55af00[35..114]; 暗杀 countdown of units 0..34 (0x4364b6); Poison(side 1); Regen; enemy AI units act
 ```
 A unit whose HP reaches 0 in an attack or strategy stays on the map at HP 0 until the command or AI action is
-over; then 0x44cc03 removes it (RemoveUnit) and the event scene is polled. Script kills (0x4121b0) remove at once.
+over; the poll in 0x45b5fe still sees it there, then 0x44cc03 removes it (RemoveUnit) and the event scene is polled
+again. Script kills (0x4121b0) remove at once.
 **EV[10]** (mod 0x4d67b8) tells the scripts that a unit fell: = 1 on every kill (physical 0x405bb7, strategy
 0x422c87, script 0x4121b5, 暗杀 0x4093c3), = 0 at battle start (0x44ccc8), when the player picks a command
 (0x43e16b) and at the start of every AIAct (0x43ad2b). 27 battle scripts have a "合并所有HP0撤退" section gated by
@@ -1009,7 +1012,9 @@ for k in (0 friend phase: ctx+0x10 = 1, units 0..34;  1 enemy phase: ctx+0x10 = 
    ActionOrder(k == 0)                                     # 10.4
    for o in 0..114:
       i = first unit of the side with state 2, order == o, ai != 7 and no flag 4/2 (if none: next o)
-      AIAct(U[i]); if U[i].flags & 2: 0x4b5df0.0x45b5fe(i)
+      AIAct(U[i]) (it makes U[i] the current unit, 0x43ad83); if U[i].flags & 2: 0x4b5df0.0x45b5fe(i): if the
+      battle goes on and U[i] is on the map (any HP), the scripts get its pid and cell (0x45b910 → R reg 3) and
+      the event scene is polled
       0x44cc03(i) (death/aftermath checks); if battle not over and flags & 2: scroll (0x43fcc9), script poll 0x44c601
       if ctx+0x504 (set when units appear/change during events): recompute ActionOrder, o restarts at 0
    stop as soon as ctx+1 (battle result) ≠ 0
@@ -1045,16 +1050,16 @@ All tests return false outside battle (screen mode 0x4ac63c ≠ 3, 0x40b922).
 "Unit of person p" = first unit index i in 0..114 with U[i].person == p (0x456079 requires state ≠ 0).
 | op | args | semantics |
 |---|---|---|
-| 0x4c unit_appear (0x414f42) | mode (0xffff→0), person, slot | mode 0: 0x4b5df0.0x4570ee(person): if the person's unit is in state 1 (off-map), take its deployment entry's (x,y), Place it (nearest free cell, state 2) with an appear animation (wipe-in, SE 0x2a; SE 0xf when the cell is off-screen [G]), camera centred. mode 1: player slot `slot` < 15 in state 1 → Place at its entry position, SE 0xf, camera, short delay. Used to reveal 伏兵 (hidden) units and reinforcements. |
+| 0x4c unit_appear (0x414f42) | mode (0xffff→0), person, slot | mode 0: 0x4b5df0.0x4570ee(person): if the person's unit is in state 1 (off-map), take its deployment entry's (x,y), Place it (nearest free cell 0x43f040, state 2), camera centred, SE 0xf, 4 ticks; a deployment entry with the person is required, HP is unchanged. (The wipe-in with SE 0x2a behind the check 0x4573c1 never runs: that check is always 0.) mode 1: player slot `slot` < 15 in state 1 → Place at its entry position, SE 0xf, camera, short delay. Used to reveal 伏兵 (hidden) units and reinforcements. |
 | 0x4d unit_change (0x4150e7) | mode, person, slot, x1, y1, x2, y2, side, buff_idx, buff_lvl, status, hp_dmg, mp_dmg | target = mode 0: unit of person; 1: unit in player slot `slot` (state 2); 2: all units of `side` (0xffff→6) in the rectangle (0x45ade5). Then via ChangeUnit(person, what, value, anim=1) (0x45aa5c): if buff_idx ≠ 0xffff: buff[buff_idx] (0 atk,1 def,2 spirit,3 agility,4 morale,5 move) = {0→0, 1→3, 2→6, other→3}[buff_lvl]; if status ≠ 0xffff: value & 0x80 → status &= ~value, else status \|= value; if hp_dmg ≠ 0: HP −= min(HP, hp_dmg & 0xffff) and a result ≤ 1 becomes 0 (death via 0x4121ca); if mp_dmg ≠ 0: MP = max(MP − mp_dmg, 1) (result ≤ 1 → 1). what ≤ 6 shows the buff/status animation (0x43e69f); the unit's status panel is refreshed. |
 | 0x4e change_ai (0x4146d4) | mode, person, x1, y1, x2, y2, side, ai_mode, ai_person, ai_x, ai_y | mode 0: SetAI(person, …) (10.3; no effect on party members); else 0x459e79: SetAI for every unit of `side` in the rectangle. |
 | 0x4f unit_turn (0x415f65 → 0x457428) | p1, p2, dir, b1 (0xffff→0), scroll (→1), wait (→1) | p1's unit (state 2) turns: if p2 == 0xffff to `dir` (nothing if already facing it), else toward p2's unit (direction from 0x4351da). scroll → centre camera + 8-tick delay before; SE 6; wait → 8-tick delay after. b1 [?]. Units that already finished their action keep the greyed look. |
 | 0x50 unit_status (0x416129 → 0x45778f) | person, action 0..12, pre_wait (→1), post_wait (→1) | Plays a battle-sprite animation on the person's unit (camera centred); the frame sequences are in §13.7. pre/post_wait = 8-tick delay (skipped for actions 0 and 11). |
 | 0x52 change_class (0x414d15) | person, class | person (selector → current unit) gets class `class` (0x40dff0); each equipped item the new class cannot use (0x407907) is unequipped (0x407dc4); in battle the unit sprite is reloaded (0x43fe2c). (Story files use it too.) |
 | 0x31 actor_remove, battle mode (0x41311c) | mode, person, x1, y1, x2, y2, side | mode 0: RemoveUnit(person, silent=1); else every unit of `side` in the rectangle (0x45a80f). See RemoveUnit below. |
-| 0x53 unit_retreat (0x41557b) | mode, person, x1, y1, x2, y2, side, anim (0xffff→0) | like 0x31 but RemoveUnit(silent=0, anim): the unit "retreats" with its 撤退 line and animation. |
+| 0x53 unit_retreat (0x41557b) | mode, person, x1, y1, x2, y2, side, anim (0xffff→0) | mode 0: RemoveUnit(silent = 0, variant = anim) (0x400..0x402 = current unit): retreat line, then the defeat animation for variant ≠ 0 or person 0, else SE 16 and two blinks; 撤退数 +1. Else 0x45a80f: the units of `side` in the rectangle, RemoveUnit(silent = anim). Silent: SE 6, SE 17, the special sheet's image sinking, no 撤退数. |
 | 0x1b set_retreat_line (0x413c56) | person, bool | U(person)+0x20 = (bool ≠ 0): whether the unit speaks its retreat line when it leaves (default 1, set by the unit reset). |
-| 0x55 unit_reenter (0x41591c → 0x4591a1) | mode (0xffff→0), person, slot, x, y, dir (0xffff→2) | (eex.md's "unit_move" is a misnomer.) mode 0: person; mode 1: the person of player slot `slot` < 15 whose unit is in state 3. A unit in state 3 (retreated) is re-initialised with UnitInit(person, entry flags with new dir, x, y) — full HP/MP, buffs reset — and appears with the wipe-in animation (SE 0x2a). |
+| 0x55 unit_reenter (0x41591c → 0x4591a1) | mode (0xffff→0), person, slot, x, y, dir (0xffff→2) | (eex.md's "unit_move" is a misnomer.) mode 0: person; mode 1: the person of player slot `slot` < 15 whose unit is in state 3. A unit in state 3 (retreated) is re-initialised with UnitInit(person, entry flags with new dir, x, y) — full HP/MP, buffs reset — and appears with SE 15, the map centred on it (no wipe-in: the check 0x4573c1 never holds); UnitInit skips 出阵数 for this call site (0x459417). |
 | 0x5b target_area (0x416cbb) | x1, y1, x2, y2, flag (0xffff→0) | Stores the destination area rectangle in ctx+0xc..+0xf and ctx+8 = (flag == 0), then 0x4b5df0.0x45a0ce(flag) clamps it to the map, moves the camera to its middle and blinks it 3 times (§13.1). Used with "到达指定地点" goals. |
 | 0x58 terrain_change (0x4166eb) | patch, alt, terrain, x, y, scroll (0xffff→0), silent (0xffff→0) | alt == 0 → ChangeTerrain 0x4b5df0.0x456140(x, y, terrain, patch, scroll, silent, EV[0]&0xff): record (x, y, new, old, patch) in a 250 × 5-byte table at ctx+0x19 (0x4b3d21, for saves); terrain grid (0x4aeb38+0x640)[x,y] = terrain; scroll → camera to (x,y). patch < 4: overlay mark written to layer 0x4aeb38+0x1f40 (patch 0/2 play SE 0x13 — fire [G]); patch ≥ 4: Nima.wa entry 2·patch−8 (a 3×3-cell 144×144 image) is pasted into the map bitmap centred on (x,y) (skipped when the last arg is 1); SE for new terrain 12 小河 / 15 城墙 / 17 城门; the 3×3 area is redrawn. alt ≠ 0 → mod 0x4d7dc5(x, y, patch, scroll, terrain): if scroll ≠ 0, terrain byte (x, y) = terrain; then 0x4567c1(x, y, patch, scroll) undoes the first recorded change with that x, y and patch (none → nothing): scroll → camera; patch < 4 → the overlay mark goes; else the 3×3 map image is restored from the map (a gate, new terrain 0x11, next to another gate plays SE 18); terrain = the recorded old one; the record is freed. Used to put out fires (`58 [2,1,0,x,y,1,1]`). op 0x21 map_mark sets fire (mode 0: ChangeTerrain to 0x1a 火, patch 0) and puts it out (mode 1: 0x4567c1 with patch 0). |
 | 0x6b map_effect (0x41405b) | x, y, effect, scroll | Plays an effect animation centred on cell (x,y) (camera scrolls there first if scroll): effect < 100 → Xben.wa[effect]; 100..108 → MCALL(effect−100) full-screen (0x497af8.0x4217ff); 109 → special 0x421879; only if the cell is on screen. |

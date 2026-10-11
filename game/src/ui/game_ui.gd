@@ -13,6 +13,7 @@ var _caption_root: Control
 var _caption_lines: Array[Label] = []
 var _title_root: Control
 var _strips: Array[Label] = []      # the two status panes of the top bar: chapter title (op 0x18), place (op 0x17)
+var meter: ResourceMeter            # the third pane: resource 2 (story scenes only)
 
 
 func _init() -> void:
@@ -48,6 +49,9 @@ func _init() -> void:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		add_child(l)
 		_strips.append(l)
+	meter = ResourceMeter.new()
+	meter.visible = false
+	add_child(meter)
 
 	dialog = DialogBox.new()
 	add_child(dialog)
@@ -166,10 +170,15 @@ func clear_strips() -> void:
 ## strip and starts at the top again); otherwise the text goes on where the last one ended, and so does a "\n".
 ## The text types out at a character per 50 ms (a click shows the rest of the line). a3 ≠ 0 then holds: a click
 ## with 会话窗口不自动关闭, else 0.5 / 1.0 / 2.0 s by 讯息显示速度 (a click ends it sooner).
+## The first caption after a mode-1 scene starts (op 0x27 → 0x43327a sets +0x68) darkens the strip in 5 steps of 2
+## ticks, each taking `step` off every 4-bit channel (0x430480, about 27 % darker in the end); that stays the
+## captions' background until a1 = 0 restores it.
 const CAP_TOP := 0x170
 const CAP_X := 64.0       # column 8 of the text grid [G: 8 px a column]
 const CAP_SIZE := 18
 var _cap_pos := Vector2(CAP_X, CAP_TOP)
+var band_pending := false
+var _band: ColorRect
 
 
 func caption(text: String, a1: int, a2: int, a3: int) -> void:
@@ -181,6 +190,13 @@ func caption(text: String, a1: int, a2: int, a3: int) -> void:
 		_cap_pos = Vector2(CAP_X, _cap_pos.y + 24)
 	if a1 == 0 or (a2 != 0 and _cap_pos.y > 0x1b7):
 		clear_captions()
+		if a1 == 0:
+			_set_band(0.0)
+	if band_pending:
+		band_pending = false
+		for k in 5:
+			_set_band(0.27 * (k + 1) / 5.0)
+			await get_tree().create_timer(0.1).timeout
 	var parts := text.split("\n")
 	for i in parts.size():
 		if i > 0:
@@ -209,6 +225,8 @@ func _caption_part(s: String) -> void:
 				break
 			l.visible_characters = k
 			await get_tree().create_timer(0.05).timeout
+			if k > 0 and k < n - 1 and s.substr(k - 1, 1) == "、":
+				await get_tree().create_timer(0.05).timeout     # one more tick after 、 when more follows
 	l.visible_characters = -1
 	_cap_pos.x += Assets.font().get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, CAP_SIZE).x
 
@@ -220,6 +238,24 @@ func wait_or_click(sec: float) -> void:
 	while t < sec and Game.clicks == n and not Game.skip_held():
 		await get_tree().process_frame
 		t += get_process_delta_time()
+
+
+## The darkened caption strip (y 360..440) at `a` (0 = gone).
+func _set_band(a: float) -> void:
+	if _band == null:
+		_band = ColorRect.new()
+		_band.color = Color(0, 0, 0, 0)
+		_band.position = Vector2(0, 360)
+		_band.size = Vector2(640, 80)
+		_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_caption_root.add_child(_band)
+		_caption_root.move_child(_band, 0)
+	_band.color.a = a
+
+
+func reset_caption_band() -> void:
+	band_pending = true
+	_set_band(0.0)
 
 
 func clear_captions() -> void:
@@ -261,27 +297,52 @@ func skill_banner(text: String) -> void:
 		n.queue_free()
 
 
+const PART_NAMES := ["隐龙篇", "游龙篇", "升龙篇", "荡龙篇", "惊龙篇"]    # 0x48b204
+
+
+## op 0x67 (0x413b3d → 0x40b940): for chapters 0..4 two black screens in 64 px bold with shadows: the part name
+## (0x48b204) faded in, 1 s plus 2 s that a click ends, faded out; then the title the same with 4 s. Later
+## chapters show nothing.
 func chapter_title(num: int, text: String) -> void:
 	if Game.autoplay:
 		print("  [chapter] ", num, " ", text)
 		return
+	if num < 0 or num >= PART_NAMES.size():
+		return
+	await title_card(PART_NAMES[num], 2.0)
+	await title_card(text, 4.0)
+
+
+## A line in 64 px bold with grey shadows (palette 0x18 / 0x15) in the middle of a black screen: faded in, 1 s,
+## then `more` seconds that a click ends, faded out.
+func title_card(text: String, more: float) -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.85)
+	bg.color = Color.BLACK
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_title_root.add_child(bg)
-	var l1 := UIStyle.label("第 %d 章" % (num + 1) if num >= 0 else "", 20, Color(0.9, 0.8, 0.5))
-	var l2 := UIStyle.label(text, 32, Color(1, 0.95, 0.8))
-	for l in [l1, l2]:
+	for k in 3:
+		var col: Color = [Color8(0x99, 0x99, 0x99), Color8(0xcc, 0xcc, 0xcc), Color.WHITE][k]
+		var l := UIStyle.label(text, 64, col)
+		l.add_theme_constant_override("shadow_offset_x", 0)
+		l.add_theme_constant_override("shadow_offset_y", 0)
+		l.add_theme_constant_override("outline_size", 2)
+		l.add_theme_color_override("font_outline_color", col)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.size = Vector2(vsize().x, 40)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.set_anchors_preset(Control.PRESET_FULL_RECT)
+		l.offset_left = 2 - k
+		l.offset_top = 2 - k
+		l.offset_right = 2 - k
+		l.offset_bottom = 2 - k
 		_title_root.add_child(l)
-	l1.position = Vector2(0, vsize().y * 0.36)
-	l2.position = Vector2(0, vsize().y * 0.36 + 40)
 	_title_root.modulate.a = 0
 	var tw := create_tween()
-	tw.tween_property(_title_root, "modulate:a", 1.0, 0.6)
-	tw.tween_interval(1.8)
-	tw.tween_property(_title_root, "modulate:a", 0.0, 0.6)
+	tw.tween_property(_title_root, "modulate:a", 1.0, 0.5)
+	await tw.finished
+	await get_tree().create_timer(1.0).timeout
+	await wait_or_click(more)
+	tw = create_tween()
+	tw.tween_property(_title_root, "modulate:a", 0.0, 0.5)
 	await tw.finished
 	for c in _title_root.get_children():
 		c.queue_free()

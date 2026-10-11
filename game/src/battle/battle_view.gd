@@ -285,7 +285,7 @@ func clamp_cam(p: Vector2) -> Vector2:
 func center_on(c: Vector2i, animate := true) -> void:
 	var vs := view_size()
 	var target := clamp_cam(cell_center(c) - vs / 2)
-	_scroll_to(target, animate)
+	await _scroll_to(target, animate)
 
 
 ## Scroll only if the cell is not comfortably inside the view.
@@ -295,13 +295,13 @@ func ensure_visible(c: Vector2i, animate := true) -> void:
 	var cam := camera.position
 	var margin := CELL * 1.5
 	if p.x < cam.x + margin or p.y < cam.y + margin or p.x + CELL > cam.x + vs.x - margin or p.y + CELL > cam.y + vs.y - margin:
-		center_on(c, animate)
+		await center_on(c, animate)
 
 
 func _scroll_to(target: Vector2, animate: bool) -> void:
 	if _cam_tween:
 		_cam_tween.kill()
-	if not animate or camera.position.distance_to(target) < 1:
+	if not animate or Game.autoplay or camera.position.distance_to(target) < 1:
 		camera.position = target
 		return
 	_cam_tween = create_tween()

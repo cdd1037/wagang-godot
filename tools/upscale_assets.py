@@ -39,6 +39,7 @@ ALPHA = "realesr-animevideov3.pth"   # small fast model for transparency masks
 RULES = [
     ("portraits/large/*.png", ANIME, None, False),
     ("portraits/small/*.png", ANIME, None, False),
+    ("portraits/classic/*.png", ANIME, None, False),   # the 64×80 faces of the story portraits (op 0x29)
     ("screens/*.png", ANIME, None, False),
     ("backgrounds/[0-9]*.png", ANIME, None, False),
     ("maps/*.png", TEXTURE, None, False),

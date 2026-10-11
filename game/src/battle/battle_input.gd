@@ -90,7 +90,7 @@ func player_phase() -> void:
 			continue
 		if u.mode == 7 and u.slot < 115 and not u.acted:     # mod 0x4d6268: any slot (no script gives an enemy code 7)
 			var did := await select_unit(u)
-			await after_command()
+			await after_command(u, did)
 			# checked after each action only, so units all under 乱 do not end the phase; 否 keeps it going
 			if did and _all_done() and not st._battle_finished() and await _confirm_end():
 				break
@@ -107,13 +107,19 @@ func _auto_player_phase() -> void:
 		if u.active() and not u.acted:
 			if FlowGoals.enabled:
 				st.ai.flow_goal = (await FlowGoals.compute(st)).get(u.slot, {})
-			await st.ai.act(u)
+			var did := await st.ai.act(u)
 			st.ai.flow_goal = {}
-			await after_command()
+			await after_command(u, did)
 
 
-## After a command (0x44e0d9): units left at HP 0 leave the map (0x44cc03), then the event scene is polled.
-func after_command() -> void:
+## After a command (0x44e0d9): `u` is the current unit (0x44e452) and, while it is on the map and the battle goes
+## on, the event scene is polled (0x45b5fe) — before the fallen leave, so a section can still see a unit at HP 0
+## on the map (S_13's 杨素第一次死 restores 杨素's HP). If the command did something, units left at HP 0 leave the
+## map (0x44cc03) and the scene is polled again.
+func after_command(u: BUnit, did: bool) -> void:
+	await st.actor_poll(u)
+	if not did:
+		return
 	await st.remove_dead()
 	if not st._battle_finished():
 		await st.checkpoint()

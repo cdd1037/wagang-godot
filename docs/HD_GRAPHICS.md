@@ -15,7 +15,7 @@ Released builds contain only the HD art; there is no switch.
 
 ## Where it lives
 
-* The pack (3,905 files, about 770 MB) is too big for the git repository. It is published as `assets_hd.zip` in
+* The pack (4,133 files, about 780 MB) is too big for the git repository. It is published as `assets_hd.zip` in
   the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack).
 * **Release builds** (`.github/workflows/release.yml`) download it (also checked against GitHub's SHA-256), and
   leave out the original pictures that have an HD version, so a build draws only the HD art.

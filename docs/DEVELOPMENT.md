@@ -108,7 +108,7 @@ walking (route order and facing per step, 0x429159), `t_dialog` the message box 
 clicks; with `OUT=file.png` and a window it also saves a screenshot of each page and of the details),
 `t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
 countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the AI's score for
-an area attack's extra targets, the 史录 rules),
+an area attack's extra targets, the default victory and defeat of ops 0x42 / 0x43, the 史录 rules),
 `t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
 连续策略, the move record), `t_skills` the character skills (the 【技】 techniques with an attack trace, the
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
@@ -117,8 +117,9 @@ terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards), `t_rule
 past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience), `t_shop` the shops and the warehouse (prices with
 八折, the bonus fruit, goods per record, buying = wearing, 装备 moves, selling), `t_menus` the group 5 windows
 (环境设定 applied without writing Niuniu.wa, 历史情报 line order, the sortie builder and 选择武将 rules, 部队情报一览
-sorting, 地形情报一览, the town gate GS+2; `OUT=dir` with a window saves their pictures), `t_person` prints person
-stats.
+sorting, 地形情报一览, the town gate GS+2; `OUT=dir` with a window saves their pictures), `t_screens` the screens of
+the script-op audit (开始作战, the 胜利条件 sequence, the chapter cards, the resource meter; `OUT=dir` with a window
+saves them), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 
@@ -142,6 +143,8 @@ The harness (`WG_AUTOSAVE`) keeps random play moving:
   with R_09's 755 / 754, so a range that starts after R_09 always ends R_21 at the click cap. With
   `WG_SETFLAGS=755` the bot gets deep into the quest (皇宫, 喜宴, 突围救友, the rescues in the fallen 瓦岗寨), but it
   has to win many 单挑 in one go; a lost one restarts the file.
+* A jump start's party is only 管毅 and `WG_PARTY`, so the persons a story file forces into the next sortie
+  (op 0x06) join the party when the sortie is built (S_31 needs its four 主攻手 to take the corners).
 * An **ending** in the last chapters stops the run.
 
 Autoplay clicks mostly go to actors whose click would run a section that has not run yet in this file (the
@@ -150,18 +153,39 @@ section the next poll would pick), else to actors some section tests for, else t
 In battles the AI plays our units, and the AI knows nothing of the script's position objectives. Under the harness
 `FlowGoals` (`game/src/debug/flow_goals.gd`) reads them from the battle scene before each of our units acts:
 * **Reach:** a section whose other conditions hold, whose title names an objective (到达, 占领, 攻破, 突破, 打开,
-  逃离, 撤离, 挖宝, 秘藏, but nothing with 伏 or 敌军) and that waits for our units on a cell or in an area
-  (0x25 / 0x26 / 0x41) sends them there (the nearest one for a single cell). They hold the cell once there and
-  attack whatever is in range. Treasure sections (no dialogue) come last, and are dropped when they lie inside the
-  area of a trigger that is armed. The other position sections are mostly enemy triggers (伏兵起动, 我军过于南进):
+  逃离, 撤离, 挖宝, 秘藏, but nothing with 伏 or 敌军) or whose cells lie in the 指定地点 the map marks (op 0x5b;
+  S_04's 伏兵出现（已料及） at (19, 4)), and that waits for our units on a cell or in an area (0x25 / 0x26 / 0x41)
+  sends them there (the nearest one for a single cell). They hold the cell once there and attack whatever is in
+  range. Treasure sections (no dialogue) come last, and are dropped when they lie inside the area of a trigger that
+  is armed or of a defeat section. The other position sections are mostly enemy triggers (伏兵起动, 我军过于南进):
   walking into them pulled our units off the pass in S_40, and S_45's 挖宝 lies in 妖风1's area, whose 罡岚万仞
   takes 罗成's HP (his fall loses the battle; god mode only covers combat).
 * **Guard:** a defeat section (its body sets story flag 1) that waits for an enemy on a cell sends the nearest unit
   there to hold it.
+* **Keep out:** a defeat section that waits for our units in an area keeps them from ending a move there (S_04's
+  友军提前攻城: coming near the town before the ambush is drawn out loses the battle).
+* **Sparing:** a defeat section that counts a side on the whole map ("fewer than n", S_03's 绿林军死伤过重) makes our
+  units leave that side alone except the target 胜利条件 names after 击退 (else the persons a section waits for at
+  HP 0); they all go for it, god mode's ×20 damage spares that side, and its clear after turn 12 is skipped.
+* **Duels:** a section titled "…VS…" that waits for our unit next to someone (0x2e, S_13's 管毅VS杨素) sends the unit
+  there, and nobody hits that person meanwhile (the duel lowers his HP by script and keeps him on the map). God
+  mode's clear after turn 12 still takes him: the duels are optional, and S_28 / S_39 need every enemy gone.
+* Sections that wait for different units on the same cells count as one goal: the nearest of those units goes
+  (S_31: one section per 主攻手 at each corner, so the four go to four corners).
 * Phase and turn tests count as true. Only the pure tests 0x05 / 0x36 / 0x79 / 0x2e are evaluated, and a section
   with any other op is left out.
 * `WG_TRACE_SEC` prints each new goal (`[goal] 管毅: reach 1.36 管毅到达鹿砦 → (2, 7)`). `WG_GOALS=0` turns it
   off.
+
+Story 单挑 (sections 攻击 / 防御 / 绝招 / 回避, the enemy's answer rolled inside them) are played by `DuelSim`
+(`game/src/debug/duel_sim.gd`): those sections test only flags and random rolls and change only flags, so a dry run
+of their control flow on a copy of the flags gives every outcome of a move with its probability; the bot clicks
+the move with the best chance to win, looking 5 rounds ahead (expectimax; a path through "R剧本单挑失败" loses, one
+into "R剧本单挑胜利" wins). `WG_TRACE_TEXT` prints each decision (`[duel] 攻击 0.78, 回避 0.70 …`),
+`WG_DUELSIM_CHECK=1` checks each round played against the predicted outcomes, `WG_DUELSIM=0` turns it off. When
+sections keep running without a pause for the player (R_16's 张千, who must be clicked during a 4-tick delay), the bot
+clicks an actor whose click would run a section, as a player's click during the delay would.
+`WG_TRACE_PID=p` prints person p's unit (slot, state, HP, cell) at each round start.
 
 Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
 limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`

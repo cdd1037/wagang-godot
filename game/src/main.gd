@@ -12,6 +12,7 @@ var _flow_running := false
 var _flow_gen := 0          # bumped to orphan a running scenario loop (load / title / retry)
 var _pending_load: Dictionary = {}
 var _retries: Dictionary = {}
+var _lost_scenario := -1            # flow-test: the scenario game_over left (it zeroes GS+7)
 
 
 func _enter_tree() -> void:
@@ -215,7 +216,9 @@ func _autoslot() -> int:
 
 
 func _retry_autosave() -> void:
-	var failed := Game.scenario            # the scenario that just ended in game over / an ending
+	# the scenario that just ended in game over (which zeroes it, GS+7) or an ending
+	var failed := _lost_scenario if _lost_scenario >= 0 else Game.scenario
+	_lost_scenario = -1
 	var was_ending := Game.ending_reached
 	Game.ending_reached = false
 	if was_ending and failed >= 106:
@@ -249,6 +252,7 @@ func _title_screen() -> void:
 	Settings.load_file()
 	Audio.play_bgm(18)
 	ui.clear_strips()
+	ui.meter.visible = false
 	if _title_bg == null:
 		_title_bg = Sprite2D.new()
 		_title_bg.centered = false
@@ -358,7 +362,14 @@ func _run_flow() -> void:
 		_flow_running = false
 
 
+## Game over (0x42c0a2): GS+7 = 0, SE 40, GHAI #7 at (0, 40) fading in from black, 2.5 s, then "再玩一次吗？". The
+## original exits either way (yes asks its launcher to start the game again); here yes goes to the title, no quits
+## (on phones, which should not quit themselves, also the title).
 func game_over() -> void:
+	_lost_scenario = Game.scenario
+	Mem.w8(Mem.GS + 7, 0)
+	Audio.stop_bgm()
+	Audio.se(40)
 	ui.set_black(true)
 	var s := Sprite2D.new()
 	s.centered = false
@@ -367,8 +378,16 @@ func game_over() -> void:
 	s.z_index = 50
 	ui.add_child(s)
 	await ui.fade_from_black()
-	await ui.popup("", 4.0)
+	if Game.autoplay:
+		s.queue_free()
+		to_title()
+		return
+	await get_tree().create_timer(2.5).timeout
+	var again := await ui.menu.choose(["是", "否"], Vector2(-1, -1), false, "再玩一次吗？")
 	s.queue_free()
+	if again == 1 and not OS.has_feature("mobile"):
+		get_tree().quit()
+		return
 	to_title()
 
 

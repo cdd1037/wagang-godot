@@ -18,24 +18,48 @@ static func get_attr(pid: int, attr: int) -> int:
 	return 0
 
 
+## op 0x38 on a person (0x412006): op 0 SetStat (0x406f54), op 1 AddStat (0x406e17), op 2 SetStat(max(cur − v, 0)).
+## SetStat: stat words capped at 9999, 5 (base MaxHP) at 0xffff, 6 (base MaxMP) at 255, abilities at 120; 9 (level)
+## and 15 do nothing. AddStat: stat words min(cur + v, 9999); 5 min(+v, 9999) and at least 1, then the battle unit's
+## HP is capped (0x4d6710); 6 the same at 255, except that nothing changes while it is 1; abilities read a dword
+## (0x406e5c: this byte and the next three), so min(dword + v, 120) is 120 whenever those bytes are not all 0, and
+## the low byte is stored (the scripts' 单挑经验 rewards in R_00 / R_04 / R_06 thus set the ability to 120).
 static func set_attr(pid: int, attr: int, op: int, v: int) -> void:
 	var p := Game.person(pid)
-	if p == null:
+	if p == null or attr > 15:
 		return
-	var cur := get_attr(pid, attr)
-	var nv := cur
-	match op:
-		0: nv = v
-		1: nv = cur + v
-		2: nv = maxi(cur - v, 0)
+	if op == 1:
+		match attr:
+			0, 1, 2, 3, 4: p.set_stat_word(attr, mini(p.get_stat_word(attr) + v, 9999))
+			5:
+				p.hp_base = maxi(mini(p.hp_base + v, 9999), 1)
+				_cap_unit(pid)
+			6:
+				if p.mp_base != 1:
+					p.mp_base = maxi(mini(p.mp_base + v, 255), 1)
+					_cap_unit(pid)
+			10, 11, 12, 13, 14:
+				var dw := Mem.r32(p.base + 0x21 + attr - 10)
+				if dw >= 0x80000000:
+					dw -= 0x100000000
+				p.set_raw(attr - 10, mini(dw + v, 120) & 0xff)
+		return
+	var nv := v if op == 0 else maxi(get_attr(pid, attr) - v, 0)
+	if op != 0 and op != 2:
+		return
 	match attr:
 		0, 1, 2, 3, 4: p.set_stat_word(attr, mini(nv, 9999))
-		5: p.hp_base = clampi(nv, 1, 9999)
-		6: p.mp_base = clampi(nv, 1, 255)
-		9:
-			if nv > p.level: p.level_up(nv - p.level)
-			else: p.level = maxi(nv, 1)
+		5: p.hp_base = mini(nv, 0xffff)
+		6: p.mp_base = mini(nv, 255)
 		10, 11, 12, 13, 14: p.set_raw(attr - 10, mini(nv, 120))
-		15:
-			if Game.is_stack_item(pid):
-				Mem.w8(Game.STACKS + pid - Game.STACK_FIRST, clampi(nv, 0, 99))
+
+
+## 0x4d6710: the battle unit's HP / MP no higher than the new maximum.
+static func _cap_unit(pid: int) -> void:
+	var u := Skills.battle_unit(pid)
+	if u == null:
+		return
+	if u.hp > u.max_hp():
+		u.hp = u.max_hp()
+	if u.mp > u.max_mp():
+		u.mp = u.max_mp()

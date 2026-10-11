@@ -20,6 +20,7 @@ var greyed := false        # already acted this turn
 var flash := 0.0           # white flash amount (hit)
 var flash_color := Color.WHITE
 var fade := 1.0
+var clip_h := 48.0          # rows of a still (FIXED) frame drawn from the top (RemoveUnit's sinking image)
 var _mov: Texture2D
 var _atk: Texture2D
 var _spc: Texture2D
@@ -139,14 +140,15 @@ func _draw() -> void:
 	if tex == null:
 		draw_rect(Rect2(4, 4, 40, 40), Color(1, 0, 1, 0.6))
 		return
-	var src := Rect2(0, idx * fw, fw, fw)
+	var h := float(fw) if pose != Pose.FIXED else clampf(clip_h, 0.0, float(fw))
+	var src := Rect2(0, idx * fw, fw, h)
 	var off := (Vector2.ZERO if fw == MOV_W else Vector2(-8, -8)) + Vector2(0, y_off)
 	if mirror:
 		draw_set_transform(Vector2(off.x + fw, off.y), 0, Vector2(-1, 1))
-		draw_texture_rect_region(tex, Rect2(0, 0, fw, fw), src)
+		draw_texture_rect_region(tex, Rect2(0, 0, fw, h), src)
 		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 	else:
-		draw_texture_rect_region(tex, Rect2(off, Vector2(fw, fw)), src)
+		draw_texture_rect_region(tex, Rect2(off, Vector2(fw, h)), src)
 
 
 ## Still frame used for the standing pose (no animation): stand_down/up/left.

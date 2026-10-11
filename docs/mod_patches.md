@@ -427,6 +427,9 @@ All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests;
   red / black list texts are lighter on the dark panels. The Win32 merchant and 武将情报 windows that the original
   keeps open beside the map are modal here.
 * **Deterministic RNG mode** (0x47fb14): dead in the original, since its checkbox does not exist.
+* **Ending and game over:** the original exits the program after the credits (op 0x0f) and after the game-over
+  question (op 0x6a; 是 asks its launcher to start the game again). The port goes to the title; 否 quits on desktop.
+* **Resource meter:** op 0x3a's kind-2 pane sits left of the port's top-bar buttons, not at (342, 25).
 
 ## Doc corrections made with this audit
 
@@ -1616,10 +1619,9 @@ person with battle HP == 0 it runs:
 * boss lines and **item rewards** (S_23: 宇文化及 → get_item 91, 宇文成都 → get_item 89);
 * other characters leaving.
 
-The port never sets EV[10], and it removes HP-0 units at once (battle_actions.gd `unit_defeated` →
-battle_stage.gd:1179 `remove_unit`). These sections, with their counters and item rewards, never run. Port work:
-set EV[10] = 1 where the original does, reset it at the three points above, and keep HP-0 units on the map until
-the post-action script poll has run (verify the removal order in 0x44cc03, another batch).
+Done: the port sets EV[10] = 1 where the original does and resets it at the three points above. HP-0 units stay
+on the map until the command or AI action is over; the poll with the actor as current unit (0x45b5fe) sees them
+there, then 0x44cc03 removes them and the scene is polled again (rules.md §9.1, verified 2026-10-11).
 
 ##### B5 F10. Per-character terrain rules (0x43f7cf / 0x43f84d hooks) — [C]
 MoveCost(U, terrain) in order:

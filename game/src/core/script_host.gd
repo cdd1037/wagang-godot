@@ -9,6 +9,7 @@ var vm: EexVM
 var ui: GameUI
 var choice_result := 0
 var fast := false
+var _jump_start := OS.get_environment("WG_START") != "" and OS.get_environment("WG_AUTOSAVE") != ""   # flow test
 
 
 func _ready() -> void:
@@ -326,6 +327,7 @@ func op_test_yes_no(ins: Dictionary) -> bool:
 
 func op_chapter_title(ins: Dictionary) -> void:
 	Game.chapter_title = sarg(ins, 1)
+	Mem.w8(Mem.GS + 6, maxi(arg(ins, 0) - 1, 0))      # 0x413b3d
 	await ui.chapter_title(arg(ins, 0), sarg(ins, 1))
 
 
@@ -417,7 +419,10 @@ func op_lose_item(ins: Dictionary) -> bool:
 
 
 func op_set_resource(ins: Dictionary) -> void:
+	var old := Mem.r8(Mem.GS + 0x12)
 	Game.change_resource(arg(ins, 0), arg(ins, 1), arg(ins, 2))
+	if arg(ins, 0) == 2 and arg(ins, 1) in [1, 2] and not in_battle() and ui.meter:
+		await ui.meter.animate(old, Mem.r8(Mem.GS + 0x12))
 
 
 func op_test_resource(ins: Dictionary) -> bool:
@@ -489,6 +494,8 @@ func build_sortie() -> bool:
 		lst.append(0)
 	for k in 9:
 		var f := Mem.r32(SORTIE_FORCED + 4 * k)
+		if f != 0 and f != 0xffff and f < 0x400 and not Game.is_member(f) and _jump_start:
+			Game.join_party(f, 1)      # flow test from WG_START: no earlier scene recruited them
 		if f != 0 and f != 0xffff and f < 0x400 and Game.is_member(f):
 			lst.append(f)
 	var forced := lst.size()
@@ -522,37 +529,37 @@ func op_test_pending(_ins: Dictionary) -> bool:
 	return false
 
 
-## op 0x52: change a person's class; equipment the new class cannot use goes back to the bag.
+## op 0x52 (0x414d15): change a person's class; each of the three slots whose item the person can no longer use
+## (0x407907, with the mod's rules: Person.can_equip) is emptied (0x407dc4: the item is gone, not put in the bag).
 func op_op_52(ins: Dictionary) -> void:
 	var pid := arg(ins, 0)
 	var p := Game.person(pid)
 	if p == null:
 		return
 	p.cls = arg(ins, 1)
-	var eq: Array = Game.cls(p.cls).get("equip_raw", [])
-	if p.weapon >= 0:
-		var t := int(Game.item(p.weapon).get("type", 0))
-		if t < eq.size() and int(eq[t]) == 0:
-			Game.add_item(p.weapon, p.weapon_lvl)
-			p.weapon = -1
-	if p.armor >= 0:
-		var t2 := int(Game.item(p.armor).get("type", 0))
-		if t2 < eq.size() and int(eq[t2]) == 0:
-			Game.add_item(p.armor, p.armor_lvl)
-			p.armor = -1
+	if p.weapon >= 0 and not p.can_equip(p.weapon):
+		p.weapon = -1
+	if p.armor >= 0 and not p.can_equip(p.armor):
+		p.armor = -1
+	if p.accessory >= 0 and not p.can_equip(p.accessory):
+		p.accessory = -1
 	on_field_written(17, pid)
 
 
-## op 0x4b outside a battle (0x415e31): with [0x55e9d4] != 0 the position is stored in the mod
-## table 0x55e9d8 (3 bytes per player entry: x, y, hidden|0xff00) for the next battle.
+## op 0x4b outside a battle (0x415e31): with [0x55e9d4] != 0 the position goes into the mod table 0x55e9d8 (3 bytes
+## per player entry: x, y, then a u16 0xff00 | hidden at +2, so the next entry's x reads 0xff and ends the list the
+## 出战位置 view (0x4db375) draws). With [0x55e9d4] == 0 it writes a deployment entry instead, which the next battle's
+## op 0x44 resets, so nothing here.
 func op_op_4b(ins: Dictionary) -> void:
+	if Mem.r32(0x55e9d4) == 0:
+		return
 	var k := arg(ins, 0)
 	if k < 0 or k >= 15:
 		return
 	var a := 0x55e9d8 + 3 * k
 	Mem.w8(a, arg(ins, 1))
 	Mem.w8(a + 1, arg(ins, 2))
-	Mem.w8(a + 2, 1 if arg(ins, 4) not in [0, 0xffff] else 0)
+	Mem.w16(a + 2, 0xff00 | (arg(ins, 4) & 0xff))
 
 
 ## op 0x20 (0x416fd8): GS+0x11 = (GS+0x11 & 0xf0) | v ; v == 0xff clears bit 4 and the low nibble.
@@ -565,21 +572,22 @@ func op_op_20(ins: Dictionary) -> void:
 		Mem.w8(Mem.GS + 0x11, (b | v) & 0xff)
 
 
-## op 0x6c (0x410c3e): copy person bytes 0x11..0x33 (except 0x26, 0x2a) from p1 to p2.
+## op 0x6c (0x410c3e): copy person bytes 0x11..0x34 (except 0x26, 0x2a) from p1 to p2.
 func op_op_6c(ins: Dictionary) -> bool:
 	var a := arg(ins, 0)
 	var b := arg(ins, 1)
 	if a >= 0x400 or b >= 0x400:
 		return false
-	for off in range(0x11, 0x34):
+	for off in range(0x11, 0x35):
 		if off == 0x26 or off == 0x2a:
 			continue
 		Mem.w8(Mem.person_addr(b) + off, Mem.r8(Mem.person_addr(a) + off))
 	return true
 
 
-## op 0x0f (0x4158af): ending reached — record it in Niuniu.wa (byte v = 1), then credits → title
-## (0x42b7c6).
+## op 0x0f (0x4158af): ending reached — record it in Niuniu.wa (byte v = 1 for v < 3), stop the sound, then the
+## credits picture GHAI #6 at (0, 40) fading in from black, 5 s, up to 20 s more that a click ends (0x431290). The
+## original then quits; here the title follows.
 func op_screen_mode(ins: Dictionary) -> void:
 	var v := arg(ins, 0)
 	if v < 3:
@@ -587,7 +595,19 @@ func op_screen_mode(ins: Dictionary) -> void:
 	Game.ending_reached = true
 	Audio.stop_bgm()
 	SoundMap.stop_loop()
-	await ui.chapter_title(-1, "全剧终")
+	if not Game.autoplay:
+		ui.set_black(true)
+		var s := Sprite2D.new()
+		s.centered = false
+		s.position = Vector2(0, 40)
+		s.texture = Assets.tex("gfx/screens/06.png")
+		s.z_index = 50
+		ui.add_child(s)
+		await ui.fade_from_black(0.5)
+		await get_tree().create_timer(5.0).timeout
+		await ui.wait_or_click(20.0)
+		await ui.fade_to_black(0.5)
+		s.queue_free()
 	if vm:
 		vm.abort = true
 		vm.active = false

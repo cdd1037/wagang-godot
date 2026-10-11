@@ -21,6 +21,7 @@ var in_click := false
 var scene_kind := -1
 var scene_image := -1
 var _waiting_click := false
+var _pending_click := -1        # an actor clicked while a section ran: the next poll sees it (as a delay's message pump does)
 var sortie_enabled := false
 var _bar_menu: Button
 var _bar_tools: Array[Button] = []    # the town toolbar: 卖出 买进 装备 出征
@@ -152,11 +153,35 @@ func run_file(file: String) -> void:
 	if not _restore.is_empty():
 		_apply_restore()
 	_ran_secs.clear()
+	ui.meter.visible = true      # resource 2 (op 0x3a kind 2), the status window's third pane
+	var busy := 0
 	while vm.active and is_inside_tree():
 		var sc := vm.scene
+		if _pending_click < 0 and busy >= 3 and Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
+			# flow-test: sections keep running without a pause for the player (R_16's 张千, who must be clicked the
+			# moment he appears): click an actor whose click would run a section now
+			_pending_click = await _live_click()
+		if _pending_click >= 0:
+			var cp := _pending_click
+			_pending_click = -1
+			click_pid = cp
+			in_click = true
+			Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
+			var hit: bool = await vm.poll()
+			if hit:
+				_ran_secs["%d.%d" % [sc, vm.last_section]] = true
+			Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
+			in_click = false
+			click_pid = -1
+			if hit:
+				busy = 0
+				continue
 		var ran: bool = await vm.poll()
 		if ran:
 			_ran_secs["%d.%d" % [sc, vm.last_section]] = true
+			busy += 1
+		else:
+			busy = 0
 		if not vm.active:
 			break
 		if not ran:
@@ -220,6 +245,16 @@ func _wait_for_click() -> int:
 			if OS.get_environment("WG_TRACE_TEXT") != "":
 				print("  [click] ", g, " (guided)")
 			return g
+		# flow-test: a story 单挑 move is chosen by dry runs of the rounds (DuelSim)
+		if DuelSim.enabled:
+			var mv := DuelSim.move_sections(vm)
+			var duel := keys.filter(func(k: int) -> bool: return mv.has(k) and DuelSim.section_for(vm, mv, k, {}) >= 0)
+			if not duel.is_empty():
+				var dp := DuelSim.best_move(vm, duel)
+				if dp >= 0:
+					if OS.get_environment("WG_TRACE_TEXT") != "":
+						print("  [click] ", dp, " (duel)")
+					return dp
 		# mostly click actors whose click runs a section that has not run yet, else actors that some section of
 		# this scene tests for (like a player would)
 		var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []
@@ -227,7 +262,13 @@ func _wait_for_click() -> int:
 		if not fresh.is_empty():
 			keys = fresh
 		elif not hot.is_empty() and Rules.chance(85):
-			keys = hot
+			# a click that runs nothing now is wasted: prefer actors whose click runs a section ("click him while he
+			# is there" mini-games such as R_16's 张千)
+			var live := []
+			for x in hot:
+				if await _section_for(x) >= 0:
+					live.append(x)
+			keys = live if not live.is_empty() else hot
 		var pid: int = keys[Rules.rand(keys.size())] if OS.get_environment("WG_RANDOM") != "" else keys[_auto_i % keys.size()]
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [click] ", pid)
@@ -236,6 +277,20 @@ func _wait_for_click() -> int:
 	var r: int = await clicked_actor
 	_waiting_click = false
 	return r
+
+
+## Autoplay helper: a visible actor some section tests for whose click would run a section now, or −1.
+func _live_click() -> int:
+	var view := Rect2(0, VIEW_Y, 640, 400)
+	for pid in _clickable_pids():
+		if not actors.has(pid):
+			continue
+		var a: RpgActor = actors[pid]
+		if a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)) and await _section_for(pid) >= 0:
+			if OS.get_environment("WG_TRACE_TEXT") != "":
+				print("  [click] ", pid, " (while sections run)")
+			return pid
+	return -1
 
 
 ## The story flags that are set, as "a-b,c,…" ranges (flow-test diagnostics).
@@ -303,6 +358,12 @@ var _press := [-1, 0]
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if not _waiting_click and vm and vm.running and ev is InputEventMouseButton and ev.pressed \
+			and ev.button_index == MOUSE_BUTTON_LEFT and actor_at(ev.position) >= 0:
+		# a click on an actor while a section runs (during its waits) counts for the next poll
+		_pending_click = actor_at(ev.position)
+		get_viewport().set_input_as_handled()
+		return
 	if not _waiting_click or not town_on():
 		_press[0] = -1
 		return
@@ -420,7 +481,9 @@ func _dialog_top(pid: int) -> bool:
 
 
 # ------------------------------------------------------------------ scene
-## op 0x27: mode 0 = CG (Giji 0..39), 1 = scene 114+, 2 = room 40+, 3 = battle map.
+## op 0x27 (0x413d13): mode 0 = CG (Giji 0..39), 1 = scene 114+, 2 = room 40+, 3 = battle map. The story actors stay
+## (only op 0x2f, op 0x11, battle init and loading clear them, 0x426bd5); the portraits and captions are reset only
+## on entering mode 1 (0x433310 → 0x43327a).
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
 	var val := 0
@@ -442,9 +505,10 @@ func op_change_scene(ins: Dictionary) -> void:
 		bg.texture = null
 		return
 	bg.texture = Assets.tex("gfx/backgrounds/%03d.png" % entry)
-	_clear_actors()
-	_clear_portraits()
-	ui.clear_captions()
+	if mode == 1:
+		_clear_portraits()
+		ui.clear_captions()
+		ui.reset_caption_band()
 
 
 func _clear_portraits() -> void:
@@ -586,41 +650,56 @@ func op_op_6a(_ins: Dictionary) -> void:
 
 
 # ------------------------------------------------------------------ portraits (ops 0x29/0x2a/0x2b)
+## op 0x29 (0x4331be): the person's classic 64×80 face (Nao.wa, 0x432ed9) at screen (x, y + 40), fading in over 15
+## ticks (at once while the screen is black). Persons 0x400 and above are ignored.
 func op_op_29(ins: Dictionary) -> void:
+	if arg(ins, 0) >= 0x400:
+		return
 	var pid := arg(ins, 0) & 0xfff
 	if portraits.has(pid):
 		(portraits[pid] as Node).queue_free()
 	var s := Sprite2D.new()
 	s.centered = false
-	s.texture = Game.person_face(pid)
-	s.position = Vector2(arg(ins, 1), arg(ins, 2))
-	s.modulate.a = 0
+	var face := Game.resolved_face(pid)
+	s.texture = Assets.tex("gfx/portraits/classic/%03d.png" % face) if face >= 0 else null
+	s.position = Vector2(arg(ins, 1), arg(ins, 2) + VIEW_Y)
 	portrait_layer.add_child(s)
 	portraits[pid] = s
+	if ui.fade_rect.color.a >= 1.0 or Game.autoplay:
+		return
+	s.modulate.a = 0
 	var tw := create_tween()
-	tw.tween_property(s, "modulate:a", 1.0, 0.3)
+	tw.tween_property(s, "modulate:a", 1.0, 0.75)
 	await tw.finished
 
 
+## op 0x2a (0x432af4): the portrait moves to (x, y + 40) at 4 px a tick along the longer axis.
 func op_op_2a(ins: Dictionary) -> void:
 	var pid := arg(ins, 0) & 0xfff
 	if not portraits.has(pid):
 		return
 	var s: Sprite2D = portraits[pid]
+	var to := Vector2(arg(ins, 1), arg(ins, 2) + VIEW_Y)
+	var d := maxf(absf(to.x - s.position.x), absf(to.y - s.position.y))
+	if Game.autoplay or d < 1:
+		s.position = to
+		return
 	var tw := create_tween()
-	tw.tween_property(s, "position", Vector2(arg(ins, 1), arg(ins, 2)), 0.4)
+	tw.tween_property(s, "position", to, d / 4.0 * 0.05)
 	await tw.finished
 
 
+## op 0x2b (0x433070): the portrait fades out over 16 ticks and its slot is cleared.
 func op_op_2b(ins: Dictionary) -> void:
 	var pid := arg(ins, 0) & 0xfff
 	if not portraits.has(pid):
 		return
 	var s: Sprite2D = portraits[pid]
 	portraits.erase(pid)
-	var tw := create_tween()
-	tw.tween_property(s, "modulate:a", 0.0, 0.3)
-	await tw.finished
+	if not Game.autoplay:
+		var tw := create_tween()
+		tw.tween_property(s, "modulate:a", 0.0, 0.8)
+		await tw.finished
 	s.queue_free()
 
 

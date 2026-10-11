@@ -16,7 +16,7 @@ const BUBBLE := [Vector2(120, 32), Vector2(184, 288)]
 const TICK := 0.05
 
 var stage: BattleStage
-var active := false                  # 0x4495f8 result: both persons have a unit on the map
+var active := false                  # 0x4495f8 / 0x477adc: both persons have a unit (any state but 0: hidden or gone count)
 var pids := [-1, -1]
 var backdrop_idx := 5
 var prev_track := -1
@@ -186,7 +186,7 @@ func setup(a: int, b: int, backdrop: int) -> void:
 	# 0x4495f8: both fighters need a unit on the map, else every duel op is skipped
 	var u0 := stage.unit_by_pid(pids[0])
 	var u1 := stage.unit_by_pid(pids[1])
-	active = u0 != null and u1 != null and u0.state == BUnit.STATE_ON_MAP and u1.state == BUnit.STATE_ON_MAP
+	active = u0 != null and u1 != null and u0.state != BUnit.STATE_NONE and u1.state != BUnit.STATE_NONE
 	if not active:
 		return
 	exp_award = 0
