@@ -99,7 +99,8 @@ The execution model follows the original:
   event loops left through `next_scene` / `goto_scenario`.
 * Nesting is tracked at run time. `IF` pushes a level, `END` pops one, `ELSE` tests the last result at its level.
   A `goto` inside a block pops one level and continues at the target, possibly in another section.
-* Each instruction is dispatched to `host.op_<name>(ins)`. Handlers may `await` (dialogue, animations, delays).
+* Each instruction is dispatched to `op_<name>(ins)` of the host stage, or of the objects in `vm.handlers` (looked
+  up once per op name, `EexVM.handler`). Handlers may `await` (dialogue, animations, delays).
   Test ops return a bool. Handlers that return nothing count as true when used as an `IF` condition, as in the
   original. `vm.next_op` tells a handler which instruction follows (a run of story `actor_move`s walks in
   parallel and only the last one waits).

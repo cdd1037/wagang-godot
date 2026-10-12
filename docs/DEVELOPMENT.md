@@ -112,7 +112,8 @@ the runs reach go to `user://test/niuniu.bin`, not the player's record.
 Headless unit checks (`tools/test_all.sh`, one with `tools/gtest.sh NAME`). Each prints `t_name: PASS` or
 `t_name: FAILED` (after `t_name: FAIL …` lines); the test runner (`debug/test_runner.gd`) turns that into the exit
 status, fails a check that hits a script error, and stops one still running after `TEST_TIMEOUT` seconds.
-`t_parse` loads every script (catches parse errors anywhere), `t_mods` a mod zip (its JSON and its picture replace
+`t_parse` loads every script (catches parse errors anywhere) and checks that every opcode the story and battle
+scripts use has a handler on that stage (`EexVM.handler`), `t_mods` a mod zip (its JSON and its picture replace
 the game's, HD version included; in `user://test/mods/`),
 `t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
 `t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling; a drag or cursor

@@ -7,12 +7,19 @@ extends RefCounted
 ##    ends the next scene starts. Multi-section scenes are event loops left via next_scene/goto_scenario.
 ##  * Bodies are flat lists; nesting is tracked at runtime (IF pushes a level, END pops one, a goto at
 ##    depth > 0 pops one level and continues at the target — possibly in another section).
-## Opcodes are dispatched to `host.op_<name>(ins)`; tests return bool; handlers may await.
+## Opcodes are dispatched to `op_<name>(ins)` of the host, or of the objects in `handlers` (searched after it, in
+## order: a stage can keep groups of opcodes in objects of their own); tests return bool; handlers may await. The
+## ops the VM runs itself are VM_OPS.
 
 signal file_finished
 
+## Ops the VM runs itself (end, if, comment, else, goto): they need no handler.
+const VM_OPS := ["end", "if", "comment", "else", "goto"]
+
 var data: Dictionary
 var host: Object
+var handlers: Array[Object] = []
+var _dispatch: Dictionary = {}   # op name → Callable (invalid: no handler), filled on first use
 var name := ""
 var scene := 0
 var running := false
@@ -52,11 +59,26 @@ func sections(sc: int) -> Array:
 	return scs[sc]["sections"]
 
 
+## The handler of op `n`: op_<n> of the host or of the first object in `handlers` that has it (an invalid
+## Callable if none does).
+func handler(n: String) -> Callable:
+	var c: Variant = _dispatch.get(n)
+	if c == null:
+		c = Callable()
+		var m := "op_" + n
+		for o: Object in [host] + handlers:
+			if o and o.has_method(m):
+				c = Callable(o, m)
+				break
+		_dispatch[n] = c
+	return c
+
+
 func _call(ins: Dictionary) -> Variant:
-	var m := "op_" + str(ins["name"])
-	if host.has_method(m):
-		return await host.call(m, ins)
 	var n: String = ins["name"]
+	var c := handler(n)
+	if c.is_valid():
+		return await c.call(ins)
 	if not _warned.has(n):
 		_warned[n] = true
 		push_warning("EEX unimplemented op %s (0x%02x) args=%s in %s" % [n, int(ins["op"]), ins["args"], name])
@@ -169,6 +191,8 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 		executed += 1
 		if steps % 4000 == 0:
 			await host.get_tree().process_frame
+			if abort or not is_instance_valid(host):      # the stage went while the VM let a frame pass
+				return
 		if trace:
 			print("[%s %d.%d #%d d%d] %s %s" % [name, sc, sec, pc, depth, ins["name"], ins["args"]])
 		match op:
