@@ -19,7 +19,7 @@ const DEPTH := 5
 const MAX_STEPS := 60000
 const MAX_PATHS := 512
 
-static var enabled := OS.get_environment("WG_AUTOSAVE") != "" and OS.get_environment("WG_DUELSIM") != "0"
+static var enabled := (OS.get_environment("WG_AUTOSAVE") != "" or OS.get_environment("WG_UIBOT") != "") and OS.get_environment("WG_DUELSIM") != "0"
 static var _memo := {}           # "depth|state" → value
 static var _scene_key := ""      # file/scene the memos and _flags belong to
 static var _flags: Array = []    # the flags the scene's sections test: a state is their values

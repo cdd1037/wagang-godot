@@ -435,19 +435,32 @@ func set_ivar(kind: int, i: int, v: int) -> void:
 # ------------------------------------------------------------------ save / load
 const SAVE_VERSION := 1
 const AUTO_SLOT := -1          # the autosave (继续游戏), a file of its own beside the numbered slots
+## Debug: WG_SAVEDIR=name keeps every save in user://name/ instead of user://, so tests that go through the save
+## menu leave the player's slots alone. The UI bot (WG_UIBOT) uses user://uibot/ unless WG_SAVEDIR says otherwise.
+var save_dir := _save_dir()
+
+
+static func _save_dir() -> String:
+	var d := OS.get_environment("WG_SAVEDIR")
+	if d == "" and OS.get_environment("WG_UIBOT") != "":
+		d = "uibot"
+	if d == "":
+		return "user://"
+	DirAccess.make_dir_recursive_absolute("user://" + d)
+	return "user://%s/" % d
 
 
 func save_path(slot: int) -> String:
 	if slot == AUTO_SLOT:
-		return "user://autosave.json"
-	return "user://save_%02d.json" % slot
+		return save_dir + "autosave.json"
+	return save_dir + "save_%02d.json" % slot
 
 
 ## Small summary next to each save so the slot list does not have to parse whole saves.
 func _info_path(slot: int) -> String:
 	if slot == AUTO_SLOT:
-		return "user://autosave.info.json"
-	return "user://save_%02d.info.json" % slot
+		return save_dir + "autosave.info.json"
+	return save_dir + "save_%02d.info.json" % slot
 
 
 ## Write `text` to `path` through a temporary file, so a crash mid-write cannot destroy the old file.

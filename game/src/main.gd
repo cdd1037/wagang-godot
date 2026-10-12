@@ -4,6 +4,9 @@ extends Node
 
 const SAVE_SLOTS := 10
 
+## A scenario's stage is about to be built (after the old one is gone): the UI bot checks for leftovers here.
+signal stage_starting(n: int)
+
 var ui: GameUI
 var stage: ScriptHost
 var _title_bg: Sprite2D
@@ -132,6 +135,8 @@ func _ready() -> void:
 
 
 func _boot() -> void:
+	if OS.get_environment("WG_UIBOT") != "":
+		add_child(UiBot.new())       # debug: plays through real input events (debug/ui_bot.gd)
 	if OS.get_environment("WG_ACCEPT_SPAM") != "":
 		# debug: tap ui_accept every 0.6 s (advances dialogue, like a player mashing Enter)
 		var t := Timer.new()
@@ -339,6 +344,7 @@ func _run_flow() -> void:
 			get_tree().quit()
 			return
 		ui.wipe_captions()        # a new stage paints its own view
+		stage_starting.emit(n)
 		if n % 2 == 0:
 			stage = StoryStage.new()
 		else:
@@ -469,7 +475,7 @@ var _was_menu_ready := false
 func _autosave_enabled() -> bool:
 	if Game.autoplay or Game.demo:
 		return false
-	for e in ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT"]:
+	for e in ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "WG_UIBOT"]:
 		if OS.get_environment(e) != "":
 			return false
 	return true

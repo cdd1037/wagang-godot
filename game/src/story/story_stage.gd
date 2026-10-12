@@ -212,12 +212,7 @@ func _wait_for_click() -> int:
 		if Game.demo:
 			await get_tree().create_timer(1.0).timeout
 		await get_tree().process_frame
-		# only actors a player could click: visible, not hidden via action 18, and inside the scene
-		# view (scripts park actors off-screen, e.g. at (90, 90), instead of removing them)
-		var view := Rect2(0, VIEW_Y, 640, 400)
-		var keys := actors.keys().filter(func(k: int) -> bool:
-			var a: RpgActor = actors[k]
-			return a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)))
+		var keys := click_candidates()
 		if keys.is_empty():
 			_auto_idle += 1
 			if _auto_idle > 300 and OS.get_environment("WG_AUTOSAVE") != "":
@@ -239,51 +234,66 @@ func _wait_for_click() -> int:
 		if sortie_enabled and Rules.chance(int(sp) if sp != "" else 12):
 			if await do_sortie():
 				return -2
-		# WG_CLICKS=a,b,…: click these first, in order, each as soon as its click would run a section (guided runs)
-		if not _guided.is_empty() and keys.has(_guided[0]) and await _section_for(_guided[0]) >= 0:
-			var g: int = _guided.pop_front()
-			if OS.get_environment("WG_TRACE_TEXT") != "":
-				print("  [click] ", g, " (guided)")
-			return g
-		# flow-test: a story 单挑 move is chosen by dry runs of the rounds (DuelSim)
-		if DuelSim.enabled:
-			var mv := DuelSim.move_sections(vm)
-			var duel := keys.filter(func(k: int) -> bool: return mv.has(k) and DuelSim.section_for(vm, mv, k, {}) >= 0)
-			if not duel.is_empty():
-				var dp := DuelSim.best_move(vm, duel)
-				if dp >= 0:
-					if OS.get_environment("WG_TRACE_TEXT") != "":
-						print("  [click] ", dp, " (duel)")
-					return dp
-		# flow-test: a click puzzle whose answer is a set of story flags (R_14's verses) is solved by dry runs
-		if FlagPuzzle.enabled:
-			var pz := FlagPuzzle.best_click(vm, keys, _ran_secs)
-			if pz >= 0:
-				if OS.get_environment("WG_TRACE_TEXT") != "":
-					print("  [click] ", pz, " (puzzle)")
-				return pz
-		# mostly click actors whose click runs a section that has not run yet, else actors that some section of
-		# this scene tests for (like a player would)
-		var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []
-		var hot := _clickable_pids().filter(func(x: int) -> bool: return keys.has(x))
-		if not fresh.is_empty():
-			keys = fresh
-		elif not hot.is_empty() and Rules.chance(85):
-			# a click that runs nothing now is wasted: prefer actors whose click runs a section ("click him while he
-			# is there" mini-games such as R_16's 张千)
-			var live := []
-			for x in hot:
-				if await _section_for(x) >= 0:
-					live.append(x)
-			keys = live if not live.is_empty() else hot
-		var pid: int = keys[Rules.rand(keys.size())] if OS.get_environment("WG_RANDOM") != "" else keys[_auto_i % keys.size()]
-		if OS.get_environment("WG_TRACE_TEXT") != "":
-			print("  [click] ", pid)
-		return pid
+		return await auto_pick(keys)
 	_waiting_click = true
 	var r: int = await clicked_actor
 	_waiting_click = false
 	return r
+
+
+## Actors a player could click now: visible, not hidden via action 18, and inside the scene view (scripts park
+## actors off-screen, e.g. at (90, 90), instead of removing them).
+func click_candidates() -> Array:
+	var view := Rect2(0, VIEW_Y, 640, 400)
+	return actors.keys().filter(func(k: int) -> bool:
+		var a: RpgActor = actors[k]
+		return a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)))
+
+
+## The actor autoplay clicks among `keys` (click_candidates(), not empty); the UI bot (debug/ui_bot.gd) clicks
+## the same one with the mouse.
+func auto_pick(keys: Array) -> int:
+	# WG_CLICKS=a,b,…: click these first, in order, each as soon as its click would run a section (guided runs)
+	if not _guided.is_empty() and keys.has(_guided[0]) and await _section_for(_guided[0]) >= 0:
+		var g: int = _guided.pop_front()
+		if OS.get_environment("WG_TRACE_TEXT") != "":
+			print("  [click] ", g, " (guided)")
+		return g
+	# flow-test: a story 单挑 move is chosen by dry runs of the rounds (DuelSim)
+	if DuelSim.enabled:
+		var mv := DuelSim.move_sections(vm)
+		var duel := keys.filter(func(k: int) -> bool: return mv.has(k) and DuelSim.section_for(vm, mv, k, {}) >= 0)
+		if not duel.is_empty():
+			var dp := DuelSim.best_move(vm, duel)
+			if dp >= 0:
+				if OS.get_environment("WG_TRACE_TEXT") != "":
+					print("  [click] ", dp, " (duel)")
+				return dp
+	# flow-test: a click puzzle whose answer is a set of story flags (R_14's verses) is solved by dry runs
+	if FlagPuzzle.enabled:
+		var pz := FlagPuzzle.best_click(vm, keys, _ran_secs)
+		if pz >= 0:
+			if OS.get_environment("WG_TRACE_TEXT") != "":
+				print("  [click] ", pz, " (puzzle)")
+			return pz
+	# mostly click actors whose click runs a section that has not run yet, else actors that some section of
+	# this scene tests for (like a player would)
+	var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []
+	var hot := _clickable_pids().filter(func(x: int) -> bool: return keys.has(x))
+	if not fresh.is_empty():
+		keys = fresh
+	elif not hot.is_empty() and Rules.chance(85):
+		# a click that runs nothing now is wasted: prefer actors whose click runs a section ("click him while he
+		# is there" mini-games such as R_16's 张千)
+		var live := []
+		for x in hot:
+			if await _section_for(x) >= 0:
+				live.append(x)
+		keys = live if not live.is_empty() else hot
+	var pid: int = keys[Rules.rand(keys.size())] if OS.get_environment("WG_RANDOM") != "" else keys[_auto_i % keys.size()]
+	if OS.get_environment("WG_TRACE_TEXT") != "":
+		print("  [click] ", pid)
+	return pid
 
 
 ## Autoplay helper: a visible actor some section tests for whose click would run a section now, or −1.

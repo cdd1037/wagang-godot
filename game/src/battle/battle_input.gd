@@ -5,6 +5,7 @@ extends RefCounted
 var st: BattleStage
 var end_turn := false
 var idle := false              # the player phase waits at its top level (no unit selected; touch shell's 菜单)
+var waiting_cell := false      # a click on the map is awaited (any level: unit, move, target), for the UI bot
 var _bot: InputBot
 
 
@@ -30,7 +31,9 @@ func _all_done() -> bool:
 
 
 func _click() -> Array:
+	waiting_cell = true
 	var r: Array = await st.view.cell_clicked
+	waiting_cell = false
 	return r
 
 

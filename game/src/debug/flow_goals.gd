@@ -43,7 +43,7 @@ const GOAL_WORDS := ["到达", "占领", "攻破", "突破", "打开", "逃离",
 const TRAP_WORDS := ["伏", "敌军"]
 const SNARE_WORDS := ["机关", "陷阱", "中计"]     # a trap that springs on our units (S_43's 机关第五区, S_36's 挖宝04中计), unless FOUND
 
-static var enabled := OS.get_environment("WG_AUTOSAVE") != "" and OS.get_environment("WG_GOALS") != "0"
+static var enabled := (OS.get_environment("WG_AUTOSAVE") != "" or OS.get_environment("WG_UIBOT") != "") and OS.get_environment("WG_GOALS") != "0"
 static var _last := {}          # slot → goal text last traced
 static var _traced := ""        # battle whose units were traced
 static var sparing: Array = []  # sides not to thin out (see above), from the last compute

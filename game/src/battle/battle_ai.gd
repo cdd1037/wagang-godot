@@ -100,6 +100,28 @@ static func _wounded(x: BUnit) -> bool:
 ## AIAct (0x43ad1c). Returns false when the unit loses its turn: confused (乱) or lost (迷) units, and units
 ## that have already acted, return at once (10.5.4).
 func act(unit: BUnit) -> bool:
+	if not decide(unit):
+		return false
+	# MoveAlongPath (0x43a956): walk to dest on the last flood's grid
+	if dest.x >= 0 and dest != u.pos and grid.has(dest):
+		await st.view.ensure_visible(u.pos)
+		await st.actions.move_unit(u, _path_from(dest))
+	_arrival()
+	# act
+	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
+		if choice_strategy >= 0 and choice_target != null and choice_target.active() \
+				and FlowGoals.may_hit(flow_goal, choice_target):
+			await st.actions.cast(u, choice_strategy, choice_target.pos)
+			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
+		else:
+			await _physical_attack()
+	return true
+
+
+## AIAct's decision (0x43ad1c up to MoveAlongPath): sets `dest`, `choice_strategy` and `choice_target` without
+## moving or acting. False when the unit loses its turn. The UI bot asks it for a player unit and carries the
+## decision out with clicks (on a Mem snapshot it restores, so the oracle leaves no trace).
+func decide(unit: BUnit) -> bool:
 	u = unit
 	Mem.set_ev(10, 0)          # mod 0x43ad2b: no unit has fallen in this action yet
 	if not u.active():
@@ -150,19 +172,6 @@ func act(unit: BUnit) -> bool:
 					_active(mv)      # player units under autoplay (WG_AUTO)
 				else:
 					_flow_walk(mv)
-	# MoveAlongPath (0x43a956): walk to dest on the last flood's grid
-	if dest.x >= 0 and dest != u.pos and grid.has(dest):
-		await st.view.ensure_visible(u.pos)
-		await st.actions.move_unit(u, _path_from(dest))
-	_arrival()
-	# act
-	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
-		if choice_strategy >= 0 and choice_target != null and choice_target.active() \
-				and FlowGoals.may_hit(flow_goal, choice_target):
-			await st.actions.cast(u, choice_strategy, choice_target.pos)
-			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
-		else:
-			await _physical_attack()
 	return true
 
 

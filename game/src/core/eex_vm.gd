@@ -23,6 +23,7 @@ var abort := false
 var trace := false
 var last_section := -1
 var next_op := -1            # opcode after the one being executed (-1 at the end of a body)
+static var executed := 0     # instructions run by every VM so far (the UI bot's sign of progress)
 var _warned: Dictionary = {}
 
 
@@ -165,6 +166,7 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 		var ins: Dictionary = body[pc]
 		var op := int(ins["op"])
 		steps += 1
+		executed += 1
 		if steps % 4000 == 0:
 			await host.get_tree().process_frame
 		if trace:

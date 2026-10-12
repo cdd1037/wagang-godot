@@ -16,7 +16,7 @@ extends RefCounted
 const MIN_FLAGS := 4
 const PATIENCE := 30     # puzzle clicks without a new target flag before the scene goes back to the usual clicking
 
-static var enabled := OS.get_environment("WG_AUTOSAVE") != "" and OS.get_environment("WG_PUZZLE") != "0"
+static var enabled := (OS.get_environment("WG_AUTOSAVE") != "" or OS.get_environment("WG_UIBOT") != "") and OS.get_environment("WG_PUZZLE") != "0"
 static var _progress := {}   # "file/scene" → [most target flags seen, puzzle clicks since]
 
 

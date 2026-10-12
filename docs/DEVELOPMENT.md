@@ -64,6 +64,8 @@ All options are environment variables read at start-up, for example
 |---|---|
 | `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 19; 0–9 are the player's saves) after each scenario, retry from it after a game over |
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
+| `WG_UIBOT=dir` | The UI bot (`game/src/debug/ui_bot.gd`): plays from the title screen through real input events only, with the game in its normal mode, and checks the UI as it goes (see "UI playthrough test" below). With a window it saves pictures to *dir*. `WG_UIBOT_TIME` (default 3600 s), `WG_UIBOT_STALL` (90 s), `WG_UIBOT_SEED` |
+| `WG_SAVEDIR=name` | Keep every save in `user://name/` instead of `user://`. The UI bot uses `user://uibot/` |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |
 | `WG_BOTMODE=victory` | Input-bot variant: open the system menu, pick 胜利条件 and screenshot the window |
@@ -96,6 +98,7 @@ The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
 | `tools/flowres.sh SLOT STOP LOG [seconds]` | Resume such a run from its autosave slot |
 | `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
 | `tools/gtest.sh t_name` | Run `game/src/debug/t_name.gd` under the headless test runner |
+| `tools/uitest.sh [stop] [seconds]` | UI playthrough test: the UI bot from a new game to scenario *stop* (default 5, after R_02) → `extract/uibot/uitest.log`; prints `uitest: PASS` or `uitest: FAIL` |
 
 The autosave slot numbers are save files in the game's user folder: use **11 or higher**, since slots 0–9 are the
 player's own saves. Run several ranges in parallel with bash, for example
@@ -231,6 +234,35 @@ Tips:
   4.7's iconv conversion never returns for a single two-byte character (无, 船, 火 …).
 * Synthetic `InputEventAction`s from the bots and `WG_ACCEPT_SPAM` don't reach the battle map, which takes only
   real key events; the bots press a real Esc (`_esc()`) to open its system menu.
+
+### UI playthrough test
+
+Flow tests run with autoplay, which skips dialogue, menus, windows and the mouse path, so a UI regression gets past
+them. `tools/uitest.sh` runs the UI bot instead. It starts a new game from the title screen with the game in its
+normal mode and only sends input a player could:
+* clicks on dialogue boxes, menu rows, window buttons, story actors, the town toolbar and map cells;
+* the wheel on long lists, Esc for the battle's system menu, and Enter when something waits with nothing to click.
+
+It decides like autoplay:
+* a story click is `StoryStage.auto_pick`, with `DuelSim` for 单挑 and `FlagPuzzle` for puzzles;
+* a player unit's move, strategy and target come from `BattleAI.decide`, with the bytes and the random state it
+  touches put back;
+* a menu gets its first enabled row;
+* the sortie takes the first candidates.
+
+It checks:
+* every click reaches its handler: a waiting dialogue page closes, a menu row is chosen, a window's 确定 / 结束 /
+  取消 closes it, an actor or map cell click is taken (each within 3 s);
+* a new stage starts with no dialogue, menu, window, popup or caption left from the last one;
+* in the first town of each story file with the toolbar, every system-menu window, the toolbar's windows and
+  武将情报 open and close, and a save to slot 1 followed by its load brings back the same scenario, gold and party.
+  Saves go to `user://uibot/`, never the player's slots; 环境设定 is closed with 取消, so the settings stay;
+* the game never sits for 90 s with nothing changing and nothing the bot can do.
+
+The script also fails on any `SCRIPT ERROR` / `ERROR:` in the log. It runs headless with `WG_GOD=1` and
+`WG_NOVIDEO=1` by default; `WINDOW=1` shows the game and saves a picture of each stage start and of each failure
+to `extract/uibot/`. The default run, R_00 to the end of R_02, takes about 20 minutes; `WG_TRACE_TEXT=1` adds the
+bot's battle moves and tour steps to the log.
 
 ## Touch controls and the phone builds
 
