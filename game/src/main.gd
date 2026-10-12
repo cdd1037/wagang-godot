@@ -252,6 +252,7 @@ func _title_screen() -> void:
 	Settings.load_file()
 	Audio.play_bgm(18)
 	ui.clear_strips()
+	ui.wipe_captions()
 	ui.meter.visible = false
 	if _title_bg == null:
 		_title_bg = Sprite2D.new()
@@ -337,6 +338,7 @@ func _run_flow() -> void:
 		if stop != "" and n >= int(stop):
 			get_tree().quit()
 			return
+		ui.wipe_captions()        # a new stage paints its own view
 		if n % 2 == 0:
 			stage = StoryStage.new()
 		else:

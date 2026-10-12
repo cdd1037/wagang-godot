@@ -122,7 +122,9 @@ past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience), `t
 (环境设定 applied without writing Niuniu.wa, 历史情报 line order, the sortie builder and 选择武将 rules, 部队情报一览
 sorting, 地形情报一览, the town gate GS+2; `OUT=dir` with a window saves their pictures), `t_screens` the screens of
 the script-op audit (开始作战, the 胜利条件 sequence, the chapter cards, the resource meter; `OUT=dir` with a window
-saves them), `t_person` prints person stats.
+saves them), `t_storyclick` plays R_00 by hand up to the training 单挑 (the opening's captions gone, 攻击 runs nothing
+until 防御 has, the click on 防御 starts it; windowed, about two minutes, run with `WG_START=0 WG_NOVIDEO=1
+WG_ACCEPT_SPAM=1`), `t_person` prints person stats.
 
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 

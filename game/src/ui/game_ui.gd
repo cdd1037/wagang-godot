@@ -171,8 +171,9 @@ func clear_strips() -> void:
 ## The text types out at a character per 50 ms (a click shows the rest of the line). a3 ≠ 0 then holds: a click
 ## with 会话窗口不自动关闭, else 0.5 / 1.0 / 2.0 s by 讯息显示速度 (a click ends it sooner).
 ## The first caption after a mode-1 scene starts (op 0x27 → 0x43327a sets +0x68) darkens the strip in 5 steps of 2
-## ticks, each taking `step` off every 4-bit channel (0x430480, about 27 % darker in the end); that stays the
-## captions' background until a1 = 0 restores it.
+## ticks, each taking `step` off every 4-bit channel (0x430480, about 27 % darker in the end), and keeps the darkened
+## strip as the one a cleared strip is restored from (0x47e251), so the band stays under later captions. Captions and
+## band are only pixels on the scene view: the next scene change repaints it (wipe_captions).
 const CAP_TOP := 0x170
 const CAP_X := 64.0       # column 8 of the text grid [G: 8 px a column]
 const CAP_SIZE := 18
@@ -190,8 +191,6 @@ func caption(text: String, a1: int, a2: int, a3: int) -> void:
 		_cap_pos = Vector2(CAP_X, _cap_pos.y + 24)
 	if a1 == 0 or (a2 != 0 and _cap_pos.y > 0x1b7):
 		clear_captions()
-		if a1 == 0:
-			_set_band(0.0)
 	if band_pending:
 		band_pending = false
 		for k in 5:
@@ -253,16 +252,26 @@ func _set_band(a: float) -> void:
 	_band.color.a = a
 
 
+## Entering a mode-1 scene (0x43327a): the next caption starts at the strip's top and darkens the strip first.
 func reset_caption_band() -> void:
 	band_pending = true
-	_set_band(0.0)
+	_cap_pos = Vector2(CAP_X, CAP_TOP)
 
 
+## The strip cleared for new captions (0x4327ef with a1 = 0, or past its last line): the band stays.
 func clear_captions() -> void:
+	wipe_captions(false)
+	_cap_pos = Vector2(CAP_X, CAP_TOP)
+
+
+## The scene view repainted (op 0x27 in any mode → 0x42c223 → 0x40bc37, or a new stage): the captions and the band
+## are gone, while the next caption still goes on where the last one ended.
+func wipe_captions(band := true) -> void:
 	for c in _caption_lines:
 		c.queue_free()
 	_caption_lines.clear()
-	_cap_pos = Vector2(CAP_X, CAP_TOP)
+	if band and _band:
+		_band.color.a = 0.0
 
 
 ## Special technique name (绝招) banner.

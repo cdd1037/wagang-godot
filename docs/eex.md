@@ -222,7 +222,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 4C | 战场指令4C | unit_op_4c | 0 | 4165 | 58 | 40 02 04 | Battle only: a hidden unit (state 1) appears at its deployment entry (mode 0 by person, entry with that person required; mode 1 slot / entry `slot`): nearest free cell (0x43f040), map centres, SE 15, 4 ticks; HP unchanged. The wipe-in (SE 42) is dead code. [C, audit 2026-10-11] |  | 414f42 |
 | 1C | 淡出 | fade_out | 4080 | 58 | 117 | — | Fade in from black (10 steps, then 3 ticks). [C, audit 2026-10-11] |  | 413ebd |
 | 26 | 测试武将区域 | test_unit_in_area | 0 | 3995 | 57 | 02 04 04 04 04 | Unit (person or selector) on the map with HP ≠ 0 inside the rectangle (0x45b4a5). [C, audit 2026-10-11] |  | 411c36 |
-| 27 | 场景切换 | change_scene | 3746 | 58 | 117 | 2d 0c 1a 1c 15 | Scene change (§ op table); the story actors stay (cleared only by 0x2f, 0x11, battle init, load); portraits and captions reset only on entering mode 1. [C, audit 2026-10-11] |  | 413d13 |
+| 27 | 场景切换 | change_scene | 3746 | 58 | 117 | 2d 0c 1a 1c 15 | Scene change (§ op table); the story actors stay (cleared only by 0x2f, 0x11, battle init, load); every mode repaints the view (0x42c223 → 0x40bc37), wiping the captions and their band; portraits, the caption position and the band reset only on entering mode 1 (0x43327a). [C, audit 2026-10-11; repaint 2026-10-12] |  | 413d13 |
 | 1D | 淡入 | fade_in | 3744 | 58 | 117 | — | Fade to black: palette 10..245 in 11 one-tick steps, toolbar hidden. [C, audit 2026-10-11] |  | 413ee2 |
 | 2D | 测试点击 | test_clicked | 3738 | 0 | 57 | 02 | Click test: GS+0 & 0x20 and event slot 1 (the clicked actor) == arg. [C, audit 2026-10-11] |  | 4119e7 |
 | 0C | 中止 | exit_section | 3470 | 227 | 69 | — | Abort the running section body immediately (like return); next poll re-selects. | 8 | 4143a4 |
@@ -240,7 +240,7 @@ Sorted by total frequency (R = story files, S = battle files, F = number of file
 | 3D | 获得物品 | get_item | 856 | 605 | 93 | 17 49 26 02 | args: item (0xFFFF or > 0x67: nothing), level (0xFFFF→0), flag, person. Level 0 for a weapon/armour = automatic from the party level L (0x40c14f: mean of the 15 highest levels of persons 0..25 in the party): normal (L mod 18)/6+1 below 48 else 3, treasures L/7+1 ≤ 10; at or above the item's maximum (3, treasures 10) the item is fully grown (exp 0xFF). Outside a battle: message "得到了…" (0x42f699(2)) then into the bag (0x40d79c / 0x40da45 for consumables); in a battle 0x45991b(item, level, flag, person, 1). Unique items (+0x18) are recorded via 0x41a1b0(item+3, 1). | 1 | 4143c2 |
 | 40 | 测试阵营 | test_side | 0 | 1443 | 58 | 48 | Phase test: ctx+0x10 (0 player, 1 friend, 2 enemy). [C, audit 2026-10-11] |  | 4116ee |
 | 21 | 地图标记 | map_mark | 0 | 1346 | 22 | 04 04 10 26 26 | Fire on a map cell (battle only): args x, y, mode, scroll (0xffff→0), silent (0xffff→0). Mode 0 sets fire: ChangeTerrain(x, y, terrain 0x1a 火, patch 0, scroll, silent) as op 0x58; mode 1 puts it out: undo of the recorded patch-0 change at (x, y) (0x4567c1, see rules.md §10.6). | 1 | 413efb |
-| 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | Caption (rules.md §13): a1 = 0 clears, a2 new line, a3 holds; the first caption after a mode-1 scene darkens the strip y 360..440 over 0.5 s. [C, audit 2026-10-11] |  | 417315 |
+| 2C | 字幕 | caption | 1301 | 0 | 47 | 05 26 26 26 | Caption (rules.md §13): a1 = 0 clears, a2 new line, a3 holds; the first caption after a mode-1 scene darkens the strip y 360..440 over 0.5 s and saves it darkened, so a cleared strip (a1 = 0) keeps the band. Captions are pixels on the view: the next op 0x27 wipes them. [C, audit 2026-10-11] |  | 417315 |
 | 63 | 单挑对话2 | duel_say2 | 0 | 1248 | 41 | 26 05 26 | 单挑 speech bubble (0x4431af); empty text erases it. [C, audit 2026-10-11] |  | 417701 |
 | 3A | 资源变更 | set_resource | 927 | 109 | 54 | 28 34 04 | Resource: kind 0 gold (≤ 9,999,999), 1 GS+6, 2 GS+0x12 (0..100, drawn as the status window's third pane 0x476715; add / sub animate in 5 × 3 ticks with a blinking arrow, 0x40d2a9 / 0x40d3ae). [C, audit 2026-10-11] |  | 4149f7 |
 | 41 | 测试区域部队 | test_units_in_area | 0 | 927 | 55 | 03 04 24 3f 04 04 04 04 | Count of `side` units in state 2 (any HP), in the rectangle as given or the whole map, compared with n; side 0–6, others count nobody. [C, audit 2026-10-11] |  | 41149d |
@@ -331,8 +331,10 @@ followed the original for most; it now also does so for these:
 * **Tests:** 0x41 counts units in state 2 whatever their HP; 0x2e never matches a selector as p1.
 * **Persons:** op 0x38 as PersonAttrs.set_attr (the dword read makes an ability add 120); op 0x52 empties any slot
   the new class cannot use (the item is lost); op 0x6c copies up to 0x34.
-* **Story:** op 0x27 keeps the actors; captions reset and the caption band darkens only on entering mode 1; op 0x29
-  / 0x2a use the classic 64×80 face at y + 40, 15-tick fade, 4 px a tick; op 0x2b fades 16 ticks; op 0x4b ends the
+* **Story:** op 0x27 keeps the actors and, in every mode, wipes the captions and their band (the view is repainted;
+  the port had kept them over rooms and 单挑 screens until a mode-1 scene); the caption position resets and the
+  band darkens again only on entering mode 1; a1 = 0 keeps the band; op 0x29 / 0x2a use the classic 64×80 face
+  at y + 40, 15-tick fade, 4 px a tick; op 0x2b fades 16 ticks; op 0x4b ends the
   出战位置 list with 0xff and does nothing while [0x55e9d4] is 0; a click on an actor while a section runs counts
   for the next poll (R_16's 张千 has to be clicked during a 4-tick delay).
 * **Screens:** 开始作战 (0x5a), the 胜利条件 sequence (0x1a), the part-name and title cards (0x67, with GS+6), the game

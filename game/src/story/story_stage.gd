@@ -489,7 +489,8 @@ func _dialog_top(pid: int) -> bool:
 
 # ------------------------------------------------------------------ scene
 ## op 0x27 (0x413d13): mode 0 = CG (Giji 0..39), 1 = scene 114+, 2 = room 40+, 3 = battle map. The story actors stay
-## (only op 0x2f, op 0x11, battle init and loading clear them, 0x426bd5); the portraits and captions are reset only
+## (only op 0x2f, op 0x11, battle init and loading clear them, 0x426bd5). Every mode repaints the scene view
+## (0x42c223 → 0x40bc37), which wipes the captions; the portraits and the caption position and band are reset only
 ## on entering mode 1 (0x433310 → 0x43327a).
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
@@ -507,6 +508,7 @@ func op_change_scene(ins: Dictionary) -> void:
 	scene_image = val
 	Mem.w8(0x4ac63c, mode)
 	Mem.w16(0x4ac63d, val)
+	ui.wipe_captions()
 	var entry := val + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
 	if mode == 3:
 		bg.texture = null
@@ -514,7 +516,6 @@ func op_change_scene(ins: Dictionary) -> void:
 	bg.texture = Assets.tex("gfx/backgrounds/%03d.png" % entry)
 	if mode == 1:
 		_clear_portraits()
-		ui.clear_captions()
 		ui.reset_caption_band()
 
 
