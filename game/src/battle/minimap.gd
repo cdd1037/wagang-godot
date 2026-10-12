@@ -37,14 +37,18 @@ func _img_size() -> Vector2:
 	return Vector2(st.view.map_w * CELL, st.view.map_h * CELL)
 
 
-## 0x449d96: show it (or keep it on top).
+## 0x449d96: show it (or keep it on top): a window of its own above the battle view, the HUD and the captions,
+## under the dialogue, menus, message boxes and the windows opened after it (a choice it is shown for stays
+## clickable).
 func open() -> void:
 	if st == null or st.view.map_id < 0:
 		return
 	if _tex == null:
 		setup(st)
 	visible = true
-	get_parent().move_child(self, -1)
+	var ui := get_parent() as GameUI
+	var below := ui.dialog.get_index()
+	ui.move_child(self, below - 1 if get_index() < below else below)
 
 
 func _process(_d: float) -> void:

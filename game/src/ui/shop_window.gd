@@ -308,8 +308,9 @@ func _on_key(ev: InputEvent) -> bool:
 	if ev.is_action_pressed("ui_left") or ev.is_action_pressed("ui_right"):
 		_on_hit(["tab", 1 - tab])
 	elif ev.is_action_pressed("ui_up"):
-		_select(maxi(lists[tab].sel - 1, 0))
-		lists[tab].select(lists[tab].sel)
+		if not lists[tab].rows.is_empty():       # (an empty list has no row 0: some shops sell no equipment)
+			_select(maxi(lists[tab].sel - 1, 0))
+			lists[tab].select(lists[tab].sel)
 	elif ev.is_action_pressed("ui_down"):
 		_select(mini(lists[tab].sel + 1, lists[tab].rows.size() - 1))
 		lists[tab].select(lists[tab].sel)

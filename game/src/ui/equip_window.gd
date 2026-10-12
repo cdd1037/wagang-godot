@@ -242,8 +242,9 @@ func _on_key(ev: InputEvent) -> bool:
 	if _busy:
 		return true
 	if ev.is_action_pressed("ui_up"):
-		_select(maxi(lv.sel - 1, 0))
-		lv.select(lv.sel)
+		if not lv.rows.is_empty():       # (an empty warehouse has no row 0)
+			_select(maxi(lv.sel - 1, 0))
+			lv.select(lv.sel)
 	elif ev.is_action_pressed("ui_down"):
 		_select(mini(lv.sel + 1, lv.rows.size() - 1))
 		lv.select(lv.sel)

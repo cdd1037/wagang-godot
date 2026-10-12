@@ -183,6 +183,7 @@ func _map_tests() -> void:
 	await _push(esc)
 	_check(clicks.size() == 1 and clicks[0][1] == MOUSE_BUTTON_RIGHT, "Esc cancels: %s" % [clicks])
 	await _scroll_stop_tests(v)
+	await _popup_tap_test(v, clicks)
 	v.queue_free()
 
 
@@ -217,3 +218,38 @@ func _scroll_stop_tests(v: BattleView) -> void:
 	for k in 3:
 		await get_tree().process_frame
 	_check(done[0], "a cursor key that scrolls the camera lets the earlier scroll's awaiter go on")
+
+
+## A tap that closes a message box is not also a tap on the map under it (with a mouse the map gets only the
+## press, which nothing waits for then).
+func _popup_tap_test(v: BattleView, clicks: Array) -> void:
+	var ui := GameUI.new()
+	add_child(ui)
+	var gs := GDScript.new()      # stand-in for main.gd (the view asks Game.main.ui about click waits)
+	gs.source_code = "extends Node\nvar ui\n"
+	gs.reload()
+	var m := Node.new()
+	m.set_script(gs)
+	m.set("ui", ui)
+	add_child(m)
+	var old_main = Game.main
+	Game.main = m
+	var shown := [true]
+	var box := func() -> void:
+		await ui.popup("不在范围之内。")
+		shown[0] = false
+	box.call()
+	await get_tree().process_frame
+	clicks.clear()
+	await _button(Vector2(100, 100), true)
+	await _button(Vector2(100, 100), false)
+	for k in 3:
+		await get_tree().process_frame
+	_check(not shown[0], "the tap closes the message box")
+	_check(clicks.is_empty(), "the tap that closed the message box is no tap on the map: %s" % [clicks])
+	await _button(Vector2(100, 100), true)
+	await _button(Vector2(100, 100), false)
+	_check(clicks.size() == 1, "the next tap clicks the map: %s" % [clicks])
+	Game.main = old_main
+	m.queue_free()
+	ui.queue_free()

@@ -470,16 +470,22 @@ func _info_path(slot: int) -> String:
 	return save_dir + "save_%02d.info.json" % slot
 
 
-## Write `text` to `path` through a temporary file, so a crash mid-write cannot destroy the old file.
+## Write `text` to `path` through a temporary file, so a crash mid-write cannot destroy the old file. The old file
+## is replaced only when the whole text landed (a full disk can leave a short file without reporting an error).
 static func _write_atomic(path: String, text: String) -> bool:
 	var tmp := path + ".tmp"
+	var bytes := text.to_utf8_buffer()
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(text)
+	var ok := f.store_buffer(bytes)
 	f.close()
-	if f.get_error() != OK:
+	var back := FileAccess.open(tmp, FileAccess.READ)
+	if not ok or back == null or back.get_length() != bytes.size():
+		back = null
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
 		return false
+	back.close()
 	return DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), ProjectSettings.globalize_path(path)) == OK
 
 

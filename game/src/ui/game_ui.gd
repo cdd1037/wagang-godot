@@ -14,6 +14,10 @@ var _caption_lines: Array[Label] = []
 var _title_root: Control
 var _strips: Array[Label] = []      # the two status panes of the top bar: chapter title (op 0x18), place (op 0x17)
 var meter: ResourceMeter            # the third pane: resource 2 (story scenes only)
+## Waits for a click running now (popups, timed messages, banners, captions). A press during one is theirs: the
+## touch map does not also take its release as a tap (with a mouse the map gets only the press, which nothing
+## waits for then).
+var click_waits := 0
 
 
 func _init() -> void:
@@ -129,8 +133,10 @@ func _wait_click() -> void:
 	# a new press (counted by Game._input), so the click that closed the previous box is not reused
 	# and a tap shorter than a frame is not missed; holding Ctrl skips
 	var n := Game.clicks
+	click_waits += 1
 	while Game.clicks == n and not Game.skip_held():
 		await get_tree().process_frame
+	click_waits -= 1
 
 
 # ------------------------------------------------------------------ banners / captions
@@ -234,9 +240,11 @@ func _caption_part(s: String) -> void:
 func wait_or_click(sec: float) -> void:
 	var n := Game.clicks
 	var t := 0.0
+	click_waits += 1
 	while t < sec and Game.clicks == n and not Game.skip_held():
 		await get_tree().process_frame
 		t += get_process_delta_time()
+	click_waits -= 1
 
 
 ## The darkened caption strip (y 360..440) at `a` (0 = gone).

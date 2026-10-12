@@ -1330,6 +1330,8 @@ func _apply_restore() -> void:
 		print("SAVETEST restoring battle turn %s scene %s" % [d.get("turn"), d.get("scene")])
 	if bool(d.get("field_ready", false)) and int(d.get("map", -1)) >= 0:
 		map_id = int(d["map"])
+		ui.clear_strips()            # as create_battlefield: a load from a town leaves no town panes up
+		ui.meter.visible = false
 		view.load_map(map_id, false)
 		# the terrain bytes came back with the memory; redraw the changed tiles
 		terrain_changes = []

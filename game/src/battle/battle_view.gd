@@ -385,6 +385,10 @@ func _touch_input(ev: InputEventMouse) -> void:
 	var mb := ev as InputEventMouseButton
 	if mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
+			if Game.main and Game.main.ui and Game.main.ui.click_waits > 0:
+				_touch_down = false      # the press closes a message box or skips a banner; its release is no tap
+				get_viewport().set_input_as_handled()
+				return
 			_touch_down = true
 			_touch_panned = false
 			_drag_from = mb.position

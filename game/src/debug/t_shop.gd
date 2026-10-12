@@ -44,6 +44,7 @@ func run() -> void:
 	await _equip_window(ui)
 	await _buy(ui)
 	await _sell(ui)
+	await _empty_lists(ui)
 	print("t_shop: PASS" if _ok else "t_shop: FAILED")
 
 
@@ -180,3 +181,30 @@ func _sell(ui: GameUI) -> void:
 		_check(Game.stack_count(0x67) == fruits + 1, "仙人果 given")
 	w.close()
 	w.queue_free()
+
+
+## Up on an empty list (an empty warehouse; a shop that sells no equipment) selects nothing.
+func _empty_lists(ui: GameUI) -> void:
+	Mem.fill(Game.BAG, 3 * Game.BAG_SLOTS, 0xff)
+	var up := InputEventAction.new()
+	up.action = "ui_up"
+	up.pressed = true
+	var w := EquipWindow.new()
+	w.dlu = Vector2(403, 225)
+	w.dlu_scale = Vector2(1.55, 1.97)
+	ui.add_child(w)
+	await get_tree().process_frame
+	w._on_key(up)
+	_check(w.lv.rows.is_empty() and w.lv.sel == -1, "装备: Up on an empty warehouse selects nothing")
+	w.close()
+	w.queue_free()
+	var sw := ShopWindow.new()
+	sw.dlu = Vector2(317, 227)
+	sw.dlu_scale = Vector2(1.95, 1.95)
+	sw.selling = true
+	ui.add_child(sw)
+	await get_tree().process_frame
+	sw._on_key(up)
+	_check(sw.lists[0].rows.is_empty() and sw.lists[0].sel == -1, "卖出: Up on an empty list selects nothing")
+	sw.close()
+	sw.queue_free()

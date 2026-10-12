@@ -52,6 +52,14 @@ func run() -> void:
 	await st.op_change_scene({"args": [3, 0xffff, 0xffff, 0xffff, 0]})
 	_check(st.in_battle(), "battle mode after change_scene 3")
 	_check(Mem.ev(10) == 0, "EV[10] = 0 at battle start (0x44ccc8)")
+	# the minimap is a window above the map and the HUD, under the dialogue, menus and message boxes
+	st.minimap.open()
+	_check(st.minimap.visible and st.minimap.get_index() > st.hud.get_index() and st.minimap.get_index() < ui.dialog.get_index()
+			and st.minimap.get_index() < ui.menu.get_index(), "minimap layer %d (HUD %d, dialogue %d)" % [st.minimap.get_index(),
+			st.hud.get_index(), ui.dialog.get_index()])
+	st.minimap.open()
+	_check(st.minimap.get_index() == ui.dialog.get_index() - 1, "opening it again keeps it under the dialogue")
+	st.minimap.visible = false
 
 	# ---- op 0x21: mode 0 sets fire (terrain 0x1a, mark 0), mode 1 puts it out
 	var c := Vector2i(5, 5)
@@ -207,8 +215,10 @@ func run() -> void:
 	Mem.restore(snap)
 	if st.vm == null:
 		st.vm = EexVM.new()
-	st.restore_state({"kind": "battle", "scene": 1, "turn": 1})
+	ui.meter.visible = true            # a battle save loaded from a town: the town's resource meter goes
+	st.restore_state({"kind": "battle", "scene": 1, "turn": 1, "field_ready": true, "map": st.map_id})
 	st._apply_restore()
+	_check(not ui.meter.visible, "a restored battle hides the town's resource meter")
 	_check(Skills.unit_in_cell(Vector2i(8, 8)) == null and Skills.unit_in_cell(Vector2i(4, 4)) != null,
 			"Skills.unit_in_cell after a restore")
 	_check(st.unit_at(Vector2i(8, 8)) == null and st.unit_at(Vector2i(4, 4)) != null, "unit_at after a restore")
