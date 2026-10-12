@@ -98,6 +98,7 @@ cd wagang-godot
 | [docs/PLAYING.md](docs/PLAYING.md) | 完整的游戏说明 |
 | [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows / iPhone / Android 版本；自动发布流程 |
 | [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 4 倍高清画面包：生成、发布和模型选择 |
+| [docs/MODDING.md](docs/MODDING.md) | 模组：把剧本、数据、图像或声音的改动打成 .zip 放进 mods 文件夹（英文） |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 实现原理：模拟内存、脚本虚拟机、场景、界面 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、界面测试、逆向工作流程 |
 | [docs/README.md](docs/README.md) | 逆向分析规格：文件格式、脚本指令、规则与 AI、MOD 补丁审计 |

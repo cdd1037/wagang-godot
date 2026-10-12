@@ -307,15 +307,21 @@ func _title_screen() -> void:
 				return
 
 
-## Build number in the title screen's corner (application/config/version, set by the release workflow).
+## Build number in the title screen's corner (application/config/version, set by the release workflow), and how many
+## mods are loaded.
 func _show_version() -> void:
 	var ver := str(ProjectSettings.get_setting("application/config/version", ""))
-	if ver == "" or _title_bg.has_node("Version"):
+	var parts: Array[String] = []
+	if ver != "":
+		parts.append("版本 " + ver)
+	if not Assets.mods.is_empty():
+		parts.append("模组 %d" % Assets.mods.size())
+	if parts.is_empty() or _title_bg.has_node("Version"):
 		return
-	var l := UIStyle.label("版本 " + ver, 12, Color(1, 1, 1, 0.75))
+	var l := UIStyle.label("  ".join(parts), 12, Color(1, 1, 1, 0.75))
 	l.name = "Version"
-	l.position = Vector2(540, 380)
-	l.size = Vector2(96, 16)
+	l.position = Vector2(436, 380)
+	l.size = Vector2(200, 16)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_title_bg.add_child(l)
 

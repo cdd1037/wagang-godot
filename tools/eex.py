@@ -5,6 +5,8 @@ Usage:
   tools/venv/bin/python -I tools/eex.py --stats         # also print opcode frequency table
   tools/venv/bin/python -I tools/eex.py --offsets       # also store byte offsets ('off') in JSON
   tools/venv/bin/python -I tools/eex.py FILE.wagan ...  # convert only these
+  tools/venv/bin/python -I tools/eex.py --src=DIR --out=DIR   # another game folder → another output folder
+                                                               # (listings go to OUT/txt)
 
 Outputs:
   game/assets/scripts/<R_xx|S_xx>.json   (UTF-8, compact)
@@ -454,10 +456,18 @@ def schema():
 
 
 def main(argv):
+    global OUT_JSON, OUT_TXT
     stats = '--stats' in argv
+    src = SRC
+    for a in argv:
+        if a.startswith('--src='):
+            src = a[6:]
+        elif a.startswith('--out='):
+            OUT_JSON = a[6:]
+            OUT_TXT = os.path.join(OUT_JSON, 'txt')
     files = [a for a in argv if not a.startswith('--')]
     if not files:
-        files = sorted(glob.glob(SRC + '/R_*.wagan') + glob.glob(SRC + '/S_*.wagan'))
+        files = sorted(glob.glob(src + '/R_*.wagan') + glob.glob(src + '/S_*.wagan'))
     os.makedirs(OUT_JSON, exist_ok=True)
     os.makedirs(OUT_TXT, exist_ok=True)
     freq = {}

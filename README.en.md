@@ -108,6 +108,7 @@ Without the script, import once with `godot --headless --path game --import`, th
 | [docs/PLAYING.md](docs/PLAYING.md) | The full player guide |
 | [docs/BUILDING.md](docs/BUILDING.md) | Re-converting the data from the original game; exporting the macOS / Windows / iPhone / Android builds; the release workflow |
 | [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The 4× HD graphics pack: building, publishing, model choice |
+| [docs/MODDING.md](docs/MODDING.md) | Mods: changing the scripts, data, pictures or sound with a .zip in the mods folder |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it works: emulated memory, script VM, stages, UI |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, the UI test, reverse-engineering workflow |
 | [docs/README.md](docs/README.md) | Reverse-engineering specifications: file formats, script ops, rules and AI, the audit of the mod's patches |

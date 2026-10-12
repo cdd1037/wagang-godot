@@ -13,6 +13,14 @@ var hd_budget := (384 if OS.has_feature("mobile") else 1024) * 1024 * 1024
 var hd := true                           # debug: WG_HD=0 shows the original art
 var hd_pack := false                     # the pack is installed
 
+## Mods (docs/MODDING.md): every .zip in user://mods/ is mounted over res:// in name order, so its files replace the
+## game's (a later mod wins over an earlier one). Test and bot runs leave them out unless WG_MODS=1; WG_MODDIR=path
+## reads them from another folder.
+var mod_dir := OS.get_environment("WG_MODDIR").path_join("") if OS.get_environment("WG_MODDIR") != "" else "user://mods/"
+var mods: Array[String] = []             # the mods loaded, by file name
+var _modded: Dictionary = {}             # "rel" under assets/ a mod replaces or adds → true
+var _modded_hd: Dictionary = {}          # the same under assets_hd/
+
 var _tex_cache: Dictionary = {}          # rel → Texture2D, or WeakRef for HD textures
 var _hd_lru: Array = []                  # [rel, texture, bytes], most recently used last
 var _hd_bytes := 0
@@ -32,9 +40,38 @@ func exists(rel: String) -> bool:
 
 
 func _ready() -> void:
+	# the first autoload to get ready: mods are mounted before Mem and Game read anything
+	if not Game.test_run or OS.get_environment("WG_MODS") == "1":
+		_load_mods()
 	hd_pack = DirAccess.dir_exists_absolute(HD_ROOT + "gfx")
 	hd = OS.get_environment("WG_HD") != "0"
 	set_view(get_tree().root)
+
+
+func _load_mods() -> void:
+	if not DirAccess.dir_exists_absolute(mod_dir):
+		return
+	var files := Array(DirAccess.get_files_at(mod_dir))
+	files.sort()
+	for f: String in files:
+		if not f.to_lower().ends_with(".zip"):
+			continue
+		var z := ZIPReader.new()
+		if z.open(mod_dir + f) != OK:
+			push_warning("mod %s: not a zip file" % f)
+			continue
+		var names := z.get_files()
+		z.close()
+		if not ProjectSettings.load_resource_pack(mod_dir + f, true):
+			push_warning("mod %s could not be mounted" % f)
+			continue
+		mods.append(f)
+		for n in names:
+			if n.begins_with("assets/"):
+				_modded[n.substr(7)] = true
+			elif n.begins_with("assets_hd/"):
+				_modded_hd[n.substr(10)] = true
+		print("mod loaded: %s (%d files)" % [f, Array(names).filter(func(n: String) -> bool: return not n.ends_with("/")).size()])
 
 
 func set_view(v: Viewport) -> void:
@@ -71,7 +108,9 @@ func tex(rel: String) -> Texture2D:
 		if live:
 			_hd_touch(rel, live)
 			return live
-	var t: Texture2D = _hd_tex(rel) if hd_active() else null
+	# a picture a mod replaces is shown as the mod has it, unless the mod brings its HD version too
+	var own_hd := not _modded.has(rel) or _modded_hd.has(rel.get_basename() + ".webp")
+	var t: Texture2D = _hd_tex(rel) if hd_active() and own_hd else null
 	if t:
 		_tex_cache[rel] = weakref(t)
 		_hd_touch(rel, t)
