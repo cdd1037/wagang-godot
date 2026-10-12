@@ -859,7 +859,7 @@ func _duanzao(x: BUnit) -> void:
 		Mem.w8(p.base + off + 1, lvl)
 		Mem.w8(p.base + off + 2, 0xff if lvl >= maxl else 0)
 		await equip_notice(p, not armour)
-	await st.op_unit_status({"args": [x.pid, 1, 0xff, 0]})
+	await st.unit_ops.op_unit_status({"args": [x.pid, 1, 0xff, 0]})
 	Audio.play_se("se30")
 
 
@@ -917,7 +917,7 @@ func unit_fell(u: BUnit) -> void:
 ## A script brought a unit's HP to 0 (0x4121b0: EV[10] = 1, then RemoveUnit at once).
 func unit_defeated(u: BUnit) -> void:
 	await unit_fell(u)
-	await st.remove_unit(u, false)
+	await st.unit_ops.remove_unit(u, false)
 	st.unit_died.emit(u)
 
 
@@ -949,7 +949,7 @@ func set_exp(p: Person, total: int) -> void:
 ## LevelUp's show part (0x4074cf): in a battle the unit's pose 11 (0x45778f(pid, 0xb, 0, 0)), SE 11, the report.
 func _show_level_up(p: Person, g: Array) -> void:
 	if st.in_battle():
-		await st.op_unit_status({"args": [p.id, 11, 0, 0]})
+		await st.unit_ops.op_unit_status({"args": [p.id, 11, 0, 0]})
 	Audio.play_se(SE_LEVELUP)
 	# "X升为N级。" and "学会了策略「…」！" are timed boxes (style 2); the detailed report of 升级显示能力成长 is an
 	# OK box (style 0, 0x4dbe57)
@@ -1020,16 +1020,16 @@ func add_equip_exp(p: Person, weapon: bool, amount: int) -> void:
 ## "护具等级上升！". Then, always, the panel with the item, its new level, the wearer and the value before → after.
 func equip_notice(p: Person, weapon: bool) -> void:
 	if st.in_battle():
-		await st.op_unit_status({"args": [p.id, 12, 0, 0]})
+		await st.unit_ops.op_unit_status({"args": [p.id, 12, 0, 0]})
 		if weapon:
-			await st.op_unit_status({"args": [p.id, 7, 0, 0]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 7, 0, 0]})
 		else:
-			await st.op_unit_status({"args": [p.id, 2, 0, 1]})
-			await st.op_unit_status({"args": [p.id, 0, 0, 0]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 2, 0, 1]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 0, 0, 0]})
 			await st.wait(0.1)
-			await st.op_unit_status({"args": [p.id, 2, 0, 1]})
-			await st.op_unit_status({"args": [p.id, 0, 0, 1]})
-		await st.op_unit_status({"args": [p.id, 1, 0, 0]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 2, 0, 1]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 0, 0, 1]})
+		await st.unit_ops.op_unit_status({"args": [p.id, 1, 0, 0]})
 		Audio.play_se(SE_EQUIP_UP)
 		await st.ui.message("武器等级上升！" if weapon else "护具等级上升！")
 	var iid := p.weapon if weapon else p.armor
@@ -1547,8 +1547,8 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 				p.set_stat_word(i, Person._min_add(p.get_stat_word(i), 2, 9999))
 			for i in 5:
 				p.set_raw(i, Person._min_add(p.get_raw(i), 2, 100))
-			await st.op_unit_status({"args": [p.id, 11, 0xff, 0xff]})
-			await st.op_unit_status({"args": [p.id, 7, 0, 0]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 11, 0xff, 0xff]})
+			await st.unit_ops.op_unit_status({"args": [p.id, 7, 0, 0]})
 		70, 71, 72, 73, 74:
 			# fruits (0x41d080): word and ability up, the stat-up effect, the battle level of that stat one step up;
 			# no message
@@ -1639,7 +1639,7 @@ func _promote(u: BUnit, t: BUnit, iid: int) -> void:
 	p._add_stat(6, (2 * int(g.get("mp", 0))) & 0xff)
 	t.hp = t.max_hp()
 	t.mp = t.max_mp()
-	await st.op_unit_status({"args": [p.id, 11, 0, 0]})
+	await st.unit_ops.op_unit_status({"args": [p.id, 11, 0, 0]})
 	p.cls = old + 1
 	if t.node and not Game.autoplay:
 		Audio.se(0x21)

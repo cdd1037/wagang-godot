@@ -234,9 +234,9 @@ func _grudge() -> void:
 	_check(Rules.calc_damage(d, a, 0, 0, false, 1) == Rules.calc_damage(d, a, 0, 0, false, 1), "not in a counterattack")
 	Mem.w8(BUnit.GRUDGE + 0xff, 0)
 	Mem.w8(BUnit.GRUDGE + 40, 4)
-	await st._phase_start_effects(0, 35)
+	await st.phase_fx._phase_start_effects(0, 35)
 	_check(Mem.r8(BUnit.GRUDGE + 40) == 0 and Mem.r8(BUnit.GRUDGE + 0) == 5, "the player phase clears the enemy counters")
-	await st._phase_start_effects(35, 115)
+	await st.phase_fx._phase_start_effects(35, 115)
 	_check(Mem.r8(BUnit.GRUDGE + 0) == 0, "the enemy phase clears the player-side counters")
 	# a counterattack rewrites the combat object (0x40639a → 0x4064f1 → 0x4061fc)
 	_clear()
@@ -374,11 +374,11 @@ func _regen_exp() -> void:
 	p.armor_lvl = 1
 	p.armor_exp = 0
 	p.accessory = 79                  # 轩辕宝鉴: weapon +3 a phase
-	await st._regen(u)
+	await st.phase_fx._regen(u)
 	_check(p.weapon_exp == 3 and p.armor_exp == 0, "轩辕宝鉴: weapon %d armour %d" % [p.weapon_exp, p.armor_exp])
 	p.accessory = 80                  # 天闻录: armour
-	await st._regen(u)
+	await st.phase_fx._regen(u)
 	_check(p.weapon_exp == 3 and p.armor_exp == 3, "天闻录: armour %d" % p.armor_exp)
 	u.colour = 1
-	await st._regen(u)
+	await st.phase_fx._regen(u)
 	_check(p.armor_exp == 3, "red units only")

@@ -42,6 +42,7 @@ func run() -> void:
 	for kind in ["R", "S"]:
 		var vm := EexVM.new()
 		vm.host = hosts[kind]
+		vm.handlers = hosts[kind].op_handlers()
 		for op: String in used[kind]:
 			n += 1
 			if not (op in EexVM.VM_OPS) and not vm.handler(op).is_valid():

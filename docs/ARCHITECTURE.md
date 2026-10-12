@@ -141,8 +141,16 @@ through EV variables.
   takes it off and the events are polled again. EV[10] = 1 tells the scripts that a unit fell (rules.md §9.1).
 * **Scene 2:** the aftermath.
 
+`BattleStage` itself keeps the turn loop, the event polls, the unit queries, the battle-time test ops, the text and
+UI ops and save / restore. The rest lives in components it creates (`deployment`, `phase_fx`, `unit_ops`,
+`field_ops`); the VM finds their `op_<name>` handlers through `BattleStage.op_handlers()` (`EexVM.handlers`).
+
 | Class | Responsibility |
 |---|---|
+| `BattleDeploy` | the opening ops (deployment entries, sortie list, equipment, 0x4a), `create_battlefield`'s unit setup (UnitInit, SetAI, Promote), free cells |
+| `BattlePhase` | the work at each phase start: 暗杀 countdown, phase-start skills and auras, status recovery, buff decay, regeneration |
+| `BattleUnitOps` | the unit ops: units appearing, moving, changing (0x4c-0x4f, 0x53 …), leaving with their animations, unit lines, effect 0x6b |
+| `BattleFieldOps` | terrain changes and their undo (0x21 / 0x58, the record saves carry), the goal area (0x5b) and its blink |
 | `BattleView` | map rendering, highlight overlays, cursor, camera and scrolling |
 | `BattleInput` | player phase: select → move range → move → command menu; a right click on a unit → 武将情报 (only a pointer right click, `BattleView.right_from_pointer`; Esc / 菜单 / a right click elsewhere → system menu) |
 | `BattleActions` | movement with zones of control, attacks (with area and piercing targets, the 【技】 techniques of the attack wrapper), counters, criticals, strategies, items, EXP, level-ups, retreats, the end-of-action skills and kill rewards (formulas in `core/rules.gd`, spec in `docs/rules.md` §4, §5, §12) |
@@ -204,6 +212,6 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
 | `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `settings`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
-| `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
+| `battle/` | `battle_stage` (with `battle_deploy`, `battle_phase`, `battle_unit_ops`, `battle_field_ops`), `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
 | `debug/` | `test_runner`, `input_bot`, the flow-test helpers `flow_goals` (battle objectives), `duel_sim` (story 单挑) and `flag_puzzle` (click puzzles), small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

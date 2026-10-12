@@ -110,7 +110,7 @@ func _phase_start() -> void:
 	far.hp -= 100
 	e.hp -= 100
 	lu.hp -= 100
-	await st._phase_skills(lu)
+	await st.phase_fx._phase_skills(lu)
 	_check(a.hp == a.max_hp() - 140, "云袖 heals Lv + 50")
 	_check(b.hp == b.max_hp(), "云袖 up to the maximum")
 	_check(far.hp == far.max_hp() - 100 and e.hp == e.max_hp() - 100 and lu.hp == lu.max_hp() - 100, "云袖 only around, own side, not herself")
@@ -119,19 +119,19 @@ func _phase_start() -> void:
 	var liu := _unit(0, 31, Vector2i(5, 5), 8)
 	var c := _unit(1, 2, Vector2i(6, 6))
 	c.mp = 0
-	await st._phase_skills(liu)
+	await st.phase_fx._phase_skills(liu)
 	_check(c.mp == 3, "仙乐 MP")
 	# 神将 and 雄师
 	_clear()
 	var sh := _unit(35, 42, Vector2i(5, 5))
 	var x := _unit(36, 301, Vector2i(5, 4))
 	var y := _unit(0, 2, Vector2i(6, 5))
-	await st._phase_skills(sh)
+	await st.phase_fx._phase_skills(sh)
 	_check(x.buff(0) == 6 and y.buff(0) == 3, "神将: own side's 攻击")
 	_clear()
 	var xs := _unit(0, 3, Vector2i(5, 5), 20, 100, 42)
 	var z := _unit(1, 2, Vector2i(4, 4))
-	await st._phase_skills(xs)
+	await st.phase_fx._phase_skills(xs)
 	_check(Game.family_of(42) == 16 and z.buff(4) == 6, "雄师: 士气")
 	# 魔功 ([0x55ac44] = 杨素): poisons the other side around him
 	_clear()
@@ -139,7 +139,7 @@ func _phase_start() -> void:
 	var ys := _unit(35, 100, Vector2i(5, 5))
 	var p1 := _unit(0, 2, Vector2i(6, 5))
 	var e2 := _unit(36, 301, Vector2i(4, 5))
-	await st._phase_skills(ys)
+	await st.phase_fx._phase_skills(ys)
 	_check((p1.status & BUnit.ST_POISON) and not (e2.status & BUnit.ST_POISON), "魔功 poisons the other side")
 	Mem.w32(0x55ac44, 0x4000)
 	# 明镜: 魏征 next to an ally with a status cures it at once
@@ -154,9 +154,9 @@ func _phase_start() -> void:
 	var foe := _unit(35, 301, Vector2i(4, 4))
 	foe.status = BUnit.ST_POISON
 	foe.person.set_raw(4, 0)
-	await st._status_recovery(sick)
-	await st._status_recovery(sick2)
-	await st._status_recovery(foe)
+	await st.phase_fx._status_recovery(sick)
+	await st.phase_fx._status_recovery(sick2)
+	await st.phase_fx._status_recovery(foe)
 	_check(sick.status == 1, "明镜 cures all, bit 0 stays")
 	_check(sick2.status == BUnit.ST_POISON and foe.status == BUnit.ST_POISON, "明镜: not far away, not the other side")
 

@@ -309,9 +309,9 @@ static func _merged(list: Array) -> Array:
 
 ## The cells of the 指定地点 marker (op 0x5b) while the map shows it, else [].
 static func _marked() -> Array[Vector2i]:
-	if Mem.r32(BattleStage.GOAL_FLAG) == 0:
+	if Mem.r32(BattleFieldOps.GOAL_FLAG) == 0:
 		return []
-	var a := BattleStage.GOAL_AREA
+	var a := BattleFieldOps.GOAL_AREA
 	return _rect(Mem.r8(a), Mem.r8(a + 1), Mem.r8(a + 2), Mem.r8(a + 3))
 
 

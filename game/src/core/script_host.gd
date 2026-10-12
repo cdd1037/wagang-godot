@@ -19,6 +19,11 @@ func _ready() -> void:
 	ui = Game.main.ui
 
 
+## The objects besides the stage itself that hold its opcode handlers (EexVM.handlers).
+func op_handlers() -> Array[Object]:
+	return []
+
+
 ## Touch shell: true while the scene waits at its top level, where its 菜单 button opens the system menu.
 func menu_ready() -> bool:
 	return false

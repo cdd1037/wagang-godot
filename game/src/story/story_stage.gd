@@ -155,6 +155,7 @@ var _restore: Dictionary = {}
 func run_file(file: String) -> void:
 	vm = EexVM.new()
 	vm.host = self
+	vm.handlers = op_handlers()
 	if not vm.load_script(file):
 		return
 	Mem.w32(Skills.MAP_NO, 0xffff)   # towns load their pictures through 0x426c6a, which marks "no battle map"
