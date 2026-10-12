@@ -297,6 +297,25 @@ func run() -> void:
 		if gt.hp < 9999:
 			break
 	_check(gt.hp < 9999 and gh.acted, "围攻: both strike, the helper is done")
+	# the target's counter is answered once more when the leader has effect 40 (0x40639a tests the defender of the
+	# counter), whoever started the last attack before
+	var gw := Game.person(0).weapon
+	Game.person(0).weapon = 32              # 水火虬龙棒: 反击后反击
+	ga.hp = 9999
+	gt.hp = 9999
+	await st.actions.attack(gt, gh)         # an attack started by someone without effect 40
+	gh.acted = false
+	gh.hp = gh.max_hp()
+	st.actions.tracing = true
+	st.actions.trace.clear()
+	await st.commands.siege(ga, gt, [gh] as Array[BUnit])
+	st.actions.tracing = false
+	var again := false
+	for ent in st.actions.trace:
+		if ent[0] == ga.slot and ent[1] == gt.slot:
+			again = true
+	_check(again, "围攻: the leader with effect 40 answers the counter: %s" % [st.actions.trace])
+	Game.person(0).weapon = gw
 
 	# ---- 交给
 	_clear()

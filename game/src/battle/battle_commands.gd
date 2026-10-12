@@ -431,13 +431,18 @@ func siege_command(a: BUnit) -> bool:
 
 ## 围攻 (0x4d6d87), also the AI's (0x4d6b80): a defender that strikes first (siege_break) attacks `a` instead;
 ## otherwise "围攻", `a` strikes, each helper strikes and loses its turn, and the defender counters `a` once.
+## 0x4d7b90: the move a person breaks a siege with (抽屉枪 2 for 14; 双雷引 1 for 101, 136 and 0x400), else 0.
+static func siege_counter(pid: int) -> int:
+	return {0x400: 1, 14: 2, 101: 1, 136: 1}.get(pid, 0)
+
+
 func siege(a: BUnit, t: BUnit, hs: Array[BUnit]) -> void:
 	Audio.play_se("se05")
 	var no_counter := false
 	var broken := false
 	if _siege_break(t, a):
 		no_counter = true                       # [0x4d002c]
-		var m: int = {14: 2, 101: 1, 136: 1}.get(t.pid, 0)    # 0x4d7b90: 抽屉枪 / 双雷引
+		var m := siege_counter(t.pid)
 		if m != 0:
 			Mem.w32(0x55ac24, m)
 			await st.actions.attack(t, a)

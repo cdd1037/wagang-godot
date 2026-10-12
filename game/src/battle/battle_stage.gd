@@ -1426,7 +1426,8 @@ func _targets_mode(mode: int, pid: int, slot: int, x1: int, y1: int, x2: int, y2
 	return out
 
 
-## op 0x4d: change buffs/status/HP/MP of units.
+## op 0x4d (0x4150e7 → 0x45aa5c per unit): change buffs/status/HP/MP of units. HP and MP drop by the amount but
+## never by more than they have; HP left at 1 or less becomes 0, MP keeps at least 1 (MP takes a byte amount).
 func op_unit_op_4d(ins: Dictionary) -> void:
 	var tg := _targets_mode(arg(ins, 0), arg(ins, 1), arg(ins, 2), arg(ins, 3), arg(ins, 4), arg(ins, 5), arg(ins, 6), arg(ins, 7))
 	var bi := arg(ins, 8)
@@ -1454,7 +1455,7 @@ func op_unit_op_4d(ins: Dictionary) -> void:
 			if nh <= 0:
 				await actions.unit_defeated(u)
 		if mpd != 0 and mpd != 0xffff:
-			u.mp = maxi(u.mp - mpd, 1)
+			u.mp = maxi(u.mp - (mpd & 0xff), 1)
 	refresh_units()
 
 
@@ -1969,12 +1970,17 @@ func op_op_6b(ins: Dictionary) -> void:
 		await wait(0.2)
 
 
-## op 0x30 in a battle: place a person's unit at (x, y) through 0x4570ee (SE 15, centred, 4-tick hold).
+## op 0x30 in a battle (0x413010 → 0x4570ee(person)): the person's hidden unit (state 1) appears at its deployment
+## entry, as op 0x4c mode 0 (the script's x, y are for story scenes only); a unit not hidden, or a person without
+## an entry, does nothing.
 func op_actor_appear(ins: Dictionary) -> void:
 	var u := unit_by_pid(arg(ins, 0) & 0xfff)
-	if u == null:
+	if u == null or u.state != BUnit.STATE_HIDDEN:
 		return
-	await _appear(u, Vector2i(arg(ins, 1), arg(ins, 2)))
+	var d := _entry_of(u)
+	if d.is_empty():
+		return
+	await _appear(u, Vector2i(int(d.get("x", u.pos.x)), int(d.get("y", u.pos.y))))
 
 
 func wait(sec: float) -> void:

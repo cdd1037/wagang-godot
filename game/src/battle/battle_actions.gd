@@ -4,7 +4,6 @@ extends RefCounted
 
 var st: BattleStage
 var _counter_depth := 0
-var _attack_start_actor: BUnit
 var tracing := false              # tests: record each Attack as [attacker slot, defender slot, strikes] in `trace`
 var trace: Array = []
 var _strikes_done := 0
@@ -201,7 +200,7 @@ func attack_cmd(att: BUnit, def: BUnit) -> void:
 		var trig := _trigger(att, def)
 		if not trig or Mem.r32(T_SHUANGLEI) != 0:
 			if st.commands._siege_break(def, att):
-				var m: int = {0x400: 1, 14: 2, 101: 1, 136: 1}.get(def.pid, 0)    # 0x4d7b90
+				var m := BattleCommands.siege_counter(def.pid)
 				if m != 0:
 					Mem.w32(T_FIRST, m)
 				await attack(def, att)
@@ -236,8 +235,6 @@ func _trigger(att: BUnit, def: BUnit) -> bool:
 ## strikes and leaves no counterattack.
 func attack(att: BUnit, def: BUnit) -> void:
 	var counter := _counter_depth > 0
-	if not counter:
-		_attack_start_actor = att
 	var whole := await strikes(att, def, true)
 	if tracing:
 		trace.append([att.slot, def.slot, _strikes_done])
@@ -569,11 +566,12 @@ func _xuanyuan(att: BUnit, t: BUnit) -> bool:
 
 
 ## Counterattack (0x40639a): a defender left standing and not confused hits back when the attacker is in its
-## range and lacks effect 44; a counter is answered once more only for an attacker with effect 40. In 双雷引's
-## second phase the banner comes first (0x4d7a11). Without a counter, 煞 stops repeating (0x433610).
+## range and lacks effect 44; a counter is answered once more only when the one it hits (the defender of the
+## counter, ctx+1: the first attacker, or 围攻's leader) has effect 40. In 双雷引's second phase the banner comes
+## first (0x4d7a11). Without a counter, 煞 stops repeating (0x433610).
 func counter_attack(att: BUnit, def: BUnit) -> void:
 	var depth := _counter_depth
-	if not (depth == 0 or (depth == 1 and _attack_start_actor and _attack_start_actor.has_effect(40))):
+	if not (depth == 0 or (depth == 1 and def.has_effect(40))):
 		return
 	Mem.w8(PREFERRED, att.slot)      # 0x406431, for the range test 0x436586
 	if def.active() and att.active() and not (def.status & BUnit.ST_CONFUSION) and not att.has_effect(44) \

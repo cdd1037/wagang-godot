@@ -166,6 +166,7 @@ func run() -> void:
 		ua.state = 0
 	at.state = 0
 	BUnit.gen += 1
+	await _strat_scores(st)
 
 	# ---- op 0x43 (0x44c74d): with 管毅 in unit 0, units 0..15 in state 1 / 2 count, whatever their HP
 	for i in 115:
@@ -240,3 +241,65 @@ func run() -> void:
 
 	Game.main = old_main
 	print("t_battle: PASS" if _ok else "t_battle: FAILED")
+
+
+## AI StratScore (0x4395ae) and BestStrategy (0x4391dc): +10 on U's own AI target, the extra terms only for a target
+## the strategy does not kill, 陷阱 adjacent on 8 neighbours (0x45afca), 开导 12 with person effect 0x40 (0x407a09).
+func _strat_scores(st: BattleStage) -> void:
+	for i in 115:
+		BUnit.at(i).clear(i)
+	BUnit.gen += 1
+	var c0 := Vector2i(5, 5)
+	var ub := _unit(40, 306, 2, c0)
+	ub.mp = ub.max_mp()
+	st.ai.u = ub
+	var cells := Shapes.range_cells(int(Game.strategy(33).get("range", 0)), c0, st.view.map_w, st.view.map_h)
+	var tp := _unit(5, 50, 0, cells[0])
+	st.ai.usable_strats = [33] as Array[int]
+	Mem.w8(ub.addr + 8, 0xff)
+	var sc := mini(st.ai._strat_score(tp, 33, c0), 255)
+	var r0: Array = st.ai._best_strategy(c0)
+	_check(sc > 0 and r0[0] == sc and r0[1] == 33 and r0[2] != null and r0[2].slot == tp.slot,
+			"BestStrategy scores the target (%s, %d)" % [r0, sc])
+	Mem.w8(ub.addr + 8, tp.slot)
+	var r1: Array = st.ai._best_strategy(c0)
+	_check(r1[0] == sc + 10, "BestStrategy: +10 on U's own AI target (%s, %d)" % [r1, sc])
+	Mem.w8(ub.addr + 8, 0xff)
+	# 暗算 (20): +5 / +10 for a hurt U, but not on a kill
+	ub.hp = 1
+	tp.hp = 1
+	_check(st.ai._strat_score(tp, 20, c0) == 76, "a kill scores 76 without 暗算's terms (%d)" % st.ai._strat_score(tp, 20, c0))
+	tp.hp = tp.max_hp()
+	var mh := tp.max_hp()
+	var d20 := Rules.strat_damage(ub, tp, 20, true)
+	if d20 < tp.hp:
+		var b20 := 30 if d20 * 10 / mh >= 3 else (10 if d20 * 10 / mh >= 1 else 1)
+		_check(st.ai._strat_score(tp, 20, c0) == b20 + 15, "暗算 by a wounded U: +5 +10 (%d)" % st.ai._strat_score(tp, 20, c0))
+	ub.hp = ub.max_hp()
+	# 陷阱 (35): +10 unless the target stands on one of U's 8 neighbours
+	for off in [Vector2i(1, 1), Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1)]:
+		tp.pos = c0 + off
+		var d35 := Rules.strat_damage(ub, tp, 35, true)
+		var want := 76
+		if d35 < tp.hp:
+			want = (30 if d35 * 10 / mh >= 3 else (10 if d35 * 10 / mh >= 1 else 1)) + (0 if maxi(absi(off.x), absi(off.y)) == 1 else 10)
+		_check(st.ai._strat_score(tp, 35, c0) == want, "陷阱 with the target at %s: %d, want %d" % [off, st.ai._strat_score(tp, 35, c0), want])
+	# 开导 (44) on a target low on MP: family 9 → 1, a magic family or person effect 0x40 → 12, family 0 → 6
+	var p := Game.person(50)
+	var fam := tp.family()
+	tp.mp = 0
+	for pid in range(300, 500):            # a caster with MP enough for 开导
+		ub.pid = pid
+		if ub.max_mp() >= st.actions.strategy_mp(44):
+			break
+	ub.mp = ub.max_mp()
+	var acc := p.accessory
+	p.accessory = -1
+	var plain := 1 if fam == 9 else (12 if fam in BattleAI.MAGIC_FAMILIES else (6 if fam == 0 else 0))
+	_check(st.ai._strat_score(tp, 44, c0) == plain, "开导 without effect 0x40: %d" % st.ai._strat_score(tp, 44, c0))
+	p.accessory = 90                        # 补气酒: item type 0x40
+	_check(st.ai._strat_score(tp, 44, c0) == (1 if fam == 9 else 12), "开导 with person effect 0x40 scores 12")
+	p.accessory = acc
+	for i in 115:
+		BUnit.at(i).clear(i)
+	BUnit.gen += 1

@@ -309,7 +309,8 @@ The mod's attack wrapper and its techniques (0x4d7808, the strike step 0x433373)
 Counter (0x40639a), depth = [0x492e04]:
 ```
 if depth > 1: stop
-if depth == 1 and not has_effect(original attacker, 40 反击后反击): stop
+if depth == 1 and not has_effect(the counter's defender (ctx+1), 40 反击后反击): stop   # the first attacker, or 围攻's
+                                                                                  # leader (verified 2026-10-12)
 counter if def.HP > 0 and not (def.status & 8 confused) and not has_effect(att, 44 无反击攻击)
            and att.pos in attack_range(def)        # 0x436586 with def's class range code (0x43f8be)
 then depth += 1; Attack(def, att)                    # damage mode has counter bit → ×3/4, no double
@@ -949,19 +950,22 @@ side(s) (0x439576): s ≤ 38 → opposite side, 39..63 → own side, ≥ 64 → 
 StratScore(t, s, c) (0x4395ae) — `hp% = t.HP*100/MaxHP(t)`; every case returns 0 unless Usable(U,t,s):
 | strategies | score |
 |---|---|
-| damage 0-8, 10-13, 15-20, 33-36 | d = StratDamage preview (0x43bfaa(U,t,s,0)); `d ≥ t.HP → 76; d*10/MaxHP ≥ 3 → 30; ≥ 1 → 10; else 1`; then 20 暗算: +5 if U.HP < U.MaxHP, +10 if U wounded; 33/34 毒: +8 if hp% ≥ 40; 35/36 麻: +10 if t is NOT adjacent to U (0x45afca(U.person, t.person, 1)) |
+| damage 0-8, 10-13, 15-20, 33-36 | d = StratDamage preview (0x43bfaa(U,t,s,0)); `d ≥ t.HP → 76` and nothing more; else `d*10/MaxHP ≥ 3 → 30; ≥ 1 → 10; else 1`, then 20 暗算: +5 if U.HP < U.MaxHP, +10 if U wounded; 33/34 毒: +8 if hp% ≥ 40; 35/36 麻: +10 if t is NOT adjacent to U (0x45afca(U.person, t.person, 1): any of the 8 neighbours, directions 0..7 of 0x4359f5 / table 0x48df68) |
 | 21 暗杀, 31 伪书, 32 伪令 | hit = StratHitRate (0x43b73f); hit ≥ 35 → 15 (+15 if hp% ≥ 80) else 0 |
 | 22 暗鬼 (MP drain) | 20 if U.MP ≤ U.MaxMP/5 and t.MP ≥ 30, else 0 |
 | 37 封印 | t's family ∈ {8,9,10,11,18,19,20} and hit ≥ 60 → 15 (+7 if hp% ≥ 80); else 0 |
 | 39 医疗, 40 痊愈, 43 救护 | t wounded (0x43a1f4) → 50 (+5 for 40, +10 for 43); else 0 |
 | 41 补给, 42 犒劳 | t wounded → 50 else 0 |
-| 44 开导, 45 诫谕, 62 暝思 (MP) | if t.MP ≤ t.MaxMP/5 and U.MP ≥ cost(s): family(t)==9 → 1; t magic family or person effect 0x40 → 12; family(t)==0 → 6; else 0 |
+| 44 开导, 45 诫谕, 62 暝思 (MP) | if t.MP ≤ t.MaxMP/5 and U.MP ≥ cost(s): family(t)==9 → 1; t magic family or person effect 0x40 (0x407a09(t.person, 0x40)) → 12; family(t)==0 → 6; else 0 |
 | 46 棒喝, 47 超脱 (cure) | 5, + (t.status == 0x02 and t.ai ∉ {2,3} → 25; == 0x04 and t magic family → 30; == 0x08 → 35) |
 | 57 战备 | t.ai ∈ {2,3} or family 9 → 0; family 0 or 19 → 15; family 5 → 10+rand(4); family 8 → 10; else rand(5) |
 | 9, 14, 23-30, 38, 48-56, 58-61, ≥ 63 | 0 (never chosen by the AI) |
-Then, if the strategy has an area (area code ≠ 0), AreaAdjust(hits around t, v, kind, U, s) (0x438d96):
-`hits empty → v = (v > 4) ? v-4 : 0`; for each hit u with Usable(U,u,s): kind 0 (damage/status) +3 (+3 more if
-u == U.target); kind 1 (heal) +5 if u's hp% < 60; kind 2 +3 if buff 0x41df90(u) < 4; kind 3/4 +3 if 0x41dfb0(u) < 4;
+AreaAdjust is applied inside StratScore (before BestStrategy's cap of 255), when the strategy has an area (area code
+≠ 0), by these cases only: the damage group and 21/31/32 (kind 0; for 21/31/32 only when hit ≥ 35), 41/42 (kind 1,
+also when the target itself scores 0) and 46/47 (kind 5). In the shipped data the other scored strategies have no
+area. AreaAdjust(hits around t, v, kind, U, s) (0x438d96):
+`hits empty → v = (v > 4) ? v-4 : 0`; for each hit u with Usable(U,u,s): kind 0 (damage/status) +3 (+6 instead if
+u == U.target, 0x41c310(U) = unit +8); kind 1 (heal) +5 if u's hp% < 60; kind 2 +3 if buff 0x41df90(u) < 4; kind 3/4 +3 if 0x41dfb0(u) < 4;
 kind 5 (cure) +3 if u.status ≠ 0; physical (s = 0xff) +10 if the hit kills, else +4 if ≥ 10 % MaxHP. Result max(·, 0).
 
 #### 10.5.2 Movement helpers
@@ -987,8 +991,8 @@ its own target point becomes choice.forbidden) else the target point (unit[9],[0
      else: GoalBonus(goal, 10, U)
            if goal reachable (Flood(goal,255,mode 2,U.pos) with zoc, else without): StepToward(goal, U.pos, mv, 1); Flood(U.pos, mv, 4)
            else: Active(mv)
-  else (scripted move, mv = 100): dest = goal if a path exists (with ZOC, else without); otherwise dest = U.pos and
-       the target point is reset to U.pos
+  else (scripted move, mv = 100): dest = goal. (The code resets dest and the target point to U.pos when the second
+       Flood(…, mode 2) returns 0, but mode 2 returns only 1 or 0xff, so that branch never runs; verified 2026-10-12.)
 ```
 Code 4 units score cells only by GoalBonus/TerrainScore (CellScore skips atk/strategy for code 4) and never attack.
 MoveAlongPath (0x43a956 → mod 0x4d3a2d): if dest ≠ 0xff and ≠ U.pos: path = StepToward(goal U.pos, from dest, 255, 0)
@@ -1017,7 +1021,8 @@ for k in (0 friend phase: ctx+0x10 = 1, units 0..34;  1 enemy phase: ctx+0x10 = 
       battle goes on and U[i] is on the map (any HP), the scripts get its pid and cell (0x45b910 → R reg 3) and
       the event scene is polled
       0x44cc03(i) (death/aftermath checks); if battle not over and flags & 2: scroll (0x43fcc9), script poll 0x44c601
-      if ctx+0x504 (set when units appear/change during events): recompute ActionOrder, o restarts at 0
+      if ctx+0x504 ([0x4b420c]; set only after an AI unit casts 57 战备, 0x43b3d5): recompute ActionOrder, o restarts
+      at 0. A unit that appears or gets its turn back after its order went by waits for such a restart.
    stop as soon as ctx+1 (battle result) ≠ 0
 ```
 Units with status 乱 (0x08) or 迷 (0x40) return immediately from AIAct, i.e. AI units under 乱/迷 lose their turn

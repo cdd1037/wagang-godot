@@ -56,36 +56,46 @@ func _compute_order(a: int, b: int) -> void:
 				n += 1
 
 
+## ctx+0x504: set after an AI unit casts 57 战备 (0x43b3d5), which lets units act again; the phase loop then
+## computes the order anew and starts over at order 0 (0x44ebbe). Kept in the battle context, so saves carry it.
+const REORDER := 0x4b420c
+
+
+## The phase loop of 0x44e851: for order o = 0..114 the first unit of the side with that order that is on the map,
+## not player-controlled and has neither moved nor acted takes its AIAct; a unit that appears or gets its turn
+## back after its order went by waits for the next start-over.
 func run_phase(a: int, b: int) -> void:
 	_compute_order(a, b)
-	var skipped := {}      # units whose AIAct returned at once (乱/迷): no flags set, not picked again
-	var guard := 0
-	while guard < 200 and not st._battle_finished():
-		guard += 1
+	Mem.w32(REORDER, 0)           # 0x44e85d
+	var o := 0
+	var restarts := 0
+	while o < 115 and not st._battle_finished():
 		var pick: BUnit = null
 		for i in range(a, b):
 			var x := st.units[i]
-			if skipped.has(i) or not x.active() or x.mode == 7:
-				continue
-			if x.flags & (BUnit.F_MOVED | BUnit.F_ACTED):
-				continue
-			if pick == null or x.order < pick.order:
+			if x.state == BUnit.STATE_ON_MAP and x.order == o and x.mode != 7 \
+					and not (x.flags & (BUnit.F_MOVED | BUnit.F_ACTED)):
 				pick = x
-		if pick == null:
-			break
-		var acted := await act(pick)
-		if acted:
-			pick.flags |= BUnit.F_MOVED | BUnit.F_ACTED
+				break
+		if pick:
+			var acted := await act(pick)      # false: AIAct returned at once (乱/迷), no flags set
+			if acted:
+				pick.flags |= BUnit.F_MOVED | BUnit.F_ACTED
+			st.refresh_units()
+			# 0x44eb4d: when the unit has acted, the event scene is polled while it is on the map (0x45b5fe); then
+			# units left at HP 0 leave the map (0x44cc03) and the scene is polled again
+			if acted:
+				await st.actor_poll(pick)
+			await st.remove_dead()
+			if acted and not st._battle_finished():
+				await st.checkpoint()
+		if Mem.r32(REORDER) != 0 and restarts < 100:
+			_compute_order(a, b)
+			Mem.w32(REORDER, 0)
+			restarts += 1
+			o = 0
 		else:
-			skipped[pick.slot] = true
-		st.refresh_units()
-		# 0x44eb4d: when the unit has acted, the event scene is polled while it is on the map (0x45b5fe); then
-		# units left at HP 0 leave the map (0x44cc03) and the scene is polled again
-		if acted:
-			await st.actor_poll(pick)
-		await st.remove_dead()
-		if acted and not st._battle_finished():
-			await st.checkpoint()
+			o += 1
 
 
 static func _wounded(x: BUnit) -> bool:
@@ -113,6 +123,8 @@ func act(unit: BUnit) -> bool:
 				and FlowGoals.may_hit(flow_goal, choice_target):
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
 			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
+			if choice_strategy == 57:
+				Mem.w32(REORDER, 1)        # 0x43b3d5
 		else:
 			await _physical_attack()
 	return true
@@ -376,15 +388,21 @@ func _phys_score(t: BUnit, c: Vector2i) -> int:
 				s += 10
 			elif dh * 10 / maxi(h.max_hp(), 1) >= 1:
 				s += 4
-	if s > 1 and st.actions.can_attack(t, u, t.pos) and Shapes.range_cells(st.actions.attack_range_code(t), t.pos, st.view.map_w, st.view.map_h).has(c):
+	# 0x438a20: t's attack range from its own cell is marked (0x436586, mark mode; no cells for range 0xff) and c
+	# tested; whether t could reach U where it stands does not matter
+	if s > 1 and Shapes.range_cells(st.actions.attack_range_code(t), t.pos, st.view.map_w, st.view.map_h).has(c):
 		s -= 1
 	return s
 
 
+## BestStrategy (0x4391dc): the best (strategy, target) cast from c. Every strategy the AI scores has a cast range,
+## so only the per-target branch runs (the summing one is for range 0xff): StratScore up to 255, +10 when the target
+## is U's own AI target (unit +8); the strictly best value wins.
 func _best_strategy(c: Vector2i) -> Array:
 	var bestv := 0
 	var bs := -1
 	var bt: BUnit = null
+	var own := Mem.r8(u.addr + 8)
 	for s in usable_strats:
 		var sd := Game.strategy(s)
 		var side_opp := s <= 38 or s >= 64
@@ -402,10 +420,8 @@ func _best_strategy(c: Vector2i) -> Array:
 			if not st.actions.usable_on(u, s, t):
 				continue
 			var v := mini(_strat_score(t, s, c), 255)
-			if v <= 0:
-				continue
-			if int(sd.get("area", 0)) != 0:
-				v = _area_adjust(s, cell, v, side_opp)
+			if v > 0 and t.slot == own:
+				v += 10
 			if v > bestv:
 				bestv = v
 				bs = s
@@ -413,28 +429,36 @@ func _best_strategy(c: Vector2i) -> Array:
 	return [bestv, bs, bt]
 
 
+## StratScore (0x4395ae). The strategies with an area add AreaAdjust here, before BestStrategy's cap: the damage
+## and status ones (kind 0), 补给 / 犒劳 (kind 1, also on a target that scores 0) and 棒喝 / 超脱 (kind 5).
 func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
 	var hpp := t.hp * 100 / maxi(t.max_hp(), 1)
+	var area := int(Game.strategy(s).get("area", 0)) != 0
 	if s in [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 33, 34, 35, 36]:
 		if not Rules.strat_terrain_ok(s, u, st.view.terrain_at(t.pos), st.weather()) and s <= 19:
 			return 0
 		var d := Rules.strat_damage(u, t, s, true)
 		var mh := maxi(t.max_hp(), 1)
 		var v := 1
-		if d >= t.hp: v = 76
-		elif d * 10 / mh >= 3: v = 30
-		elif d * 10 / mh >= 1: v = 10
-		if s == 20:
-			if u.hp < u.max_hp(): v += 5
-			if _wounded(u): v += 10
-		if s in [33, 34] and hpp >= 40: v += 8
-		if s in [35, 36] and Grid.manhattan(t.pos, u.pos) != 1: v += 10
-		return v
+		if d >= t.hp:
+			v = 76
+		else:
+			if d * 10 / mh >= 3: v = 30
+			elif d * 10 / mh >= 1: v = 10
+			# the extra terms only for a target it does not kill
+			if s == 20:
+				if u.hp < u.max_hp(): v += 5
+				if _wounded(u): v += 10
+			if s in [33, 34] and hpp >= 40: v += 8
+			# 0x45afca(U, t, 1): adjacent on any of the 8 neighbours (0x4359f5 directions 0..7)
+			if s in [35, 36] and maxi(absi(t.pos.x - u.pos.x), absi(t.pos.y - u.pos.y)) != 1: v += 10
+		return _area_adjust(s, t.pos, v, 0) if area else v
 	match s:
 		21, 31, 32:
 			var h := Rules.strat_hit(u, t, s, st.view.terrain_at(t.pos), st.weather())
 			if h >= 35:
-				return 15 + (15 if hpp >= 80 else 0)
+				var v := 15 + (15 if hpp >= 80 else 0)
+				return _area_adjust(s, t.pos, v, 0) if area else v
 			return 0
 		22:
 			return 20 if (u.mp <= u.max_mp() / 5 and t.mp >= 30) else 0
@@ -445,11 +469,12 @@ func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
 		39, 40, 43:
 			return (50 + (5 if s == 40 else (10 if s == 43 else 0))) if _wounded(t) else 0
 		41, 42:
-			return 50 if _wounded(t) else 0
+			var v1 := 50 if _wounded(t) else 0
+			return _area_adjust(s, t.pos, v1, 1) if area else v1
 		44, 45, 62:
 			if t.mp <= t.max_mp() / 5 and u.mp >= st.actions.strategy_mp(s):
 				if t.family() == 9: return 1
-				if t.family() in MAGIC_FAMILIES: return 12
+				if t.family() in MAGIC_FAMILIES or t.has_effect(0x40): return 12    # 0x407a09(person, 0x40)
 				if t.family() == 0: return 6
 			return 0
 		46, 47:
@@ -457,7 +482,7 @@ func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
 			if t.status == BUnit.ST_PARALYSIS and not (t.mode in [2, 3]): v2 += 25
 			elif t.status == BUnit.ST_SEAL and t.family() in MAGIC_FAMILIES: v2 += 30
 			elif t.status == BUnit.ST_CONFUSION: v2 += 35
-			return v2 if t.status != 0 else 0
+			return _area_adjust(s, t.pos, v2, 5) if area else v2
 		57:
 			if t.mode in [2, 3] or t.family() == 9: return 0
 			if t.family() in [0, 19]: return 15
@@ -467,7 +492,11 @@ func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
 	return 0
 
 
-func _area_adjust(s: int, center: Vector2i, v: int, side_opp: bool) -> int:
+## AreaAdjust (0x438d96) for a strategy: the other units its area around the target hits; none costs 4. Each hit
+## the strategy is usable on adds, by kind: 0 (damage, status) 3, or 6 when it is U's own AI target; 1 (supplies)
+## 5 below 60 % HP; 5 (cures) 3 with a status.
+func _area_adjust(s: int, center: Vector2i, v: int, kind: int) -> int:
+	var side_opp := s <= 38 or s >= 64
 	var hits: Array[BUnit] = []
 	for cell in Shapes.area_cells(int(Game.strategy(s).get("area", 0)), u.pos, center, st.view.map_w, st.view.map_h):
 		if cell == center:
@@ -477,19 +506,14 @@ func _area_adjust(s: int, center: Vector2i, v: int, side_opp: bool) -> int:
 			hits.append(t)
 	if hits.is_empty():
 		return v - 4 if v > 4 else 0
+	var own := Mem.r8(u.addr + 8)
 	for t in hits:
 		if not st.actions.usable_on(u, s, t):
 			continue
-		if side_opp:
-			v += 3
-		elif s >= 39 and s <= 45:
-			if t.hp * 100 / maxi(t.max_hp(), 1) < 60:
-				v += 5
-		elif s in [46, 47]:
-			if t.status != 0:
-				v += 3
-		else:
-			v += 3
+		match kind:
+			0: v += 6 if t.slot == own else 3
+			1: v += 5 if t.hp * 100 / maxi(t.max_hp(), 1) < 60 else 0
+			5: v += 3 if t.status != 0 else 0
 	return maxi(v, 0)
 
 
