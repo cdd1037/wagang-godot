@@ -36,6 +36,8 @@ Audit of 2026-10-11, against commit 8c00d22. Tags as in [rules.md](rules.md): **
   * re-pointed jump-table entries: 0x45bcc8 → 绝招, the class-matchup table 0x4d2140;
   * patched data operands, e.g. the terrain rows 0x4d5fbc.
 
+  [Coverage of the mod code](#coverage-of-the-mod-code) checks this limit: no mod code is reached any other way.
+
 ## Results
 
 | Batch | Original code | Sites | PORTED | PARTIAL | MISSING | N/A | FALSE |
@@ -56,7 +58,76 @@ pickers' forecast with 交给's preview line (0x4412c9) and the command menu's i
 **Answer to "has the port reached feature parity?": yes, for everything this audit found.** The story scripts, the
 map, the base CCZ battle rules, the mod's formula changes, its battle commands (group 2), its character skills
 (group 3), the general battle rules (group 4) and the shops, menus, windows and settings (group 5) are ported. Left:
-the deliberate differences below.
+the deliberate differences below. The audit also covers all of the mod's live code: every byte of `.text2` that
+no audited entry point reaches is either data that live code reads or dead code
+([Coverage of the mod code](#coverage-of-the-mod-code)).
+
+## Coverage of the mod code
+
+Can mod code run from somewhere other than the 316 sites, and so be missing from this audit? Checked on 2026-10-12
+with `tools/ghidra/modcov.sh`, which writes `extract/modcov.txt`. **No.** Deadness is **[C]**; the "what it was"
+column below is **[G]**, from a quick read of each range.
+
+* **Entry points:**
+  * the 274 rel32 hooks (284 minus 10 FALSE sites);
+  * the handlers of script ops 0x17, 0x72 and 0x74..0x79 in the op table 0x410a3e;
+  * the gap code in `.text`;
+  * the jump-table entry 0x45bcc8;
+  * the class-matchup table 0x4d2140, indexed at 0x43bdac.
+* **Two independent traces from them:**
+  * Ghidra's reference graph (`tools/ghidra/ModCoverage.java`), with the seeds disassembled first and raw dword
+    pointers added;
+  * a capstone descent (`tools/modcov.py`) that follows `jmp/call [reg*4 + T]` tables and pushed function or vtable
+    addresses.
+* **Indirect transfers in live mod code:** seven, all through tables whose entries are plain dwords:
+  * the op 0x78 tables 0x4d0683, 0x4d0692 / 0x4d06aa and 0x4d0a97;
+  * the 历史情报 painter's table 0x4d0f83;
+  * the table 0x4db0cd;
+  * two `call [eax+0x18]` vtable calls.
+* **The search for what neither trace reaches:** every byte of the file was checked for references into it:
+  * rel8 / rel32 branches;
+  * dwords pointing into the range, or up to 0x40 below it (base + index).
+
+| `.text2`, non-padding bytes | |
+|---|---|
+| total | 36,403 |
+| reached as instructions (either trace) | 31,501 |
+| data that live code reads (tables, strings, variables) | 1,793 in 23 ranges |
+| dead code and data | 3,112 in 69 ranges |
+
+No live instruction branches into a dead range, and no pointer in the file points at one. The only branch from
+`.text` is 0x409ead, a FALSE site.
+
+Four ranges match only by coincidence:
+* 0x4d1060: its only references are live code reading the 0x4d1050 block in front of it;
+* 0x4d2220: a table entry that points below it and jumps away first;
+* 0x4d8186: the match is the bytes of the `call` at 0x407964;
+* 0x4d8923: the match is the bytes of the `jnc` at 0x484646.
+
+The dead ranges are mostly earlier versions of a hook, left behind when the author re-pointed it. Many end in a
+`jmp` back to `.text`.
+
+| Dead ranges | What it was [G] | Live version |
+|---|---|---|
+| 0x4d1060 (with its window procedure's remnants 0x4d120c, 0x4d1227, 0x4d1264 and title 0x4d0f7a "历史情报"), 0x4d1af7 | modeless 历史情报 window: class PPHHDB, 380×397 beside the map, 按顺序显示 (control 0x407) into [0x55eff4]. The original code still hides its HWND [0x4d1050] (ShowWindow 0x4298dd, 0x479c31), which stays 0 | the dialog with handler table 0x4d17f0 (B6 F3) |
+| 0x4d014c, 0x4d0208 | save-path hook; a load setting [0x4ce004] = 1 | 0x4d009f, 0x4d0c29 (B6 F4) |
+| 0x4d02cc, 0x4d030d | level-up grade count [0x4cf2b8]; 仙人果 count 0x55a400 | LevelUp 0x4e0100, item use (group 4 item 32) |
+| 0x4d21bc, 0x4d2220 | class-matchup conditions (classes 7 / 13 / 20 / 24 × 1.5) before the entry was re-pointed to 0x4d2312 | table 0x4d2140 (B4) |
+| 0x4d23c4 | 连续攻击 (effect 90) test | gap code 0x406b4f (B1 F18) |
+| 0x4d2f60, 0x4d2fcd, 0x4d768e, 0x4d77fa, 0x4d8186 (+ 0x4d83c2), 0x4d6e77 (+ 0x4d6e58) | strike steps; the technique-flag reset [0x55ac1c..0x55ac50]; a "target strikes first" wrapper (0x4d74e4, [0x4d002c]) | strike step 0x433373 and the attack wrapper (group 3) |
+| 0x4d385f, 0x4d3b9f, 0x4d3c39, 0x4d3ca2, 0x4d3ce4, 0x4d801e, 0x4d831c | technique banners picked by pid in code (【术】连理, 【术】锻造, 【术】枪母子, 【术】魔功, 【技】双雷引 …) | pid table 0x4d3c4c → banner table 0x4d8260, read at 0x4d3c25 |
+| 0x4d48e3, 0x4d3e4d, 0x4d9029 | phase-start aura helper (0x43ff54, then 0x4011a9 on 0x497b04); unit actions 0x45778f(…, 7, …) | phase-start skills (B1 F1) |
+| 0x4d6637 | catch-up divisor from the party's average level | LevelUp 0x4e0100 (group 4 item 32) |
+| 0x4d9863 | 组阵 defence: families 39 / 46, +15 % per neighbour | formation getters (B4 §C) |
+| 0x4d62e5 | on-hit status rolls (effect test, then random 75) | B1 F4 / F5 |
+| 0x4d49ec, 0x4d4b03, 0x4d72ae | hit / damage hooks (back to 0x43c2cb, 0x43beb7) | B4 |
+| 0x4d35a2 | area-code override (class 0x21 → 2) | 0x40783f (B2 §H) |
+| 0x4d33b1 | move-record fragment ([0x4cfbfc]) | group 2 item 13 |
+| 0x4d43fa, 0x4d4598, 0x4d4723 | redraw and GDI helpers (InvalidateRect 0x4d41a6, SelectObject, DeleteDC) | 0x47c8b6 → 0x4d418e (B6) |
+| 0x4d503a (+ 0x4d7418), 0x4d525e (+ 0x4d5292) | membership tail with a scan of 0x4b0783; a three-line message box (strings 0x555718 / 0x555724 / 0x55570c) | — |
+| 0x4d534c, 0x4d5408, 0x4d878f, 0x4d8923 (+ 0x4d895b), 0x4d8c13, 0x4d9331, 0x4e00c5, 0x4e01c5, 0x4e2184 | other hook bodies: info-window text colour; [0x4cf307] / [0x4cf310]; a target list via 0x4d8879; class tests (back to 0x420d3a); a person compare (back to 0x43d500 / 0x43d22e); a stat of person 20; "≥ 9" tests (back to 0x42139f / 0x4214b9); effect 50 (to 0x43f54c) | — |
+| 0x4d31ad, 0x4dc696, 0x4d0ce9 | `eax / n`; [0x4dc0ff] = 0 (the 技能说明 state); a 12-byte table after a `ret` | — |
+| 0x4d3210, 0x4d3368, 0x4d46da, 0x4d6874, 0x4d67b2, 0x4dbedf, 0x4dc550, 0x526061, and 2–3 byte remnants at 0x4d2979, 0x4d785b, 0x4d95fd, 0x4dc889 | stubs and leftovers | — |
 
 ## Skill owners
 

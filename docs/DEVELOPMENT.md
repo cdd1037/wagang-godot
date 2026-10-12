@@ -301,6 +301,9 @@ The original executable is `wg2025/wagan.wa` (PE32, image base 0x400000). The mo
   and JDK 21 from Homebrew unless `GHIDRA_INSTALL_DIR` / `JAVA_HOME_21` point elsewhere.
 * **Quick disassembly:** `tools/venv/bin/python -I tools/disx.py 0x43640e 40` (capstone). `tools/cases.py`
   disassembles jump-table targets, and `tools/findins.py REGEX` searches instructions.
+* **Mod-code coverage:** `tools/ghidra/modcov.sh` traces `.text2` from the audited entry points, with Ghidra and with
+  `tools/modcov.py`. It writes the bytes neither trace reaches, with every reference into them, to
+  `extract/modcov.txt`. See "Coverage of the mod code" in [mod_patches.md](mod_patches.md).
 * **Data:** `game/assets/data/exe_image.bin` is the mapped executable, so `offset = address − 0x400000` reads any
   table the game uses. The same image is the game's emulated memory.
 * **Scripts:** `tools/eex.py` also writes human-readable listings to `extract/eex_txt/`. The JSON in
