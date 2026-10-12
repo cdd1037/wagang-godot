@@ -357,5 +357,48 @@ func run() -> void:
 	_check(st.actions.strategy_mp(0) == 2 * mp1, "double MP on the second cast")
 	_check(not st.actions.second_cast(cu) and Mem.r8(BattleStage.SECOND_CAST) == 0, "the flag clears")
 
+	# ---- the target pickers' forecast (0x4404bd, its line 0x440e89)
+	_clear()
+	var fa := _unit(0, 0, Vector2i(5, 5))
+	var fe := _unit(35, 300, Vector2i(6, 5))
+	var ff := _unit(1, 2, Vector2i(5, 6))
+	ff.hp = 1
+	var fd := Rules.calc_damage(fa, fe, st.view.terrain_at(fa.pos), st.view.terrain_at(fe.pos), false, 0)
+	var f1 := BattleHUD.forecast_for(st, {"kind": 1, "actor": fa, "param": -1}, fe)
+	_check(f1["hp"] == fe.hp - fd and f1["mp"] == -1, "attack forecast: HP after the damage")
+	_check(f1["line"] == "损伤 %3d  命中 %3d%%" % [fd, Rules.hit_rate(fa, fe)], "attack forecast line: " + str(f1["line"]))
+	var fh := Rules.heal_amount(fa, ff, 39, true)
+	var f3 := BattleHUD.forecast_for(st, {"kind": 3, "actor": fa, "param": 39}, ff)
+	_check(f3["hp"] == 1 + fh and str(f3["line"]).begins_with("恢复HP %3d" % fh) and "效果" in str(f3["line"]),
+			"医疗 forecast: " + str(f3["line"]))
+	var f22 := BattleHUD.forecast_for(st, {"kind": 2, "actor": fa, "param": 22}, fe)
+	_check(f22["hp"] == -1 and f22["mp"] == fe.mp - Rules.strat_damage(fa, fe, 22, true), "暗鬼 forecast takes MP")
+	var f23 := BattleHUD.forecast_for(st, {"kind": 2, "actor": fa, "param": 23}, fe)
+	_check(str(f23["line"]).begins_with(Mem.str_ptr(0x48bd40, 9)) and "命中" in str(f23["line"]), "流言 forecast names the effect")
+	var f48 := BattleHUD.forecast_for(st, {"kind": 3, "actor": fa, "param": 48}, ff)
+	_check(str(f48["line"]).begins_with("机动上升") and f48["hp"] == -1, "急行 forecast: " + str(f48["line"]))
+	var f87 := BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 87}, ff)
+	_check(f87["hp"] == 1 + st.actions.heal_value(87, ff) and f87["line"] == "恢复HP %3d" % st.actions.heal_value(87, ff),
+			"馒头 forecast: " + str(f87["line"]))
+	var f90 := BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 90}, ff)
+	_check(f90["mp"] >= 0 and f90["hp"] == -1 and str(f90["line"]).begins_with("恢复MP"), "补气酒 forecast")
+	_check(BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 98}, ff)["line"] == "武艺上升 %3d" % 2, "精强果: its value")
+	_check(BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 103}, ff)["line"] == "等级上升 %3d" % 1, "仙人果: value / 100")
+	# 交给 a mod accessory: types above 0x51 are named from 0x410f50 (mod 0x4412c9 → 0x4d23a8)
+	_check(BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 85}, ff)["line"] == "再移动", "六军镜·阴阳 (0x52)")
+	_check(BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 83}, ff)["line"] == "连续攻击", "六军镜·形势 (0x5a)")
+	_check(BattleHUD.forecast_for(st, {"kind": 4, "actor": fa, "param": 53}, ff)["line"] == Mem.str_ptr(0x48bc08, 0x35), "an original accessory")
+	# shown for a unit of the right side on a picker cell only (0x4541a9)
+	st.hud.forecast = {"kind": 1, "actor": fa, "param": -1, "cells": [fe.pos, ff.pos]}
+	st.hud.hover_cell = fe.pos
+	_check(st.hud._forecast_on(fe), "an enemy in reach gets the attack forecast")
+	st.hud.hover_cell = ff.pos
+	_check(not st.hud._forecast_on(ff), "an ally does not")
+	st.hud.forecast["kind"] = 4
+	_check(st.hud._forecast_on(ff), "an ally gets the item forecast")
+	st.hud.hover_cell = Vector2i(9, 9)
+	_check(not st.hud._forecast_on(ff), "off the picker's cells: none")
+	st.hud.forecast = {}
+
 	Game.main = old_main
 	print("t_commands: PASS" if _ok else "t_commands: FAILED")

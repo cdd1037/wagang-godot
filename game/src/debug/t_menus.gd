@@ -44,7 +44,25 @@ func run() -> void:
 	await _history(ui)
 	await _sortie(ui)
 	await _windows(ui)
+	_icons(ui)
 	print("t_menus: PASS" if _ok else "t_menus: FAILED")
+
+
+## The command menu's icons (0x45bd05, mod 0x4d034d) and the tabs' (0x472281), from CmdIcon.dll.
+func _icons(ui: GameUI) -> void:
+	var ic := BattleInput.command_icons()
+	_check(ic.size() == BattleInput.COMMANDS.size() and ic.all(func(t: Variant) -> bool: return t is Texture2D),
+			"a CmdIcon picture per command")
+	_check(ic[0] == ic[1] and ic[1] == ic[2] and ic[3] != ic[0] and ic[4] != ic[5] and ic[6] != ic[5], "sword ×3, scroll, hand-over, pouch, tent")
+	_check(UIStyle.tab_icons()[0] == ic[0] and UIStyle.tab_icons()[1] == ic[5], "tabs: sword and pouch")
+	var menu := ui.menu
+	var auto := Game.autoplay
+	Game.autoplay = true
+	menu.choose(BattleInput.COMMANDS, Vector2(-1, -1), true, "", [], 60, 0, Callable(), ic)
+	_check(menu.icons.size() == 7 and menu._text_dx() > 0, "the menu keeps them and moves the text right")
+	menu.choose(["a", "b"])
+	_check(menu.icons.is_empty() and menu._text_dx() == 0, "a plain menu has none")
+	Game.autoplay = auto
 
 
 func _settings(ui: GameUI) -> void:

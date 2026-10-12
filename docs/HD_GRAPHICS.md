@@ -23,7 +23,9 @@ Released builds contain only the HD art; there is no switch.
     `tools/check_hd_exclude.py --apply` copies it into the macOS and Windows presets and fails if it leaves out a
     picture that has no HD version. `tools/build_ios.sh` and `tools/build_android.sh` run the same check.
   * Pictures without an HD version stay in the build: data such as the Qusi.wa tile tables 12..14, which the
-    sortie map reads pixel by pixel, and art the game does not draw (about 5 MB).
+    sortie map reads pixel by pixel, and art the game does not draw (about 5 MB). The five CmdIcon.dll command
+    icons (`gfx/icons/commands`, the command menu and the item lists' tabs) have no HD version yet either: the
+    upscaler's `icons/*/*/*.png` rule only matches the item and strategy icons, one folder deeper.
   * The workflow then plays the first scenarios from the exported data to make sure no picture is missing.
 * **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`, which
   checks the download against the SHA-256 GitHub publishes for the asset). Without it the game falls back to the

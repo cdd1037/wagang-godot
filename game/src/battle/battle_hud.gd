@@ -13,6 +13,7 @@ var _tpop := {}            # the terrain box of an empty cell: {"rect" (screen),
 var icon_over := {}        # an item icon over a cell: {"tex", "cell", "off" (px from the cell's corner)}
 var _reward := {}          # the reward screen: {"wipe" 0..1, "lines": [[text, y, size, colour]], "bars": [[tex, name, y]]}
 var _seq := {}             # 开始作战 / 胜利条件 (0x44bac2 / 0x44bd27): {"wipe" 0..1, "lines": [[text, y, size, colour, shadows]]}
+var forecast := {}         # a target picker's forecast (0x4541a9 → 0x4404bd): {"kind" 1-4, "actor", "param", "cells"}
 
 
 func _init() -> void:
@@ -401,10 +402,14 @@ func _draw_info(vs: Vector2) -> void:
 	var col := Color(1, 0.55, 0.5) if u.side == BUnit.Side.ENEMY else (Color(0.6, 1, 0.6) if u.side == BUnit.Side.FRIEND else UIStyle.NAME_COLOR)
 	UIStyle.draw_text(self, Vector2(tx, r.position.y + 20), p.name, col, 15)
 	UIStyle.draw_text(self, Vector2(tx, r.position.y + 38), "%s Lv%d" % [p.class_name_str(), p.level], Color(1, 1, 1), 13)
-	_bar(Vector2(tx, r.position.y + 46), 110, u.hp, u.max_hp(), Color(0.9, 0.25, 0.2), "兵")
-	_bar(Vector2(tx, r.position.y + 64), 110, u.mp, u.max_mp(), Color(0.3, 0.5, 1.0), "策")
-	var eff := Rules.terrain_effect(u, terr) * 10
-	UIStyle.draw_text(self, Vector2(tx, r.position.y + 92), "%s %d%%" % [tname, eff], Color(0.85, 0.85, 0.7), 12)
+	var fc := forecast_for(stage, forecast, u) if _forecast_on(u) else {}
+	_bar(Vector2(tx, r.position.y + 46), 110, u.hp, u.max_hp(), Color(0.9, 0.25, 0.2), "兵", int(fc.get("hp", -1)))
+	_bar(Vector2(tx, r.position.y + 64), 110, u.mp, u.max_mp(), Color(0.3, 0.5, 1.0), "策", int(fc.get("mp", -1)))
+	if not fc.is_empty():
+		UIStyle.draw_text(self, Vector2(tx, r.position.y + 92), str(fc["line"]), Color(1, 0.95, 0.6), 12)
+	else:
+		var eff := Rules.terrain_effect(u, terr) * 10
+		UIStyle.draw_text(self, Vector2(tx, r.position.y + 92), "%s %d%%" % [tname, eff], Color(0.85, 0.85, 0.7), 12)
 	var st := ""
 	if u.status & BUnit.ST_POISON: st += "毒"
 	if u.status & BUnit.ST_CONFUSION: st += "乱"
@@ -415,11 +420,101 @@ func _draw_info(vs: Vector2) -> void:
 		UIStyle.draw_text(self, Vector2(r.end.x - 40, r.position.y + 20), st, Color(1, 0.4, 1), 13)
 
 
-func _bar(pos: Vector2, w: float, v: int, m: int, c: Color, label: String) -> void:
+## `after` ≥ 0: the forecast's value (0x450ed5): the part the action takes is drawn pale, the part it gives back
+## bright; the numbers stay the current ones.
+func _bar(pos: Vector2, w: float, v: int, m: int, c: Color, label: String, after := -1) -> void:
 	UIStyle.draw_text(self, pos + Vector2(0, 13), label, Color(0.9, 0.9, 0.9), 12)
 	var r := Rect2(pos + Vector2(16, 3), Vector2(w - 16, 10))
 	draw_rect(r, Color(0.1, 0.1, 0.1))
 	if m > 0:
-		draw_rect(Rect2(r.position, Vector2(r.size.x * clampf(float(v) / m, 0, 1), r.size.y)), c)
+		var a := clampi(after, 0, m) if after >= 0 else v
+		var lo := r.size.x * clampf(float(mini(v, a)) / m, 0, 1)
+		var hi := r.size.x * clampf(float(maxi(v, a)) / m, 0, 1)
+		draw_rect(Rect2(r.position, Vector2(lo, r.size.y)), c)
+		if hi > lo:
+			draw_rect(Rect2(r.position + Vector2(lo, 0), Vector2(hi - lo, r.size.y)),
+					c.lightened(0.6) if a < v else Color(0.55, 1.0, 0.55))
 	draw_rect(r, Color(0.8, 0.7, 0.4), false, 1)
 	UIStyle.draw_text(self, pos + Vector2(w + 4, 13), "%d/%d" % [v, m], Color(1, 1, 1), 11)
+
+
+## The hovered unit gets the forecast (0x4541a9): it stands on one of the picker's cells and is of the other side
+## from the actor for kinds 1 and 2 (attack, offensive strategy), of the same side for 3 and 4 (support strategy,
+## item); anyone else gets the plain panel. Sides as 0x406710: slot < 35 is the player's and friends' side.
+func _forecast_on(u: BUnit) -> bool:
+	if forecast.is_empty() or u == null or not forecast["cells"].has(hover_cell):
+		return false
+	var a: BUnit = forecast["actor"]
+	return ((a.slot < 35) == (u.slot < 35)) == (int(forecast["kind"]) >= 3)
+
+
+## The forecast window's numbers (0x4404bd) for target `t` of picker `f` ({"kind", "actor", "param"}): the HP and
+## MP after the action (−1: unchanged) and the line under the bars (0x440e89).
+##   kind 1 攻击 / 绝招 / 围攻: CalcDamage (0x43bc4b, no roll) off the HP; "损伤 n  命中 h%" with HitRate (0x43b50d).
+##   kind 2 offensive strategy p: StratDamage (0x43bfaa) off the HP for 0x449bac's set, off the MP for 暗鬼
+##     (0x449c36); "损伤 n" for those, else the effect's name (0x48bd40); then "命中 h%" (0x43b73f, the forecast form).
+##   kind 3 support strategy p: the heal (0x43c548) onto the HP for 39-43 (0x449c55), onto the MP for 44-45
+##     (0x449c7a); the effect's name with the amount for 恢复HP/MP (effects 19, 20), the name alone for effects
+##     11-14, 21, 22 and 27, nothing for 15-18 and 23-26; then "效果 h%".
+##   kind 4 item p (道具, 交给): a 恢复HP / 恢复MP item's heal (0x43c42e) onto the HP / MP; the name of its type
+##     (0x48bc08, types above 0x51 the mod's 0x410f50 via 0x4d23a8) with the heal for 恢复HP/MP, the item's value
+##     (+0x15) for the stat fruits 0x46-0x4a and value/100 for 0x4b; the cures and 0x4c print 4 spaces.
+static func forecast_for(st: BattleStage, f: Dictionary, t: BUnit) -> Dictionary:
+	var kind := int(f["kind"])
+	var a: BUnit = f["actor"]
+	var p := int(f.get("param", -1))
+	var out := {"hp": -1, "mp": -1, "line": ""}
+	var v := 0
+	var hit := 0
+	match kind:
+		1:
+			v = Rules.calc_damage(a, t, st.view.terrain_at(a.pos), st.view.terrain_at(t.pos), false, 0)
+			out["hp"] = t.hp - v
+			hit = Rules.hit_rate(a, t)
+			out["line"] = "损伤 %3d  命中 %3d%%" % [v, hit]
+		2:
+			if Rules.strat_hp_damage(p):
+				v = Rules.strat_damage(a, t, p, true)
+				out["hp"] = t.hp - v
+			elif Rules.strat_mp_damage(p):
+				v = Rules.strat_damage(a, t, p, true)
+				out["mp"] = t.mp - v
+			hit = Rules.strat_hit(a, t, p, st.view.terrain_at(t.pos), st.weather(), true)
+			var head := "损伤 %3d" % v if Rules.strat_hp_damage(p) or Rules.strat_mp_damage(p) else _strat_effect_name(p)
+			out["line"] = "%s  命中 %3d%%" % [head, hit]
+		3:
+			if Rules.strat_hp_heal(p):
+				v = Rules.heal_amount(a, t, p, true)
+				out["hp"] = t.hp + v
+			elif Rules.strat_mp_heal(p):
+				v = Rules.heal_amount(a, t, p, true)
+				out["mp"] = t.mp + v
+			hit = Rules.strat_hit(a, t, p, st.view.terrain_at(t.pos), st.weather(), true)
+			var e := int(Game.strategy(p).get("effect", 0))
+			var head := ""
+			if e in [19, 20]:
+				head = "%s %3d" % [_strat_effect_name(p), v]
+			elif e in [11, 12, 13, 14, 21, 22, 27]:
+				head = _strat_effect_name(p)
+			out["line"] = "%s  效果 %3d%%" % [head, hit] if head != "" else "效果 %3d%%" % hit
+		4:
+			var it := Game.item(p)
+			var ty := int(it.get("type", 0))
+			v = int(it.get("value", 0)) & 0xff
+			if ty == 0x3f:
+				v = st.actions.heal_value(p, t)
+				out["hp"] = t.hp + v
+			elif ty == 0x40:
+				v = st.actions.heal_value(p, t)
+				out["mp"] = t.mp + v
+			var name := Mem.str_ptr(0x48bc08, ty) if ty <= 0x51 else Mem.str_ptr(0x410f50, ty - 0x51)
+			if ty in [0x3f, 0x40, 0x46, 0x47, 0x48, 0x49, 0x4a]:
+				name += " %3d" % v
+			elif ty == 0x4b:
+				name += " %3d" % (v / 100)
+			out["line"] = name
+	return out
+
+
+static func _strat_effect_name(s: int) -> String:
+	return Mem.str_ptr(0x48bd40, int(Game.strategy(s).get("effect", 0)))

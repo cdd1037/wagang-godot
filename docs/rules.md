@@ -1398,6 +1398,20 @@ other group in the 3×3 (0x4d7efa; 六军镜·阴阳 has 0).
   deciding both), the cell's picture, the terrain name (over 29 → 平原), 可以恢复 (18..22) or 无法移动 (5 6 11 12 14 15
   17 25..29), the four element icons grey where they cannot be cast; any click closes it, then SE 1.
 * Status pane: "(%2d:%2d) %s" of the cursor cell (mod 0x4d1c10).
+* Target forecast (unit picker 0x45533d(kind, param) → 0x4541a9 on each cursor move → 0x4404bd(kind, actor, param)):
+  a unit on one of the picker's cells and of the other side from the actor (kinds 1, 2) or the same side (kinds 3, 4;
+  sides as 0x406710: slot < 35) gets the forecast in its window, anyone else the plain window (kind 0). Kinds: 1 攻击,
+  绝招, 围攻; 2 a strategy at the other side, 3 at one's own (the handlers pass 2 + (arg ≠ 0)); 4 道具 and 交给, param
+  the item. The HP and MP bars (0x450ed5) show the value after the action, the part taken or given in a second colour,
+  the numbers staying the current ones. HP: kind 1 − CalcDamage (0x43bc4b, no roll); kind 2 − StratDamage (0x43bfaa)
+  for 0x449bac's set (0-20, 33-36, 38, 64, 65); kind 3 + the heal (0x43c548) for 39-43 (0x449c55); kind 4 + the
+  item's heal (0x43c42e) for type 0x3f. MP: 暗鬼 (22, 0x449c36), 44-45 (0x449c7a), type 0x40. The line under the
+  bars (0x440e89) replaces the Exp / terrain line: kind 1 "损伤 n 命中 h%" (HitRate 0x43b50d); kind 2 "损伤 n" for
+  those damage sets, else the effect's name (0x48bd40[+0xf]), then "命中 h%" (0x43b73f, the forecast form); kind 3 the
+  effect's name with the amount for effects 19, 20, the name alone for 11-14, 21, 22, 27, nothing for 15-18 and
+  23-26, then "效果 h%"; kind 4 the type's name (0x48bc08; above 0x51 mod 0x4d23a8 → 0x410f50[type − 0x51], 再移动
+  …), then the heal for 0x3f / 0x40, the item's value (+0x15) for 0x46-0x4a, value / 100 for 0x4b (仙人果: 1), and
+  4 spaces for 0x41-0x45, 0x4c. Port: `BattleHUD.forecast_for`, set by the pickers through `BattleInput.show_forecast`.
 * Choice box (op 0x12, 0x42de12): at most three options, "1." … "3.", beside the 120×120 face of arg1's person (0xffff
   = 0).
 * Unit actions 0x45778f(pid, kind, pre, post) (op 0x50 and the engine): 0 normal; 1 cheer, 2 defend by facing, 3 hurt,

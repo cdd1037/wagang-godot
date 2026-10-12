@@ -127,7 +127,7 @@ func _special_run(u: BUnit) -> bool:
 	if pid == 7:
 		return await _wei_zhen_ba_huang(u)
 	# the attack picker with the 绝招 ranges (0x45533d mode 1); a cancel spends nothing
-	var t := await st.input.pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active())
+	var t := await st.input.pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active(), 1, u)
 	if t == null:
 		return false
 	u.mp = 0
@@ -417,7 +417,7 @@ func siege_enabled(a: BUnit) -> bool:
 ## Returns true when the action ended.
 func siege_command(a: BUnit) -> bool:
 	while true:
-		var t := await st.input.pick_unit(st.actions.attack_cells(a, a.pos), func(x: BUnit) -> bool: return x.is_enemy_of(a) and x.active())
+		var t := await st.input.pick_unit(st.actions.attack_cells(a, a.pos), func(x: BUnit) -> bool: return x.is_enemy_of(a) and x.active(), 1, a)
 		if t == null:
 			return false
 		var hs := helpers(a, t)
@@ -521,7 +521,7 @@ func give_command(u: BUnit) -> bool:
 func give(u: BUnit, item: int) -> bool:
 	var cells := Shapes.range_cells(1, u.pos, st.view.map_w, st.view.map_h, true)
 	while true:
-		var r := await st.input.pick_unit(cells, func(x: BUnit) -> bool: return not x.is_enemy_of(u))
+		var r := await st.input.pick_unit(cells, func(x: BUnit) -> bool: return not x.is_enemy_of(u), 4, u, item)
 		if r == null:
 			return false
 		if r == u:

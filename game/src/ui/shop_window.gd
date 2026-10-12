@@ -179,7 +179,7 @@ func _person_changed() -> void:
 func _draw_dialog() -> void:
 	if selling:
 		group(r(2, 2, 312, 204), "仓库列表")
-		var body := tabs(r(6, 11, 304, 192), TABS, tab)
+		var body := tabs(r(6, 11, 304, 192), TABS, tab, "tab", UIStyle.tab_icons())
 		list_view(body.grow(-3), lists[tab], "list")
 		text(r(108, 212, 25, 10), "现金", HORIZONTAL_ALIGNMENT_LEFT, CAPTION)
 		text(r(135, 212, 40, 10), "%d" % Game.gold)
@@ -188,7 +188,7 @@ func _draw_dialog() -> void:
 		button(r(267, 209, 41, 15), "结束", ["end", 0])
 	else:
 		group(r(2, 3, 235, 204), "商品列表")
-		var body := tabs(r(6, 12, 226, 192), TABS, tab)
+		var body := tabs(r(6, 12, 226, 192), TABS, tab, "tab", UIStyle.tab_icons())
 		list_view(body.grow(-3), lists[tab], "list")
 		text(r(129, 213, 24, 10), "现金", HORIZONTAL_ALIGNMENT_LEFT, CAPTION)
 		text(r(150, 213, 38, 10), "%d" % Game.gold, HORIZONTAL_ALIGNMENT_RIGHT)

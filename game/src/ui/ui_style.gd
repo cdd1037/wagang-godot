@@ -38,6 +38,17 @@ static func panel_texture() -> Texture2D:
 	return _panel_tex
 
 
+## The CmdIcon.dll icons (16×16, ImageList 0x40b701) for these indices: 0 sword, 1 scroll, 2 pouch, 3 tent,
+## 4 hand-over.
+static func cmd_icons(ids: Array) -> Array:
+	return ids.map(func(k: int) -> Texture2D: return Assets.tex("gfx/icons/commands/%03d.png" % k))
+
+
+## The two tabs of 武具一览 / 道具一览 and the shops (0x472281): sword and pouch.
+static func tab_icons() -> Array:
+	return cmd_icons([0, 2])
+
+
 static func draw_panel(ci: CanvasItem, r: Rect2) -> void:
 	var t := panel_texture()
 	if t:

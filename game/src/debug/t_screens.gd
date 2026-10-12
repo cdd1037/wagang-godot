@@ -14,8 +14,11 @@ func _check(ok: bool, what: String) -> void:
 
 func _shot(name: String) -> void:
 	var out := OS.get_environment("OUT")
+	if out != "":
+		DisplayServer.window_move_to_foreground()
 	for k in 3:
 		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
 	if out != "":
 		get_viewport().get_texture().get_image().save_png(out.path_join(name + ".png"))
 
@@ -67,6 +70,45 @@ func run() -> void:
 	ui.meter.visible = true
 	await _shot("meter")
 	ui.meter.visible = false
+
+	# a battle field: the command menu's icons (0x45bd05) and an attack's forecast in the hover panel (0x4404bd)
+	await st.op_change_scene({"args": [3, 0xffff, 0xffff, 0xffff, 0]})
+	var clear := 0
+	for k in 600:      # the title cards (the chapter's two, the battle's part name): until none for a second
+		clear = clear + 1 if ui._title_root.get_child_count() == 0 else 0
+		if clear >= 20:
+			break
+		await get_tree().create_timer(0.05).timeout
+	ui.fade_rect.color.a = 0.0         # the script's fade_in would lift the black
+	st.hud._seq = {}                   # the 胜利条件 screen above waits for a click
+	for u in st.units:
+		u.clear(u.slot)
+	var a: BUnit = st.units[0]
+	var e: BUnit = st.units[35]
+	for x in [[a, 0, Vector2i(5, 5), 0], [e, 300, Vector2i(6, 5), 2]]:
+		var u: BUnit = x[0]
+		u.pid = x[1]
+		u.pos = x[2]
+		u.colour = x[3]
+		u.mode = 7 if u == a else 1
+		u.state = BUnit.STATE_ON_MAP
+		u.hp = u.max_hp()
+		u.mp = u.max_mp()
+	st.refresh_units()
+	st.field_ready = true
+	st.turn = 1
+	var sp := st.view.cell_pos(a.pos) - st.view.camera.position + Vector2(56, -10)
+	ui.menu.choose(BattleInput.COMMANDS, sp, true, "", [true, false, false, true, false, true, true], 60, 0, Callable(),
+			BattleInput.command_icons())
+	await get_tree().create_timer(0.5).timeout
+	await _shot("command_menu")
+	_check(ui.menu.icons.size() == 7, "the command menu has its icons")
+	ui.menu._finish(-1)
+	st.input.show_forecast(1, a, -1, st.actions.attack_cells(a, a.pos))
+	st.hud.set_hover(e.pos)
+	_check(st.hud._forecast_on(e), "the enemy in reach gets the forecast")
+	await _shot("forecast")
+	st.input.show_forecast(0)
 
 	Game.main = old_main
 	print("t_screens: PASS" if _ok else "t_screens: FAILED")

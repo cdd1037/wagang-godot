@@ -9,7 +9,10 @@ var vm: EexVM
 var ui: GameUI
 var choice_result := 0
 var fast := false
-var _jump_start := OS.get_environment("WG_START") != "" and OS.get_environment("WG_AUTOSAVE") != ""   # flow test
+## Flow test started past the opening (WG_START > 0): the party lacks those that earlier files recruited. A run
+## from scenario 0 recruits them itself, and a forced person who is not a member yet then is not one in the original
+## either (R_08 forces 雄阔海, who joins only during S_08).
+var _jump_start := int(OS.get_environment("WG_START")) > 0 and OS.get_environment("WG_AUTOSAVE") != ""
 
 
 func _ready() -> void:

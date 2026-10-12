@@ -44,14 +44,14 @@ Audit of 2026-10-11, against commit 8c00d22. Tags as in [rules.md](rules.md): **
 | [B2](#b2--persons-level-up-script-ops-toolbar-saves-0x4070000x41ffff) | persons, level-up, script ops, toolbar, saves | 65 | 48 | 1 | 0 | 9 | 7 |
 | [B3](#b3--strategies-story-scenes-ai-attack-0x4200000x43afff) | strategies, story scenes, AI attack | 63 | 38 | 0 | 0 | 25 | 0 |
 | [B4](#b4--hit-rates-damage-healing-regeneration-0x43b0000x43cfff) | hit rates, damage, healing, regeneration | 30 | 30 | 0 | 0 | 0 | 0 |
-| [B5](#b5--units-movement-turns-command-menu-0x43d0000x45ffff) | unit commands, movement, turns, command menu | 52 | 34 | 1 | 2 | 13 | 2 |
+| [B5](#b5--units-movement-turns-command-menu-0x43d0000x45ffff) | unit commands, movement, turns, command menu | 52 | 36 | 1 | 0 | 13 | 2 |
 | [B6](#b6--dialogs-info-window-runtime-0x4600000x486000) | dialogs, info window, runtime | 55 | 29 | 0 | 7 | 17 | 2 |
-| **Total** | | **316** | **215** | **2** | **9** | **79** | **11** |
+| **Total** | | **316** | **217** | **2** | **7** | **79** | **11** |
 
 Counts rechecked against the port on 2026-10-12 (at the audit: 66 / 22 / 136 / 81 / 11); each batch report gives its
-own. What is left: the 7 sites of the 武将情报 技能说明 button (B6 F7, left out on purpose, group 5 item 40), and in
-B5 the 交给 target picker's preview line (0x4412c9) and the command menu's icons (0x45bd35); the 2 PARTIAL rows are
-deliberate differences (the autosave, skippable videos).
+own. What is left: the 7 sites of the 武将情报 技能说明 button (B6 F7, left out on purpose, group 5 item 40); the 2
+PARTIAL rows are deliberate differences (the autosave, skippable videos). The last two MISSING rows of B5, the target
+pickers' forecast with 交给's preview line (0x4412c9) and the command menu's icons (0x45bd35), are ported since.
 
 **Answer to "has the port reached feature parity?": yes, for everything this audit found.** The story scripts, the
 map, the base CCZ battle rules, the mod's formula changes, its battle commands (group 2), its character skills
@@ -1345,7 +1345,7 @@ Evidence: `wg2025/wagan.wa` disassembly (jmp chains followed until the return to
 including a full trace of the 绝招 dispatcher. Port = `game/src`. Skill owners as in [Skill owners](#skill-owners).
 Tags: [C] confirmed from code, [G] guess.
 
-Status counts: **PORTED 34 · PARTIAL 1 · MISSING 2 · N/A 13 · FALSE 2** (52 rows; rechecked against the port
+Status counts: **PORTED 36 · PARTIAL 1 · MISSING 0 · N/A 13 · FALSE 2** (52 rows; rechecked against the port
 2026-10-12, before that PORTED 4 · PARTIAL 4 · MISSING 27 · N/A 15).
 
 Corrections found on the way:
@@ -1386,7 +1386,7 @@ Corrections found on the way:
 | 0x43f890 | 0x43f84d TerrainEffect(unit) | call 0x4d39a3 = family record pointer (compaction) | — | N/A | No behaviour change. [C] |
 | 0x43f8a3 | 0x43f84d after the table lookup | jmp 0x4d39b9: pid 6 on terrain 9/10/13 → 11 (110 %). Then effect 86 max(·,10) (0x407d4d) and 0xff → 0 | 水军 (丁天庆) terrain effect | PORTED | rules.gd `terrain_effect`. See F10. [C] |
 | 0x43f8d1 | 0x43f8be AttackRangeCode(unit) | jmp 0x4d3417: 怯 (0x20) → 11; when not in a 绝招: pid 0xcc (张善相) → 12, pid 25 with class 41 → 4; during a 绝招: pid 8 → 6, pids 5/26/14/19 → 0; else the original effect 42 / effect 21 / class path | 枪母子 (张善相), 飞将军 range (张公瑾), 绝招 ranges | PORTED | battle_actions.gd `attack_range_code`: 怯 → 11, then 张善相 → 12 and 张公瑾 → 4 outside a 绝招, the 绝招 ranges inside one, then effect 42 / effect 21 / class. [C] |
-| 0x4412c9 | 0x440e89 target-preview HUD line, kind 4 (item) | jmp 0x4d23a8: for item types > 0x51 take the effect name from 0x410f50[type−0x51]. Otherwise the original table 0x48bc08 | name of a mod accessory effect in the preview while picking a 交给 receiver | MISSING | Cosmetic part of 交给 (F3, otherwise ported). The port's unit picker (battle_input.gd `pick_unit`) shows no target-preview line (0x440e89) at all, so the effect name is not shown. [C] |
+| 0x4412c9 | 0x440e89 target-preview HUD line, kind 4 (item) | jmp 0x4d23a8: for item types > 0x51 take the effect name from 0x410f50[type−0x51]. Otherwise the original table 0x48bc08 | name of a mod accessory effect in the preview while picking a 交给 receiver | PORTED | battle_hud.gd `forecast_for` (kind 4: the type's name from 0x48bc08, above 0x51 from 0x410f50); the pickers set the forecast (battle_input.gd `pick_unit` / `show_forecast`, 交给 in battle_commands.gd `give`). The whole forecast window 0x4404bd is ported with it: rules.md §13.7. [C] |
 | 0x441888 | 0x441744 RemoveUnit common tail | call 0x4dbff3: clear the leaving unit's 暗杀 mark (0x569f00[i] = 0, 0x569f73[i] = 0xff) and cancel every mark it placed (0x569f73[k] == i → 0xff) | 暗杀 delayed defeat (mod) | PORTED | battle_stage.gd `remove_unit` (mod 0x4dbff3 comment). The mark is set in battle_actions.gd `_apply_strategy` and counted down in battle_stage.gd `_assassination_countdown`. See F11. [C] |
 | 0x44272c | 0x442718 SetActionFlags(unit, f) | call 0x4d90bf when f == 6 (action finished) | 锻造 (齐国远) / 波若 (罗士信) path skills | PORTED | battle_actions.gd `end_action` (`_boruo`, `_duanzao`). See F7. [C] |
 | 0x443a44 | 0x443a0d duel portrait draw | jmp 0x4d4e8c: while [0x4cf608], load sge 2301+face (80×80) for side 0/1 at the original position −8/−10 px | duel portraits (mod) | PORTED | duel_layer.gd:13 (16,24)/(526,280) and :768-772 draw the 80×80 small face in colour (duel.md §3). [C] |
@@ -1413,7 +1413,7 @@ Corrections found on the way:
 | 0x4559ba | 0x45576d terrain info popup (left click on an empty cell in the player phase) | jmp 0x4e0000: terrain id > 29 → 0 before indexing the name table 0x48bdb0 | bounds clamp | PORTED | battle_hud.gd `terrain_popup` (`t > 29 → 0`), opened by battle_input.gd `player_phase` on an empty-cell click. [C] |
 | 0x45bb2b | 0x45badb command dialog 279 init (EnableWindow per button) | jmp 0x4d022b: enable 绝招 0x50a by 0x4d53d4, 交给 0x50c by 0x4d9cc9, 围攻 0x50d by 0x4d7196 | 绝招/交给/围攻 buttons | PORTED | battle_input.gd `command_menu` with battle_commands.gd `special_enabled` / `give_enabled` / `siege_enabled`. See F4. [C] |
 | 0x45bc55 | 0x45bc23 dialog 279 WM_COMMAND (id−0x507 → jump table 0x45bcbc) | jmp 0x4d029b: index 5 (交给) → EndDialog result 6, index 6 (围攻) → 7, else the table (whose entry 3 = 绝招 was re-pointed to 0x4d2800 → result 5) | click → command code | PORTED | battle_input.gd `command_menu` maps the entry to the command directly. [C] |
-| 0x45bd35 | 0x45bd05 dialog 279 button painting (icon index → 0x471981) | jmp 0x4d034d: icon index 0x50a → 0, 0x50c → 4, 0x508 → 1, 0x50d → 0 | icons of the new buttons | MISSING | Cosmetic. The port's command menu (battle_input.gd `command_menu`, ui/choice_menu.gd) is a text list with no icons for any command; see [Deliberate differences](#deliberate-differences-port-design-keep-unless-asked) (Looks). [C] |
+| 0x45bd35 | 0x45bd05 dialog 279 button painting (icon index → 0x471981) | jmp 0x4d034d: icon index 0x50a → 0, 0x50c → 4, 0x508 → 1, 0x50d → 0 | icons of the new buttons | PORTED | battle_input.gd `COMMAND_ICONS` [0, 0, 0, 1, 4, 2, 3] for 攻击 绝招 围攻 策略 交给 道具 待命 (道具 2 and 待命 3 come from the original code at 0x45bd64 / 0x45bd6d, 取消 has none), drawn by ui/choice_menu.gd at the row's left (0x472403), greyed when the command is off; the CmdIcon.dll pictures are assets/gfx/icons/commands. The item lists' and shops' two tabs get icons 0 and 2 as well (0x472281; dlg_panel.gd `tabs`). [C] |
 | 0x45c6f8 | 0x45c697 选择武将 dialog (236): details of the selected person (face, name, class, stats) | jmp 0x4d411e: load the 120×120 sge portrait 301+face into 0x4cf2c0 (instead of the 64×80 face) | big portrait in the sortie dialog | PORTED | sortie_screen.gd `_draw_panel` draws the hovered candidate's 120×120 portrait (`Game.person_face`, large). [C] |
 | 0x45e91a | 0x45e87d 选择武将 dialog proc, WM_INITDIALOG | call 0x4db120: enable button 0x3e9 "战场位置", create the hidden modeless dialog 333 "出战位置" (proc 0x4db180) → [0x4db0da] | 战场位置 map preview | PORTED | sortie_screen.gd `_draw_dialog` (button, enabled) → battle/sortie_map.gd `SortieMap.open`. See F13. [C] |
 | 0x45e984 | 0x45e87d WM_COMMAND id 0x3e9 | data ref [0x4db0da]: ShowWindow(dlg333, SW_SHOW) | 战场位置 | PORTED | sortie_screen.gd `_on_hit` ("map") → `SortieMap.open`. See F13. [C] |
@@ -1554,7 +1554,7 @@ helpers(A, T) == 0 → popup "无法围攻该部队" and pick again. Then 0x4d6d
 to U and U's range ∉ {2, 3, 4}, the AI runs 0x4d6d87 (the same 围攻) instead of a normal attack. Enemy helpers that
 have not acted lose their turn.
 
-##### B5 F3. 交给 (hand over an accessory) — PORTED, except the receiver preview (row 0x4412c9) [C] unless marked
+##### B5 F3. 交给 (hand over an accessory) — PORTED [C] unless marked
 Port: battle_commands.gd `give_enabled`, `give_command`, `give`, `_give_fx`.
 
 **Enable** (0x4d9cc9):

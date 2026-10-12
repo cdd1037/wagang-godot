@@ -68,7 +68,7 @@ func _cells() -> void:
 
 
 func _draw_dialog() -> void:
-	var body := tabs(r(1, 1, 316, 190), TABS, tab)
+	var body := tabs(r(1, 1, 316, 190), TABS, tab, "tab", UIStyle.tab_icons())
 	list_view(body.grow(-3), lists[tab], "list")
 	text(r(5, 197, 58, 10), "仓库装备现存量", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(r(62, 197, 32, 10), "%d/200" % _count, HORIZONTAL_ALIGNMENT_CENTER)

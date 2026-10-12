@@ -205,6 +205,8 @@ func _walk(u: BUnit, path: Array[Vector2i]) -> void:
 
 
 const COMMANDS := ["攻击", "绝招", "围攻", "策略", "交给", "道具", "待命"]
+## Their CmdIcon.dll icons (0x45bd05, mod 0x4d034d): sword, sword, sword, scroll, hand-over, pouch, tent.
+const COMMAND_ICONS := [0, 0, 0, 1, 4, 2, 3]
 
 
 ## The command menu (dialog 279, 0x43dde3), until the unit has finished: 攻击 绝招 围攻 策略 交给 道具 待命.
@@ -218,7 +220,7 @@ func command_menu(u: BUnit) -> bool:
 		var en := [not targets.is_empty(), st.commands.special_enabled(), st.commands.siege_enabled(u),
 				not strats.is_empty(), st.commands.give_enabled(u), not items.is_empty(), true]
 		var sp := st.view.cell_pos(u.pos) - st.view.camera.position + Vector2(56, -10)
-		var i := await st.ui.menu.choose(COMMANDS, sp, true, "", en, 60)
+		var i := await st.ui.menu.choose(COMMANDS, sp, true, "", en, 60, 0, Callable(), command_icons())
 		if i < 0:
 			st.actions.kill_rewards()
 			return false
@@ -237,6 +239,10 @@ func command_menu(u: BUnit) -> bool:
 			await _move_again(u)
 		st.actions.kill_rewards()
 	return true
+
+
+static func command_icons() -> Array:
+	return UIStyle.cmd_icons(COMMAND_ICONS)
 
 
 ## 再移动 (effect 82, 0x4d27a0): after an action the unit may move once more, from where it stands; then its action
@@ -273,19 +279,28 @@ func _cancels(r: Array, cells: Array) -> bool:
 
 
 ## The unit picker (0x45533d): highlights `cells` and returns the unit clicked on them that `ok` accepts, or
-## null on a cancel.
-func pick_unit(cells: Array[Vector2i], ok: Callable) -> BUnit:
+## null on a cancel. `kind` 1-4 with `actor` and `param`: the hover panel shows that forecast (0x4541a9 → 0x4404bd).
+func pick_unit(cells: Array[Vector2i], ok: Callable, kind := 0, actor: BUnit = null, param := -1) -> BUnit:
 	st.view.set_attack_cells(cells)
+	show_forecast(kind, actor, param, cells)
 	while true:
 		var r := await _click()
 		if _cancels(r, cells):
 			st.view.clear_highlights()
+			show_forecast(0)
 			return null
 		var t := st.unit_at(r[0])
 		if t and cells.has(t.pos) and ok.call(t):
 			st.view.clear_highlights()
+			show_forecast(0)
 			return t
 	return null
+
+
+## Kind 0 ends the forecast.
+func show_forecast(kind: int, actor: BUnit = null, param := -1, cells: Array = []) -> void:
+	st.hud.forecast = {} if kind == 0 or actor == null else {"kind": kind, "actor": actor, "param": param, "cells": cells}
+	st.hud.queue_redraw()
 
 
 ## 攻击 (0x43dada). 引导攻击 (effect 46, 0x43db4e): while the target falls, the next one in reach is attacked at
@@ -295,7 +310,7 @@ func pick_unit(cells: Array[Vector2i], ok: Callable) -> BUnit:
 func _do_attack(u: BUnit) -> bool:
 	var again := false
 	while true:
-		var t := await pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active())
+		var t := await pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active(), 1, u)
 		if t == null:
 			return again
 		Mem.w8(BattleActions.STRIKE, 0)        # cave 0x407651, then the attack wrapper 0x4d7808
@@ -344,6 +359,8 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			continue
 		var cells := st.actions.strategy_cast_cells(u, s)
 		st.view.set_attack_cells(cells)
+		# 0x42335b / 0x423549 and the others: kind 2 at the other side, 3 at one's own (2 + (arg ≠ 0))
+		show_forecast(3 if int(Game.strategy(s).get("target", 0)) == 1 else 2, u, s, cells)
 		var chosen := false
 		while true:
 			var r := await _click()
@@ -372,10 +389,12 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			st.view.set_area_cells([])
 			if ok == 0:
 				st.view.clear_highlights()
+				show_forecast(0)
 				await st.actions.cast(u, s, c)
 				chosen = true
 				break
 		st.view.clear_highlights()
+		show_forecast(0)
 		if chosen and not st.actions.second_cast(u):
 			return true
 	return false
@@ -396,6 +415,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 		cells.append(u.pos + d)
 	st.view.set_attack_cells(cells)
 	var iid := int(entry["id"])
+	show_forecast(4, u, iid, cells)
 	var t70 := int(Game.item(iid).get("type", 0)) >= 70
 	# the own-side picker (0x45533d mode 4): a cancel plays SE 1; outside the range SE 2 + "不在范围之内。"; a unit
 	# of the other group SE 2 + "这是敌军部队。". Fruits, 仙人果 and 印绶 take any own unit and refuse afterwards.
@@ -403,6 +423,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 		var r := await _click()
 		if _cancels(r, cells):
 			st.view.clear_highlights()
+			show_forecast(0)
 			Audio.se(1)
 			return false
 		var c: Vector2i = r[0]
@@ -420,6 +441,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 		if not t70 and not st.actions.item_usable_on(iid, t):
 			continue
 		st.view.clear_highlights()
+		show_forecast(0)
 		return await st.actions.use_item(u, entry, t)
 	return false
 

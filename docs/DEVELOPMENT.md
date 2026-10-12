@@ -42,6 +42,7 @@ All options are environment variables read at start-up, for example
 | `WG_RANDOM=1` | Autoplay picks random choices and clicks (otherwise deterministic) |
 | `WG_CLICKS=608,600,…` | Autoplay clicks these actors first, in order, each as soon as its click would run a section (a guided run through a puzzle; R_14's poem: `608,600,609,602,616,604,617,606,614,648,615,653,618,655,619,657`) |
 | `WG_CLICKCAP=n` | With `WG_AUTOSAVE`: end a story file after *n* autoplay clicks instead of 2,500 |
+| `WG_GOALS=0`, `WG_DUELSIM=0`, `WG_PUZZLE=0` | With `WG_AUTOSAVE`: turn off the battle objectives, the story 单挑 player or the flag-puzzle solver of the flow-test harness |
 | `WG_GOD=1` | Player side invulnerable and strong. With autoplay: from turn 13 the enemies on the map fall at each round (HP 0 and EV[10] as in combat, so the scripts' kill sections run) and hidden ones go; a battle still running at turn 60 jumps to its aftermath |
 | `WG_SORTIE_P=n` | Chance (%) that autoplay presses 出征 when available (default 12) |
 
@@ -53,6 +54,8 @@ All options are environment variables read at start-up, for example
 | `WG_TRACE_TEXT=1` | Print dialogue, choices, popups and autoplay clicks |
 | `WG_TRACE_OPS=1` | Print every executed instruction (very verbose) |
 | `WG_TRACE_BATTLE=1` | Print battle details (deployment, joins, area tests) |
+| `WG_TRACE_PID=p` / `all` | Print person p's unit, or every unit on the map, at each round start |
+| `WG_TRACE_MAP=1` | Print the battle map's terrain codes once, at turn 2 |
 | `WG_MEMWATCH=4b2c50-4b2c74` | Report writes to an address range (hex) in the emulated memory |
 
 **Test harness and bots**
@@ -140,11 +143,13 @@ The harness (`WG_AUTOSAVE`) keeps random play moving:
   on a jump start that lacks an earlier file's story flags: R_10's opening needs flag 755 from R_09, so start at
   18 or pass `WG_SETFLAGS=755`. The original would sit in the same empty scene.
 * Jump starts lack earlier files' flags in quests too: R_21's 出征 needs flag 19, which 并肩王府 / 管毅邸 set only
-  with R_09's 755 / 754, so a range that starts after R_09 always ends R_21 at the click cap. With
-  `WG_SETFLAGS=755` the bot gets deep into the quest (皇宫, 喜宴, 突围救友, the rescues in the fallen 瓦岗寨), but it
-  has to win many 单挑 in one go; a lost one restarts the file.
+  with R_09's branch flag 755 / 754. So `tools/flowpar.sh` passes `WG_SETFLAGS=755` (the 突围 branch) to a range
+  that starts after R_09 unless `WG_SETFLAGS` is set. R_21 also needs R_20's choice of a name for the garden
+  (flags 799-801, 月映轩 …), so test it from R_19 (38) or earlier, not by a jump into R_21.
 * A jump start's party is only 管毅 and `WG_PARTY`, so the persons a story file forces into the next sortie
-  (op 0x06) join the party when the sortie is built (S_31 needs its four 主攻手 to take the corners).
+  (op 0x06) join the party when the sortie is built (S_31 needs its four 主攻手 to take the corners). Not from
+  scenario 0: R_08 forces 雄阔海, who joins only in S_08, and with him S_08 would field a seventh unit, which the
+  six op 0x4b places leave at S_07's spot, shut in behind the city wall.
 * An **ending** in the last chapters stops the run.
 
 Autoplay clicks mostly go to actors whose click would run a section that has not run yet in this file (the
@@ -153,18 +158,24 @@ section the next poll would pick), else to actors some section tests for, else t
 In battles the AI plays our units, and the AI knows nothing of the script's position objectives. Under the harness
 `FlowGoals` (`game/src/debug/flow_goals.gd`) reads them from the battle scene before each of our units acts:
 * **Reach:** a section whose other conditions hold, whose title names an objective (到达, 占领, 攻破, 突破, 打开,
-  逃离, 撤离, 挖宝, 秘藏, but nothing with 伏 or 敌军) or whose cells lie in the 指定地点 the map marks (op 0x5b;
-  S_04's 伏兵出现（已料及） at (19, 4)), and that waits for our units on a cell or in an area (0x25 / 0x26 / 0x41)
-  sends them there (the nearest one for a single cell). They hold the cell once there and attack whatever is in
+  逃离, 撤离, 我军逃, 挖宝, 秘藏, 找到, but nothing with 伏 or 敌军) or whose cells lie in the 指定地点 the map marks
+  (op 0x5b; S_04's 伏兵出现（已料及） at (19, 4); S_36's 我军逃走 needs its name, since the marker moves on), and
+  that waits for our units on a cell or in an area (0x25 / 0x26 / 0x41) sends them there (the nearest one for a
+  single cell). They hold the cell once there and attack whatever is in
   range. Treasure sections (no dialogue) come last, and are dropped when they lie inside the area of a trigger that
   is armed or of a defeat section. The other position sections are mostly enemy triggers (伏兵起动, 我军过于南进):
   walking into them pulled our units off the pass in S_40, and S_45's 挖宝 lies in 妖风1's area, whose 罡岚万仞
   takes 罗成's HP (his fall loses the battle; god mode only covers combat).
 * **Guard:** a defeat section (its body sets story flag 1) that waits for an enemy on a cell sends the nearest unit
-  there to hold it.
+  there to hold it. An enemy closing in on such a cell (a shorter walk there than at an earlier turn) and within
+  four of its moves is the first target of every unit that can hit it this turn, unless it is a duel foe: in S_08,
+  内郭军方针变更 sends two light cavalry for 鹿砦 through the gate's guards, who block our way there.
 * **Keep out:** a defeat section that waits for our units in an area keeps them from ending a move there (S_04's
   友军提前攻城: coming near the town before the ambush is drawn out loses the battle). So does a section titled as
-  a trap (机关, 陷阱, 中计: S_43's 机关第五区; S_36's 挖宝04中计 is not a treasure to dig).
+  a trap (机关, 陷阱, 中计: S_43's 机关第五区; S_36's 挖宝04中计 is not a treasure to dig), unless the title is about
+  finding it (找到, an objective: S_36's 我军找到吊桥机关 lowers the drawbridges out of the maze) or the trap sets a
+  flag an objective waits for (S_36's 究极陷阱 has to go off before that mechanism works). Units walk round the
+  areas they keep out of when there is a way round.
 * **Sparing:** a defeat section that counts an enemy side on the whole map ("fewer than n", S_03's 绿林军死伤过重;
   not S_08's count of our own side, 我方有人撤退) makes our units leave that side alone except the target 胜利条件
   names after 击退 (else the persons a section waits for at HP 0); they all go for it, god mode's ×20 damage spares
@@ -175,8 +186,10 @@ In battles the AI plays our units, and the AI knows nothing of the script's posi
   Duel goals come after the objectives (S_08: the race to 鹿砦 before the duels with 宇文成都).
 * Sections that wait for different units on the same cells count as one goal: the nearest of those units goes
   (S_31: one section per 主攻手 at each corner, so the four go to four corners). Nearest means the cheapest walk
-  by the unit's move costs; a unit that cannot get there is passed over. A guarded cell that is also an
-  objective (S_08's 鹿砦, which the enemy makes for too) gets every unit the objective waits for.
+  by the unit's move costs; a unit that cannot get there is passed over, and the unit already sent to a single
+  cell keeps it unless another is much nearer (two units would otherwise swap two goals at every move). A guarded
+  cell that is also an objective (S_08's 鹿砦, which the enemy makes for too) gets every unit the objective waits
+  for.
 * Phase and turn tests count as true. Only the pure tests 0x05 / 0x36 / 0x79 / 0x2e are evaluated, and a section
   with any other op is left out.
 * `WG_TRACE_SEC` prints each new goal (`[goal] 管毅: reach 1.36 管毅到达鹿砦 → (2, 7)`). `WG_GOALS=0` turns it
@@ -190,7 +203,15 @@ into "R剧本单挑胜利" wins). `WG_TRACE_TEXT` prints each decision (`[duel] 
 `WG_DUELSIM_CHECK=1` checks each round played against the predicted outcomes, `WG_DUELSIM=0` turns it off. When
 sections keep running without a pause for the player (R_16's 张千, who must be clicked during a 4-tick delay), the bot
 clicks an actor whose click would run a section, as a player's click during the delay would.
+Click puzzles whose answer is a set of story flags are solved by `FlagPuzzle` (`game/src/debug/flag_puzzle.gd`):
+the target is a section of the scene that has not run, with only flag tests, that needs at least 4 flags which click
+sections set (R_14's 管德昭解图赴东郡: flags 111, 122, …, 188, verse v in slot v). Dry runs with DuelSim's flag
+interpreter rate each click on screen and every follow-up click; the bot takes the one whose best two clicks set the
+most of those flags, never clears one already set and changes some flag. After 30 such clicks without a new flag
+the scene goes back to the usual clicking (R_31's placement puzzle, whose last pieces the dry runs get wrong).
+`WG_TRACE_TEXT` prints `[puzzle] 3 of 8 flags, aiming at 4`; `WG_PUZZLE=0` turns it off.
 `WG_TRACE_PID=p` prints person p's unit (slot, state, HP, cell) at each round start; `WG_TRACE_PID=all` every unit on the map.
+`WG_TRACE_MAP=1` prints the battle map's terrain codes (hex, a row per line) once, at turn 2.
 
 Every skip prints a `== flow-test: …` line. A skip usually means random play can't meet a scripted objective (turn
 limits, traps, puzzles, choice-dependent endings), not a bug. Look for `SCRIPT ERROR`, `ERROR` or a `STALL`

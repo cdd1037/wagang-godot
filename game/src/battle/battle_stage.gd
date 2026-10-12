@@ -211,6 +211,13 @@ func battle_loop() -> void:
 			get_tree().quit()
 			return
 		var tp := OS.get_environment("WG_TRACE_PID")
+		if turn == 2 and OS.get_environment("WG_TRACE_MAP") != "":
+			# debug: the battle map's terrain codes, one row per line (hex)
+			for y in view.map_h:
+				var row := ""
+				for x in view.map_w:
+					row += "%02x" % (view.terrain_at(Vector2i(x, y)) & 0xff)
+				print("    [map %2d] %s" % [y, row])
 		if tp == "all":
 			# debug: every unit on the map at each round start, by colour
 			var rows := {}

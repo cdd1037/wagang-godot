@@ -426,6 +426,27 @@ static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int,
 	return clampi(h, 0, 100)
 
 
+## The forecast's (0x4404bd) strategy kinds: HP damage (0x449bac, a table over 0..0x41), MP damage (0x449c36: 暗鬼),
+## HP heal (0x449c55: 0x27-0x2b) and MP heal (0x449c7a: 0x2c-0x2d).
+const STRAT_HP_DAMAGE := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 33, 34, 35, 36, 38, 64, 65]
+
+
+static func strat_hp_damage(s: int) -> bool:
+	return s in STRAT_HP_DAMAGE
+
+
+static func strat_mp_damage(s: int) -> bool:
+	return s == 22
+
+
+static func strat_hp_heal(s: int) -> bool:
+	return s >= 39 and s <= 43
+
+
+static func strat_mp_heal(s: int) -> bool:
+	return s == 44 or s == 45
+
+
 static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) -> int:
 	var I := caster.spirit()
 	var J := target.spirit()

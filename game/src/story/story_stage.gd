@@ -255,6 +255,13 @@ func _wait_for_click() -> int:
 					if OS.get_environment("WG_TRACE_TEXT") != "":
 						print("  [click] ", dp, " (duel)")
 					return dp
+		# flow-test: a click puzzle whose answer is a set of story flags (R_14's verses) is solved by dry runs
+		if FlagPuzzle.enabled:
+			var pz := FlagPuzzle.best_click(vm, keys, _ran_secs)
+			if pz >= 0:
+				if OS.get_environment("WG_TRACE_TEXT") != "":
+					print("  [click] ", pz, " (puzzle)")
+				return pz
 		# mostly click actors whose click runs a section that has not run yet, else actors that some section of
 		# this scene tests for (like a player would)
 		var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []

@@ -7,10 +7,15 @@ extends RefCounted
 ## 0x26 unit in area, 0x41 count in area). Phase (0x40) and turn (0x3f) tests count as true; a section with any op
 ## besides those and the pure tests 0x05 / 0x36 / 0x79 / 0x2e is left out, so nothing runs.
 ## * A defeat section (its body sets story flag 1) that waits for an enemy on a cell: the nearest player unit goes
-##   there and holds it, so no enemy can stand on it (S_02's 山寨被占领).
+##   there and holds it, so no enemy can stand on it (S_02's 山寨被占领). An enemy closing in on such a cell (a
+##   shorter walk there than at an earlier turn), within four of its moves, is the first target of every unit that
+##   can hit it this turn (S_08's cavalry, sent for 鹿砦); not a duel foe or a spared side.
 ## * A defeat section that waits for player units in an area: those units never end a move there (S_04's
 ##   友军提前攻城: the battle is lost if anyone comes near the town before the ambush is drawn out). The same for a
-##   section titled as a trap (机关, 陷阱, 中计: S_43's 机关第五区 hurts 管毅; S_36's 挖宝04中计 is no treasure).
+##   section titled as a trap (机关, 陷阱, 中计: S_43's 机关第五区 hurts 管毅; S_36's 挖宝04中计 is no treasure),
+##   unless it is about finding the mechanism (找到: S_36's 我军找到吊桥机关 lowers the bridge out of the maze), or it
+##   sets a flag an objective waits for (S_36's 究极陷阱 has to go off before that mechanism works). Units walk round
+##   these areas when there is a way round (BattleAI._flow_walk).
 ## * A section whose title names an objective (到达, 占领, 攻破, …; see GOAL_WORDS), or whose cells lie in the area
 ##   the map marks as 指定地点 (op 0x5b), and that waits for player units on a cell or in an area: those units walk
 ##   there (到达指定地点). Other position sections are mostly enemy triggers (伏兵起动, 我军过于南进 …) that would
@@ -25,28 +30,35 @@ extends RefCounted
 ##   which the follow-up sections need). The god-mode clear after turn 12 still takes him (S_28, S_39). Duels come
 ##   after the objectives (S_08: the race to 鹿砦 before the duels with 宇文成都).
 ## Sections that wait for different units on the same cells are one goal, for the nearest of those units (S_31).
-## "Nearest" is the cheapest walk by the unit's move costs; a unit that cannot get there is passed over.
+## "Nearest" is the cheapest walk by the unit's move costs; a unit that cannot get there is passed over, and a unit
+## already sent to a single cell keeps it unless another is much nearer.
 ## WG_GOALS=0 turns it off, to compare.
 
 const PURE := [5, 0x36, 0x79, 0x2e]
 const POS := [0x25, 0x26, 0x41]
 const FREE := [2, 0x40, 0x3f]
 const MAX_GUARD_CELLS := 4      # a defeat area larger than this cannot be held
-const GOAL_WORDS := ["到达", "占领", "攻破", "突破", "打开", "逃离", "撤离", "挖宝", "秘藏"]
+const FOUND := "找到"      # finding the mechanism is the objective (S_36's 我军找到吊桥机关, 我军找到城门机关1)
+const GOAL_WORDS := ["到达", "占领", "攻破", "突破", "打开", "逃离", "撤离", "挖宝", "秘藏", "我军逃", FOUND]
 const TRAP_WORDS := ["伏", "敌军"]
-const SNARE_WORDS := ["机关", "陷阱", "中计"]     # a trap that springs on our units (S_43's 机关第五区, S_36's 挖宝04中计)
+const SNARE_WORDS := ["机关", "陷阱", "中计"]     # a trap that springs on our units (S_43's 机关第五区, S_36's 挖宝04中计), unless FOUND
 
 static var enabled := OS.get_environment("WG_AUTOSAVE") != "" and OS.get_environment("WG_GOALS") != "0"
 static var _last := {}          # slot → goal text last traced
 static var _traced := ""        # battle whose units were traced
 static var sparing: Array = []  # sides not to thin out (see above), from the last compute
 static var no_hit: Array = []   # persons a pending duel section waits for, from the last compute
-static var no_go := {}          # slot → cells a defeat section waits for that unit in, from the last compute
+static var no_go := {}          # slot → {cell: true} a defeat or trap section waits for that unit in (last compute)
+static var threats: Array = []  # enemies closing in on a guarded cell, the nearest (in its moves) first (see above)
+static var _approach := {}      # "battle/slot/cell" → [turn, its walk cost then, the cost at an earlier turn]
+static var _holder := {}        # "battle/cell" → slot of the unit last sent to that single cell
+const THREAT_MOVES := 4         # …that could get there within this many of their moves
 
 
 ## slot → {"cells": Array[Vector2i] (the nearest one counts), "hold": bool, "why": String}
 static func compute(st: BattleStage) -> Dictionary:
 	var out := {}
+	threats = []
 	var vm: EexVM = st.vm
 	if vm == null or not vm.active:
 		return out
@@ -70,6 +82,7 @@ static func compute(st: BattleStage) -> Dictionary:
 	var avoid := {}              # slot → cells of defeat sections that wait for that unit
 	var mark := _marked()
 	var secs := vm.sections(vm.scene)
+	var wanted_flags := _objective_flags(secs)
 	for k in secs.size():
 		var sec: Dictionary = secs[k]
 		var pos: Array = []
@@ -139,7 +152,8 @@ static func compute(st: BattleStage) -> Dictionary:
 					if st.side_match(u, int(a[0])):
 						who.append(u)
 			var goal := named or (not mark.is_empty() and cells.all(func(c: Vector2i) -> bool: return c in mark))
-			if SNARE_WORDS.any(func(w: String) -> bool: return w in title):
+			if SNARE_WORDS.any(func(w: String) -> bool: return w in title) and not FOUND in title \
+					and not _sets_any(secs, k, wanted_flags):
 				for u in who:
 					avoid[u.slot] = avoid.get(u.slot, []) + cells
 				continue
@@ -154,7 +168,12 @@ static func compute(st: BattleStage) -> Dictionary:
 				traps.append(cells)
 	sparing = spare
 	no_hit = duel_pids
-	no_go = avoid
+	no_go = {}
+	for slot in avoid:
+		var set := {}
+		for c in avoid[slot]:
+			set[c] = true
+		no_go[slot] = set
 	if OS.get_environment("WG_TRACE_SEC") != "" and _last.get(-2, "") != str(avoid.keys()):
 		_last[-2] = str(avoid.keys())
 		if not avoid.is_empty():
@@ -210,6 +229,34 @@ static func compute(st: BattleStage) -> Dictionary:
 				for u in pool:
 					if not out.has(u.slot):
 						out[u.slot] = {"cells": [c], "hold": true, "why": "race " + str(g[1])}
+	# an enemy closing in on a guarded cell (its walk there shorter than at an earlier turn) and within THREAT_MOVES
+	# of its moves is everyone's first target (S_08: the cavalry that 内郭军方针变更 sends for 鹿砦 rides through
+	# the gate's guards, who block our way to it; the guards beside 鹿砦 never step on it)
+	var near := {}       # threat → its moves from the cell, the nearest first
+	var to_cell := {}    # "cell/family" → walk costs to the cell (one search per movement family)
+	for c in held:
+		for x in st.units:
+			if not x.active() or not x.is_enemy_of(ours[0]) or x.pid in duel_pids:
+				continue
+			var fk := "%s/%d" % [c, x.family()]
+			if not to_cell.has(fk):
+				to_cell[fk] = _costs_to(st, x, c)
+			var k := int(to_cell[fk].get(x.pos, 1 << 30))
+			var key := "%s/%d/%s" % [vm.name, x.slot, c]
+			var e: Array = _approach.get(key, [st.turn, k, -1])
+			if int(e[0]) > st.turn:
+				e = [st.turn, k, -1]          # the battle again (a retry)
+			elif int(e[0]) < st.turn:
+				e = [st.turn, k, int(e[1])]
+			_approach[key] = e
+			if int(e[2]) >= 0 and k < int(e[2]) and k <= THREAT_MOVES * x.move_points():
+				near[x] = minf(float(near.get(x, INF)), float(k) / maxi(x.move_points(), 1))
+	threats = near.keys()
+	threats.sort_custom(func(a: BUnit, b: BUnit) -> bool: return near[a] < near[b])
+	if OS.get_environment("WG_TRACE_SEC") != "" and _last.get(-3, "") != str(threats.map(func(x: BUnit) -> int: return x.slot)):
+		_last[-3] = str(threats.map(func(x: BUnit) -> int: return x.slot))
+		if not threats.is_empty():
+			print("  [goal] threats to the guarded cells: %s" % ", ".join(threats.map(func(x: BUnit) -> String: return x.person.name)))
 	# then the reach goals, the duels, the treasure
 	for cells in avoid.values():
 		traps.append(cells)
@@ -270,7 +317,7 @@ static func _marked() -> Array[Vector2i]:
 
 ## Unit `u` (autoplayed) must not end a move on `c` (a defeat section's area, see above).
 static func avoids(u: BUnit, c: Vector2i) -> bool:
-	return enabled and c in no_go.get(u.slot, [])
+	return enabled and no_go.has(u.slot) and no_go[u.slot].has(c)
 
 
 ## test_attr p 7 0 2: person p's battle-unit HP is 0.
@@ -317,13 +364,24 @@ static func _rect(x0: int, y0: int, x1: int, y1: int) -> Array[Vector2i]:
 static func _nearest(st: BattleStage, pool: Array, c: Vector2i, out: Dictionary) -> BUnit:
 	var best: BUnit = null
 	var best_cost := 1 << 30
+	var key := "%s/%s" % [st.vm.name if st.vm else "", c]
+	var had: Variant = _holder.get(key)
+	var had_cost := 1 << 30
 	for u in pool:
 		if out.has(u.slot):
 			continue
 		var k := _walk_cost(st, u, c)
+		if u.slot == had:
+			had_cost = k
 		if k < best_cost:
 			best = u
 			best_cost = k
+	# keep the unit already on its way (else two units swap two goals at every move) unless one is much nearer
+	# (S_36's mechanism, when 究极陷阱 walls the way its first pick had)
+	if had_cost < (1 << 30) and had_cost <= best_cost * 3 / 2 + 4:
+		best = st.units[int(had)]
+	if best:
+		_holder[key] = best.slot
 	return best
 
 
@@ -357,6 +415,67 @@ static func _walk_cost(st: BattleStage, u: BUnit, c: Vector2i) -> int:
 		buckets.erase(level)
 		level += 1
 	return 1 << 30
+
+
+## The flags that objective sections (titles with GOAL_WORDS) need set.
+static func _objective_flags(secs: Array) -> Dictionary:
+	var out := {}
+	for sec in secs:
+		var title := str(sec.get("title", ""))
+		if not GOAL_WORDS.any(func(w: String) -> bool: return w in title):
+			continue
+		for c in sec.get("conditions", []):
+			if int(c["op"]) == 5:
+				for f in c["args"][0]:
+					out[int(f)] = true
+	return out
+
+
+## Section k sets one of `flags` (following its gotos within the scene): a trap that an objective needs sprung
+## (S_36's 究极陷阱发动1/2 set flag 16, which 我军找到吊桥机关 waits for), so not one to keep out of.
+static func _sets_any(secs: Array, k: int, flags: Dictionary, depth := 0) -> bool:
+	if flags.is_empty() or depth > 3:
+		return false
+	for ins in secs[k].get("body", []):
+		var op := int(ins.get("op", -1))
+		if op == 0x0b and int(ins["args"][1]) != 0 and flags.has(int(ins["args"][0])):
+			return true
+		if op == 0x76:
+			var t: Dictionary = ins.get("target", {})
+			if not t.is_empty() and int(t.get("section", -1)) >= 0 and int(t["section"]) < secs.size() \
+					and _sets_any(secs, int(t["section"]), flags, depth + 1):
+				return true
+	return false
+
+
+## The cost of the cheapest walk to `c` from every cell, by the move costs of `u`'s family (as `_walk_cost`, searched
+## from `c` backwards: a step costs what entering its cell costs).
+static func _costs_to(st: BattleStage, u: BUnit, c: Vector2i) -> Dictionary:
+	var far := {c: 0}
+	var buckets := {0: [c]}
+	var level := 0
+	var top := 0
+	while level <= top:
+		for p in buckets.get(level, []):
+			if int(far[p]) != level:
+				continue
+			var step := Rules.move_cost(u, st.view.terrain_at(p))
+			if step >= 255:
+				continue
+			for d in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+				var n: Vector2i = p + d
+				if not st.view.in_bounds(n) or Rules.move_cost(u, st.view.terrain_at(n)) >= 255:
+					continue
+				var k := level + step
+				if not far.has(n) or k < int(far[n]):
+					far[n] = k
+					if not buckets.has(k):
+						buckets[k] = []
+					buckets[k].append(n)
+					top = maxi(top, k)
+		buckets.erase(level)
+		level += 1
+	return far
 
 
 static func _talks(sec: Dictionary) -> bool:

@@ -9,9 +9,13 @@ signal chosen(index: int)
 const ROW_H := 24
 const PAD := 10
 const TAP_SLOP := 10.0       # finger travel (px) before a touch on a long list scrolls it instead of picking
+const ICON := 16             # row icons (the command menu's CmdIcon.dll set, 0x45bd05)
+const ICON_X := (ROW_H - ICON) / 2 + 1     # 0x472403: left margin = vertical margin + 1
+const ICON_TEXT := ICON_X + ICON + 6 - (PAD + 4)   # how far a row's text moves right when the menu has icons
 
 var items: PackedStringArray = []
 var enabled: Array = []
+var icons: Array = []        # Texture2D or null per row, or empty
 var sel := 0
 var cancellable := true
 var title := ""
@@ -41,10 +45,11 @@ func _init() -> void:
 	visible = false
 
 
-func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0, first := 0, info_cb := Callable()) -> int:
+func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header := "", enabled_mask: Array = [], min_width := 0.0, first := 0, info_cb := Callable(), row_icons: Array = []) -> int:
 	info = info_cb
 	items = PackedStringArray(options)
 	enabled = enabled_mask if enabled_mask.size() == options.size() else []
+	icons = row_icons if row_icons.any(func(t: Variant) -> bool: return t != null) else []
 	cancellable = can_cancel
 	title = header
 	_min_width = min_width
@@ -54,7 +59,7 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	var f := Assets.font()
 	var w := _min_width
 	for s in items:
-		w = maxf(w, f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x)
+		w = maxf(w, f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x + _text_dx())
 	if title != "":
 		w = maxf(w, f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x)
 	var vs := get_viewport_rect().size
@@ -100,6 +105,10 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	return r
 
 
+func _text_dx() -> int:
+	return ICON_TEXT if not icons.is_empty() else 0
+
+
 func _is_enabled(i: int) -> bool:
 	return enabled.is_empty() or (i < enabled.size() and enabled[i])
 
@@ -131,18 +140,22 @@ func _draw() -> void:
 	if title != "":
 		UIStyle.draw_text(self, Vector2(_rect.position.x + PAD + 8, _rect.position.y + PAD + 17), title, UIStyle.NAME_COLOR)
 	var f := Assets.font()
-	var max_w := _rect.size.x - PAD * 2 - 16
+	var max_w := _rect.size.x - PAD * 2 - 16 - _text_dx()
 	for i in range(_top, mini(_top + _rows, items.size())):
 		var rr := _row_rect(i)
 		if i == sel:
 			draw_rect(rr, UIStyle.HILITE)
 		var col := UIStyle.TEXT_COLOR if _is_enabled(i) else Color(0.55, 0.55, 0.6)
+		if i < icons.size() and icons[i] != null:
+			# disabled: greyed (DrawState DSS_DISABLED in the original)
+			draw_texture_rect(icons[i], Rect2(rr.position + Vector2(ICON_X, (ROW_H - ICON) / 2), Vector2(ICON, ICON)), false,
+					Color(1, 1, 1) if _is_enabled(i) else Color(0.55, 0.55, 0.6, 0.6))
 		var t := items[i]
 		if f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x > max_w:
 			while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, UIStyle.FONT_SIZE).x > max_w:
 				t = t.left(-1)
 			t += "…"
-		UIStyle.draw_text(self, Vector2(rr.position.x + PAD + 4, rr.position.y + 17), t, col)
+		UIStyle.draw_text(self, Vector2(rr.position.x + PAD + 4 + _text_dx(), rr.position.y + 17), t, col)
 	# more rows above / below
 	var ax := _rect.end.x - 14
 	if _top > 0:

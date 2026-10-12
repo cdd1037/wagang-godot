@@ -574,13 +574,49 @@ func _active(mv: int) -> void:
 
 
 ## Flow-test harness only (FlowGoals, not the original AI): walk to the reachable cell nearest the goal cells by
-## U's move costs (other units ignored), or hold a goal cell already reached; then attack whatever is in range.
+## U's move costs (other units ignored, round the areas U keeps out of when it can), or hold a goal cell already
+## reached; then attack whatever is in range.
+## A threat to a guarded cell that U can hit this turn comes first.
 func _flow_walk(mv: int) -> void:
 	var cells: Array = flow_goal["cells"]
 	if u.pos in cells and flow_goal["hold"]:
 		_flood4(u.pos, 0)
 		dest = u.pos
 		return
+	# the walk round the areas U keeps out of (FlowGoals.avoids), else straight through them
+	var far := _goal_distances(cells, true)
+	if not far.has(u.pos):
+		far = _goal_distances(cells, false)
+	if not far.has(u.pos):
+		_active(mv)
+		return
+	_flood(u.pos, mv, true, func(_n: Vector2i) -> bool: return false)
+	dest = u.pos
+	# an enemy that threatens a guarded cell (FlowGoals.threats, the nearest to it first): hit the first one U can,
+	# from the cell nearest the goal
+	for x: BUnit in FlowGoals.threats:
+		if not x.active() or not FlowGoals.may_hit(flow_goal, x):
+			continue
+		var hit := false
+		for c in grid:
+			if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c) or not st.actions.can_attack(u, x, c):
+				continue
+			if not hit or int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
+				hit = true
+				dest = c
+		if hit:
+			choice_target = x
+			return
+	for c in grid:
+		if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c):
+			continue
+		if int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
+			dest = c
+
+
+## Flow-test harness: the cost of U's cheapest walk from each cell to the nearest of `cells` by its move costs,
+## other units ignored; with `around`, through no cell U keeps out of (but its own).
+func _goal_distances(cells: Array, around: bool) -> Dictionary:
 	var far := {}
 	var buckets := {0: []}
 	for c in cells:
@@ -600,6 +636,8 @@ func _flow_walk(mv: int) -> void:
 				var n: Vector2i = c + d
 				if not st.view.in_bounds(n) or Rules.move_cost(u, st.view.terrain_at(n)) >= 255:
 					continue
+				if around and n != u.pos and FlowGoals.avoids(u, n):
+					continue
 				if not far.has(n) or int(far[n]) > level + step:
 					far[n] = level + step
 					if not buckets.has(level + step):
@@ -607,16 +645,7 @@ func _flow_walk(mv: int) -> void:
 					buckets[level + step].append(n)
 		buckets.erase(level)
 		level += 1
-	if not far.has(u.pos):
-		_active(mv)
-		return
-	_flood(u.pos, mv, true, func(_n: Vector2i) -> bool: return false)
-	dest = u.pos
-	for c in grid:
-		if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c):
-			continue
-		if int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
-			dest = c
+	return far
 
 
 ## GoTarget (0x43afd4, codes 0 and 4): the target unit's cell (if that unit itself goes for a target, its target

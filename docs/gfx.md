@@ -54,7 +54,9 @@ Exe = `wagan.wa` (CCZ Ekd5.exe + mod code in .text2 0x4d0000+). Addresses are VA
   bitmap id = `100 + 2*i + size` (size 0 = 16x16, 1 = 32x32). Masked lists use palette **index 0 as the
   colour key** (mask generator 0x40a58a compares the 8-bit pixel to the key index passed = 0).
   Lists: MgcIcon small unmasked / large masked (0x40b5d1/0x40b61d), ItemIcon small+large masked
-  (0x40b669/0x40b6b5). `CmdIcon.dll`: 5 16x16 command icons (ids 100..104).
+  (0x40b669/0x40b6b5). `CmdIcon.dll`: 5 16x16 command icons (ids 100..104; ImageList 0x40b701): 0 sword, 1 scroll, 2 pouch,
+  3 tent, 4 hand-over. The battle command menu (0x45bd05) shows them by its buttons, the item lists' and shops' two
+  tabs show 0 and 2 (0x472281).
   Koei-original bitmaps have palette[0] = (247,0,255); mod-made item icons use (0,0,255) — both keyed by index.
 * `Mapatr.dll`: 28 48x48 terrain-info pictures, id = 100 + terrain (0x46c675 adds 100..123 to an
   ImageList; the mod's extra 124..127 are loaded elsewhere).

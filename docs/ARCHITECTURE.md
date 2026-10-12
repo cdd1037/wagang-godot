@@ -205,4 +205,4 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage`, `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
-| `debug/` | `test_runner`, `input_bot`, small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |
+| `debug/` | `test_runner`, `input_bot`, the flow-test helpers `flow_goals` (battle objectives), `duel_sim` (story 单挑) and `flag_puzzle` (click puzzles), small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

@@ -396,8 +396,9 @@ func list_scroll_hit(key: Variant, lv: ListView, name: String) -> bool:
 
 
 ## A tab control (SysTabControl32): the labels along the top of rect; returns the page area under them.
-## Hits: [key, i].
-func tabs(rect: Rect2, labels: Array, cur: int, key := "tab") -> Rect2:
+## `icons`: a 16×16 picture before each label (0x472281 gives the item lists' and shops' two tabs the CmdIcon.dll
+## sword and pouch). Hits: [key, i].
+func tabs(rect: Rect2, labels: Array, cur: int, key := "tab", icons: Array = []) -> Rect2:
 	var th := 13 * dlu_scale.y
 	var body := Rect2(rect.position + Vector2(0, th), rect.size - Vector2(0, th))
 	draw_rect(body, Color(0, 0, 0.08, 0.25))
@@ -405,13 +406,18 @@ func tabs(rect: Rect2, labels: Array, cur: int, key := "tab") -> Rect2:
 	var f := Assets.font()
 	var x := rect.position.x
 	for i in labels.size():
-		var tw := f.get_string_size(str(labels[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x + 20
+		var ic: Texture2D = icons[i] if i < icons.size() else null
+		var iw := 20.0 if ic else 0.0
+		var tw := f.get_string_size(str(labels[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x + 20 + iw
 		var tr := Rect2(x, rect.position.y + (0.0 if i == cur else 2.0), tw, th - (0.0 if i == cur else 2.0))
 		draw_rect(tr, Color(0.16, 0.24, 0.46, 0.95) if i == cur else Color(0.08, 0.1, 0.2, 0.85))
 		if i != cur and hovered([key, i]):
 			draw_rect(tr, HOVER)
 		draw_rect(tr, FRAME, false, 1.0)
-		text(tr, str(labels[i]), HORIZONTAL_ALIGNMENT_CENTER, UIStyle.NAME_COLOR if i == cur else UIStyle.TEXT_COLOR)
+		if ic:
+			draw_texture_rect(ic, Rect2(tr.position + Vector2(8, (tr.size.y - 16) / 2), Vector2(16, 16)), false)
+		var lr := Rect2(tr.position + Vector2(iw, 0), tr.size - Vector2(iw, 0))
+		text(lr, str(labels[i]), HORIZONTAL_ALIGNMENT_CENTER, UIStyle.NAME_COLOR if i == cur else UIStyle.TEXT_COLOR)
 		hit(tr, [key, i])
 		x += tw
 	return body
