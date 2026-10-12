@@ -1,149 +1,121 @@
-# 兴唐传·瓦岗山异闻录 — Godot reimplementation
+# 兴唐传·瓦岗山异闻录 — Godot remake
 
 [中文](README.md) | **English**
 
-A reverse-engineered reimplementation of **兴唐传·瓦岗山异闻录** (*Xing Tang Zhuan: Wagang Mountain Chronicles*), a
-Sui–Tang story mod built on Koei's 1998 *三国志曹操传* (Cao Cao Zhuan) engine, rewritten in **Godot 4.7** so it runs
-natively on macOS, Windows, iPhone and Android.
-
-The original Windows executable was decompiled (Ghidra) and its formats, script language, battle formulas and AI
-were documented, then re-implemented. The game's own data is used unchanged in converted form: all 117 story and
-battle scripts, maps, sprites, portraits, music, sound effects and cutscenes.
+A remake of the Sui–Tang tactics game **兴唐传·瓦岗山异闻录** (*Xing Tang Zhuan: Wagang Mountain Chronicles*) that runs
+natively on **Windows**, **macOS**, **iPhone** and **Android**. The original is a mod by 轩辕学院 built on Koei's
+*三国志曹操传* (Cao Cao Zhuan) engine. The remake was rewritten from the original program: story, battle rules, enemy
+AI, shops and menus work as in the original, and every picture is AI-upscaled to 4× HD.
 
 <p align="center">
   <img src="docs/images/title.jpg" width="400" alt="Title screen">
-  <img src="docs/images/story.jpg" width="400" alt="Story scene">
+  <img src="docs/images/story.jpg" width="400" alt="Story dialogue">
 </p>
 <p align="center">
-  <img src="docs/images/battle-move.jpg" width="400" alt="Battle: attack range">
-  <img src="docs/images/duel.jpg" width="400" alt="Duel (单挑)">
+  <img src="docs/images/battle-menu.jpg" width="400" alt="Battle commands: 绝招, 围攻, 交给">
+  <img src="docs/images/info.jpg" width="400" alt="武将情报 (character information)">
 </p>
-
-## Features
-
-* **Story scenes** – isometric towns and cutscenes, portraits and dialogue, captions, CG pictures, videos, branching
-  choices, hub towns with shops and side quests, and the mod's 单挑 mini-games.
-* **Tactical battles** – deployment and sortie selection, movement with zones of control, attacks, counters and
-  double attacks, strategies with their animations, items, terrain and weather effects, experience and promotions,
-  scripted battle events, and the original enemy AI.
-* **Duels** – the 单挑 screen, re-implemented from the decompiled routines (intro, speech bubbles, every action and
-  blow animation, EXP for the winner).
-* **HD graphics** – every texture the game draws re-rendered at 4× with AI upscalers chosen per kind of art. The
-  released builds contain only the HD art. See [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
-* **Saves** – 10 slots, usable from story scenes and mid-battle, plus an autosave written when the app goes to the
-  background or is closed; 继续游戏 on the title screen resumes it.
-* **Multiple endings** – decided by the story flags and scores the scripts keep, exactly as in the original.
-
-All 117 scripts have been run end to end by an automated play-through harness without script errors.
 
 ## Download
 
-Ready-to-play builds for **macOS** (Apple Silicon and Intel), **Windows** (64-bit), **iPhone** and **Android** are on the
-[Releases page](https://github.com/seedds/wagang-godot/releases). Every change to the game publishes a new
-numbered build automatically; the build number is shown in the corner of the title screen. The builds contain the
-HD art only; each platform's zip is about 1.1 GB.
+Get the newest **Build N** from the [Releases page](https://github.com/seedds/wagang-godot/releases). Every update
+publishes a new build automatically; each platform's file is about 1.1 GB, and the iPhone and Android files arrive a
+few minutes after the desktop ones.
 
-* **macOS:** unzip and open the app. It is not notarized, so macOS blocks it the first time. On macOS 15 and later
-  open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**; on older versions
-  right-click the app → **Open**. Or run `xattr -dr com.apple.quarantine <app>`.
-* **Windows:** unzip and run `WaGang.exe`, keeping `WaGang.pck` next to it. If SmartScreen warns about an
-  unknown publisher, choose **More info → Run anyway**.
-* **iPhone** (iOS 15+, iPhone XS or newer): `WaGang-iOS-build-N.ipa` is uploaded a few minutes after the others. It
-  is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID (with a free Apple ID it has
-  to be re-signed every 7 days). With an Apple developer account and a Mac you can also build and install it with
-  `tools/build_ios.sh --device` (see [docs/BUILDING.md](docs/BUILDING.md)).
-* **Android** (Android 7.0+, 64-bit ARM): `WaGang-Android-build-N.apk`, also uploaded a few minutes after the
-  others. Download it on the phone, open it and allow the browser or file manager to install apps when asked. Later
-  builds install over it and keep the saves.
+| Platform | File | Install |
+|---|---|---|
+| Windows (64-bit) | `WaGang-Windows-build-N.zip` | Unzip and run `WaGang.exe` (keep `WaGang.pck` next to it). If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**. |
+| macOS (Apple Silicon 11+, Intel 10.13+) | `WaGang-macOS-build-N.zip` | Unzip and open the app. It is not notarized, so macOS blocks it the first time: on macOS 15 and later click **Open Anyway** at the bottom of **System Settings → Privacy & Security**; on older versions right-click the app → **Open**. |
+| iPhone (iOS 15+, iPhone XS or newer) | `WaGang-iOS-build-N.ipa` | Unsigned: install it with AltStore or Sideloadly (with a free Apple ID it must be re-signed every 7 days). |
+| Android (7.0+, 64-bit) | `WaGang-Android-build-N.apk` | Download it on the phone, open it and allow the install. Later builds install over it and keep the saves. |
 
-## Quick start (from source)
+## Features
 
-**Requirements:** macOS 10.13+ on Intel or 11+ on Apple Silicon, and [Godot 4.7](https://godotengine.org)
-(`brew install --cask godot`). The converted game data is included in this repository.
+* **The whole story**: all 117 story and battle scripts, from the opening at 牧龙谷 to every ending. Dialogue choices
+  and battle results change the branches and the ending you reach.
+* **The original battles**: Cao Cao Zhuan's tactics rules plus the mod's 绝招 (special move), 围攻 (siege) and 交给
+  (hand over) commands and the many characters' 【技】/【术】 skills; the enemy AI is the original's too.
+* **Towns and mini-games**: buy and sell weapons and items, change equipment, choose who marches out, take side
+  quests; the story also has 单挑 duels, puzzles and other mini-games.
+* **4× HD graphics**: every picture is AI-upscaled to 4× ([original vs HD](docs/HD_GRAPHICS.md)).
+* **Save anywhere**: 10 slots, in story scenes and mid-battle, plus an autosave written when the app goes to the
+  background or is closed; 继续游戏 on the title screen picks it up. Save files can be copied between computer and
+  iPhone.
+
+<p align="center">
+  <img src="docs/images/town.jpg" width="400" alt="Town toolbar: 出征, 装备, 买进, 卖出">
+  <img src="docs/images/shop.jpg" width="400" alt="Shop">
+</p>
+
+**On phones** the game plays in landscape with the 4:3 picture in the middle and 菜单 (menu), 返回 (back) and 快进
+(fast-forward) buttons beside it; tap, drag and hold to play:
+
+<p align="center">
+  <img src="docs/images/phone-story.jpg" width="400" alt="Phone: story scene">
+  <img src="docs/images/phone-battle.jpg" width="400" alt="Phone: battle">
+</p>
+
+## Controls
+
+| Computer | Phone | Action |
+|---|---|---|
+| Left click / Enter | Tap | select, confirm, advance dialogue |
+| Right click / Esc | Tap an empty spot / 返回 | cancel, go back |
+| Esc / right click on an empty spot | 菜单 | system menu: save, load, end turn, unit list … |
+| Right click on a character | Hold a finger on it | 武将情报 (character information) |
+| Arrow keys / mouse at the screen edge | Drag | scroll the battle map |
+| Hold Space or Ctrl | 快进 | fast-forward |
+| ⌘F / F11 / Alt+Enter | — | full screen; drag the window's edge to resize it |
+
+Android's back button works like 返回 and never quits the game. Menus, battle commands, character skills, where the
+saves live and troubleshooting are in the full **[player guide](docs/PLAYING.md)**.
+
+## Differences from the original
+
+The game plays as the original does, apart from these deliberate changes:
+
+* The autosave is a file of its own and takes no save slot (the original overwrote slots 1–5 in turn after each of
+  your battle phases).
+* Every cutscene video can be skipped.
+* The original's Windows menu bar and toolbar are an in-game list and buttons in the top bar; one window is open
+  at a time.
+* An ending or a game over returns to the title screen instead of closing the program.
+
+## Status
+
+* The whole game is playable from the opening to the endings. Every script has been run by automated play-through
+  tests, but nobody has played it through by hand yet.
+* The Windows build has not been tested on a real Windows machine yet.
+* Please report problems in [Issues](https://github.com/seedds/wagang-godot/issues).
+
+## For developers
+
+The original program (`wagan.wa`) was decompiled with Ghidra; its file formats, script language, battle formulas,
+enemy AI and every change the mod makes to the engine were documented and then reimplemented in **Godot 4.7**. The
+game data (scripts, maps, pictures, music, sound, videos) is the original's, only converted.
+
+Running from source needs [Godot 4.7](https://godotengine.org) (`brew install --cask godot` on macOS):
 
 ```sh
 git clone https://github.com/seedds/wagang-godot.git
 cd wagang-godot
-./run_game.sh                 # first run downloads the HD graphics pack (~720 MB), imports the project, starts the game
+./run_game.sh      # first run downloads the HD graphics pack (~720 MB), imports the project, starts the game
 ```
 
-To use Godot directly, import once with `godot --headless --path game --import`, then run `godot --path game`.
-Without the import step the scripts' class names aren't registered and the game fails to start.
-
-The HD graphics pack is too big for the git repository; it is published as the release
-[hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack). `run_game.sh` downloads it on first run
-(or run `tools/get_hd_pack.sh`). It is built with `tools/upscale_assets.py`, see
-[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md).
-
-To build a standalone `.app`:
-
-```sh
-godot --headless --path game --import                          # first time only
-godot --headless --path game --export-release "macOS" ../build/WaGang.app
-open build/WaGang.app
-```
-
-The app is ad-hoc signed. If macOS refuses to open a copy that came from another machine, allow it in **System
-Settings → Privacy & Security → Open Anyway** (macOS 15+; right-click → **Open** on older versions), or run
-`xattr -dr com.apple.quarantine WaGang.app`.
-
-## Controls (summary)
-
-| Input | Action |
-|---|---|
-| Left click / Enter | select, confirm, advance dialogue |
-| Right click / Esc | cancel; open the menu (story: 菜单, battle: 回合结束 / save / load …) |
-| Arrow keys | move the battle cursor |
-| Mouse at screen edge, middle-drag | scroll the battle map |
-| Hold Space or Ctrl | fast-forward |
-| ⌘F / F11 / Alt+Enter | toggle full screen |
-| Drag the window edge | resize; the window snaps back to 4:3 when you let go |
-
-On iPhone and Android the game plays in landscape with the 4:3 picture in the middle and touch buttons beside it:
-
-| Touch | Action |
-|---|---|
-| Tap | left click: select, confirm, advance dialogue; on the battle map it also shows that cell's unit or terrain |
-| Drag on the battle map | scroll the map |
-| Drag up/down on a long list | scroll it; on a list, slide the finger to the entry you want and lift to pick it |
-| Tap an empty spot | cancel: outside a list closes it (outside the attack/strategy/item command list it takes the move back); outside a target range stops picking a target; outside the move range drops the selected unit |
-| **菜单** (top left) | the system menu (story: 菜单; battle: end turn, save, load …); only when nothing is selected |
-| **返回** (left) | cancel / go back, like Esc; dimmed when 菜单 is available |
-| **快进** (right) | fast-forward on/off (like holding Ctrl); lit while on |
-| Android back button / gesture | like **返回**; opens the system menu where 返回 is dimmed (it does not quit the game) |
-
-The full guide is in **[docs/PLAYING.md](docs/PLAYING.md)**.
-
-## Documentation
+Without the script, import once with `godot --headless --path game --import`, then run `godot --path game`.
 
 | Document | Contents |
 |---|---|
-| [docs/PLAYING.md](docs/PLAYING.md) | Player guide: story scenes, battles, duels, menus, saving, troubleshooting |
-| [docs/BUILDING.md](docs/BUILDING.md) | Rebuilding the converted assets from the original game, exporting the macOS / Windows / iPhone / Android apps |
-| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The 4× AI-upscaled graphics pack: how it works, building and publishing it, model choice |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the reimplementation works: emulated memory, script VM, stages, UI |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, reverse-engineering workflow |
-| [docs/README.md](docs/README.md) | Index of the reverse-engineering specifications (formats, script ops, rules, AI) |
+| [docs/PLAYING.md](docs/PLAYING.md) | The full player guide |
+| [docs/BUILDING.md](docs/BUILDING.md) | Re-converting the data from the original game; exporting the macOS / Windows / iPhone / Android builds; the release workflow |
+| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | The 4× HD graphics pack: building, publishing, model choice |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it works: emulated memory, script VM, stages, UI |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Debug options, automated play-through tests, the UI test, reverse-engineering workflow |
+| [docs/README.md](docs/README.md) | Reverse-engineering specifications: file formats, script ops, rules and AI, the audit of the mod's patches |
 
-## Repository layout
-
-| Path | Contents |
-|---|---|
-| `game/` | The Godot project. `src/` = GDScript source, `assets/` = converted game data (loaded at runtime), `assets_hd/` = HD graphics pack (downloaded or generated, not in git) |
-| `docs/` | Guides and reverse-engineering specifications |
-| `tools/` | Python converters, analysis helpers, Ghidra headless wrapper, test scripts, `build_ios.sh`, `build_android.sh` |
-| `.github/` | GitHub Actions workflow (and its scripts) that builds and publishes the macOS / Windows / iPhone / Android releases |
-| `run_game.sh` | Runs the game from source |
-
-Not in the repository (see `.gitignore`): the original game (`wg2025/`), build output (`build/`), scratch data
-(`extract/`), the HD graphics pack (`game/assets_hd/`) and the upscaling models (`tools/upscale_models/`).
-
-## Status and known differences
-
-* The whole game is playable from the opening to the endings. Each script has been exercised automatically; long
-  stretches have not yet been checked by a human play-through.
-* The original town toolbar is replaced by **菜单** / **出征** buttons in the top bar of story scenes.
-* UI layout follows the original style but is not pixel-identical.
+`game/` is the Godot project (`src/` source, `assets/` converted game data), `tools/` holds the converters, test
+and build scripts, `.github/` the release workflow. The original game, build output and the HD graphics pack are not
+in the repository.
 
 ## Legal
 

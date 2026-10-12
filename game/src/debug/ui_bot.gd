@@ -16,6 +16,8 @@ extends Node
 ## * the game never sits WG_UIBOT_STALL seconds (default 90) with nothing changing and nothing to do.
 ## Each failure prints "UIBOT: FAIL …" (with a window, also a screenshot in dir). The run ends at WG_STOP, at a game
 ## over, or after WG_UIBOT_TIME seconds (default 3600), with "UIBOT: PASS" or "UIBOT: FAILED (n)".
+## WG_UIBOT_GALLERY=n (with a window): also a picture of each window, menu, dialogue page and move range the bot is
+## about to act on, up to n of each kind per scenario (the README's screenshots).
 ## Example: WG_UIBOT=../extract/uibot WG_STOP=3 WG_GOD=1 godot --path game   (tools/uitest.sh)
 
 const TICK := 0.15
@@ -44,6 +46,8 @@ var _skip_units := {}      # battle: unit slots whose command was cancelled this
 var _turn := -1
 var _clicks_here := 0      # story clicks in this scenario
 var _shots := 0
+var _gallery := int(OS.get_environment("WG_UIBOT_GALLERY"))
+var _gallery_seen := {}    # "scenario|kind" → pictures taken
 var _counts := {"dialog": 0, "chosen": 0, "actor": 0, "cell": 0}
 var _stop := int(OS.get_environment("WG_STOP")) if OS.get_environment("WG_STOP") != "" else -1
 var _done := false
@@ -186,10 +190,15 @@ func _step() -> bool:
 		return true
 	var p := _top_panel()
 	if p:
+		if not p._hits.is_empty():
+			await _gallery_shot("msg" if p is MsgBox else str(p.get_script().get_global_name()))
 		return await _panel(p)
 	if ui.menu.visible and ui.menu._active:
+		await _gallery_shot("menu_" + (ui.menu.title if ui.menu.title != "" else ui.menu.items[0]))
 		return await _choice(ui.menu)
 	if ui.dialog.visible:
+		if ui.dialog._waiting and not ui.dialog._typing:
+			await _gallery_shot("dialog")
 		return await _dialog()
 	if ui._popup_box.visible:
 		await _click(ui._popup_box.get_global_rect().get_center())
@@ -394,11 +403,13 @@ func _story(st: StoryStage) -> bool:
 			_toured[Game.scenario] = true
 			_tour = _tour_steps(st)
 			print("UIBOT: town tour in %s: %s" % [main.scenario_file(Game.scenario), _tour])
+			await _gallery_shot("toolbar")
 		if st.menu_ready():
 			return await _tour_step(st)
 	var keys := st.click_candidates()
 	if keys.is_empty():
 		return false
+	await _gallery_shot("town" if st.town_on() else "story")
 	# like autoplay, now and then the toolbar's 出征 (WG_SORTIE_P, default 12 %)
 	var sp := OS.get_environment("WG_SORTIE_P")
 	if st.sortie_enabled and st.menu_ready() and st.tool_shown(3) and _rng.randi_range(0, 99) < (int(sp) if sp != "" else 12):
@@ -535,6 +546,19 @@ func _on_stage_starting(n: int) -> void:
 		_shot.call_deferred("start_%s" % main.scenario_file(n))
 
 
+## WG_UIBOT_GALLERY: the whole screen (in the touch shell with its side buttons) as NNN_<scenario>_<kind>.png.
+func _gallery_shot(kind: String) -> void:
+	var k := "%d|%s" % [Game.scenario, kind]
+	if _gallery <= 0 or not _shots_on() or int(_gallery_seen.get(k, 0)) >= _gallery:
+		return
+	_gallery_seen[k] = int(_gallery_seen.get(k, 0)) + 1
+	await get_tree().create_timer(0.4).timeout
+	await RenderingServer.frame_post_draw
+	_shots += 1
+	get_tree().root.get_texture().get_image().save_png(dir.path_join("%03d_%s_%s.png" % [_shots,
+			main.scenario_file(Game.scenario), kind.validate_filename()]))
+
+
 func _shot(tag: String) -> void:
 	await get_tree().create_timer(1.0).timeout
 	var img := get_viewport().get_texture().get_image()
@@ -595,6 +619,7 @@ func _battle(st: BattleStage) -> bool:
 			var dest: Vector2i = _plan["dest"]
 			if not st.actions.reachable(u).has(dest):
 				dest = u.pos
+			await _gallery_shot("move")
 			_plan["stage"] = "menu"
 			await _click_cell(st, dest)
 		"target", "strat_target":

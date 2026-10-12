@@ -64,7 +64,7 @@ All options are environment variables read at start-up, for example
 |---|---|
 | `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 19; 0–9 are the player's saves) after each scenario, retry from it after a game over |
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
-| `WG_UIBOT=dir` | The UI bot (`game/src/debug/ui_bot.gd`): plays from the title screen through real input events only, with the game in its normal mode, and checks the UI as it goes (see "UI playthrough test" below). With a window it saves pictures to *dir*. `WG_UIBOT_TIME` (default 3600 s), `WG_UIBOT_STALL` (90 s), `WG_UIBOT_SEED` |
+| `WG_UIBOT=dir` | The UI bot (`game/src/debug/ui_bot.gd`): plays from the title screen through real input events only, with the game in its normal mode, and checks the UI as it goes (see "UI playthrough test" below). With a window it saves pictures to *dir*. `WG_UIBOT_TIME` (default 3600 s), `WG_UIBOT_STALL` (90 s), `WG_UIBOT_SEED`; `WG_UIBOT_GALLERY=n` (with a window) also saves the whole screen at each window, menu, dialogue page, move range and town toolbar it meets, up to *n* of each per scenario, in the touch shell with its side buttons (the README's screenshots: e.g. `WG_UIBOT=dir WG_UIBOT_GALLERY=3 WG_SAVEDIR=shots WG_LOADSLOT=n`) |
 | `WG_SAVEDIR=name` | Keep every save in `user://name/` instead of `user://`. The UI bot uses `user://uibot/` |
 | `WG_BOTMODE=load`, `WG_BOTSLOT=n` | Input-bot variant: load slot *n* from the battle menu |
 | `WG_BOTMODE=duel` | Input-bot variant: stage a 单挑 between the first player unit and the first enemy, with screenshots |

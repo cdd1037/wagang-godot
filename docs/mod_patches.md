@@ -502,7 +502,8 @@ All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests;
 * **Deterministic RNG mode** (0x47fb14): dead in the original, since its checkbox does not exist.
 * **Ending and game over:** the original exits the program after the credits (op 0x0f) and after the game-over
   question (op 0x6a; 是 asks its launcher to start the game again). The port goes to the title; 否 quits on desktop.
-* **Resource meter:** op 0x3a's kind-2 pane sits left of the port's top-bar buttons, not at (342, 25).
+* **Resource meter:** op 0x3a's kind-2 pane sits at (290, 25), left of the port's 菜单 button, and above the
+  buttons (y 2) while the town toolbar shows, not at (342, 25).
 
 ## Doc corrections made with this audit
 

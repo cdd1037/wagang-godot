@@ -114,6 +114,14 @@ func _process(_d: float) -> void:
 		if b.visible:
 			b.position.x = x
 			x -= 68
+	# the toolbar's buttons reach under the meter (x 290..502): while they show, they sit at the bar's bottom
+	# and the meter goes above them
+	var tools := x < 504.0
+	for b in [_bar_menu] + _bar_tools:
+		b.position.y = 12 if tools else 8
+		b.size.y = 24 if tools else 26
+	if ui and ui.meter:
+		ui.meter.position.y = 2 if tools else 25
 
 
 ## The town toolbar (0x419d22) is shown with 出征 (op 0x06); story flags 0xf3 / 0xf2 / 0xf1 move 卖出 / 买进 / 装备

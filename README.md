@@ -2,147 +2,108 @@
 
 **中文** | [English](README.en.md)
 
-本项目通过逆向工程，用 **Godot 4.7** 重新实现了 **《兴唐传·瓦岗山异闻录》**，使其可以在 **macOS**、**Windows**、**iPhone** 和 **Android** 上原生运行。
-原作是基于光荣 1998 年《三国志曹操传》引擎制作的隋唐题材 MOD。
-
-原版 Windows 程序经 Ghidra 反编译，其文件格式、剧本脚本语言、战斗公式和敌军 AI 都整理成了文档，再据此重新实现。
-游戏数据全部来自原作，只做了格式转换、内容未作改动：117 个剧情与战斗脚本、地图、人物和部队图像、头像、音乐、音效和过场动画。
+隋唐题材战棋游戏《兴唐传·瓦岗山异闻录》的重制版，可以在 **Windows**、**macOS**、**iPhone** 和 **Android** 上直接玩。
+原作是轩辕学院用光荣《三国志曹操传》引擎制作的 MOD。重制版照着原版程序重写，剧情、战斗规则、敌军 AI、商店和菜单都与原版一致，
+画面全部经 AI 放大到 4 倍高清。
 
 <p align="center">
   <img src="docs/images/title.jpg" width="400" alt="标题画面">
-  <img src="docs/images/story.jpg" width="400" alt="剧情场景">
+  <img src="docs/images/story.jpg" width="400" alt="剧情对话">
 </p>
 <p align="center">
-  <img src="docs/images/battle-move.jpg" width="400" alt="战斗：攻击范围">
-  <img src="docs/images/duel.jpg" width="400" alt="单挑">
-</p>
-
-## 功能
-
-* **剧情场景**：斜视角城镇与过场，头像对话，字幕，CG 图片，视频，剧情分支选项，可以购物、接支线任务的城镇，以及 MOD
-  自带的单挑小游戏。
-* **战棋战斗**：布阵与出场选择，带敌军阻挡（ZOC）的移动，攻击、反击与二次攻击，策略及其动画，道具，地形与天气，
-  经验与转职，剧本战斗事件，以及原版敌军 AI。
-* **单挑**：根据反编译代码重现的单挑画面，包括开场、对话气泡、全部动作与招式动画、胜者获得经验。
-* **高清画面**：游戏用到的全部图像都经 AI 放大到 4 倍，并按画面类型分别选用最合适的模型，详见
-  [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。发布版本只包含高清画面。
-* **存档**：10 个存档位，剧情中和战斗中都能存读档；另有自动存档，切到后台或关闭游戏时自动保存，标题画面“继续游戏”即可接着玩。
-* **多结局**：与原作一样，由脚本记录的剧情标志和好感度决定。
-
-全部 117 个脚本都已用自动通关测试从头跑到尾，没有出现脚本错误。
-
-<p align="center">
-  <img src="docs/images/hd-compare.jpg" width="640" alt="原版画面与高清画面对比">
+  <img src="docs/images/battle-menu.jpg" width="400" alt="战斗指令：绝招、围攻、交给">
+  <img src="docs/images/info.jpg" width="400" alt="武将情报">
 </p>
 
 ## 下载
 
-可直接游玩的 **macOS**（Apple 芯片与 Intel）、**Windows**（64 位）、**iPhone** 和 **Android** 版本发布在
-[Releases 页面](https://github.com/seedds/wagang-godot/releases)。游戏代码每次更新，都会自动构建并发布新版本，
-构建号自动递增（Build 1、Build 2……），标题画面右下角会显示版本号（例如“版本 1.0.3”）。发布版本只包含高清画面，
-每个平台的压缩包约 1.1 GB。
+到 [Releases 页面](https://github.com/seedds/wagang-godot/releases) 下载最新的 **Build N**。游戏每次更新都会自动发布新版本，
+每个平台约 1.1 GB；iPhone 和 Android 安装包比电脑版晚几分钟上传。
 
-* **macOS**：解压后打开应用。应用未经苹果公证，第一次打开会被系统拦截：macOS 15 及以上请打开
-  “系统设置 → 隐私与安全性”，在页面下方点击“仍要打开”；更早的版本可以右键点击应用并选择“打开”。
-  也可以在终端执行 `xattr -dr com.apple.quarantine <应用路径>`。
-* **Windows**：解压后运行 `WaGang.exe`，`WaGang.pck` 要放在同一目录。如果 SmartScreen 提示“未知发布者”，
-  请点击“更多信息”→“仍要运行”。
-* **iPhone**（iOS 15 及以上，iPhone XS 及更新机型）：`WaGang-iOS-build-N.ipa` 比其他平台晚几分钟上传。安装包未签名，
-  请用 AltStore 或 Sideloadly 安装，它们会用你的 Apple ID 签名（免费 Apple ID 每 7 天需要重新签名一次）。
-  有 Apple 开发者账号和 Mac 的话，也可以用 `tools/build_ios.sh --device` 自己构建并安装，见
-  [docs/BUILDING.md](docs/BUILDING.md)。
-* **Android**（Android 7.0 及以上，64 位 ARM）：`WaGang-Android-build-N.apk` 也比其他平台晚几分钟上传。在手机上下载并打开，
-  按提示允许浏览器或文件管理器安装应用即可。之后的版本可以直接覆盖安装，存档会保留。
+| 平台 | 文件 | 安装 |
+|---|---|---|
+| Windows（64 位） | `WaGang-Windows-build-N.zip` | 解压后运行 `WaGang.exe`（`WaGang.pck` 要在同一目录）。SmartScreen 提示“未知发布者”时，点“更多信息”→“仍要运行”。 |
+| macOS（Apple 芯片 11+，Intel 10.13+） | `WaGang-macOS-build-N.zip` | 解压后打开。应用未经公证，第一次打开会被拦截：macOS 15 起到“系统设置 → 隐私与安全性”页面底部点“仍要打开”，更早的版本右键点应用选“打开”。 |
+| iPhone（iOS 15+，iPhone XS 及更新） | `WaGang-iOS-build-N.ipa` | 安装包未签名，请用 AltStore 或 Sideloadly 安装（免费 Apple ID 每 7 天要重新签名一次）。 |
+| Android（7.0+，64 位） | `WaGang-Android-build-N.apk` | 在手机上下载并打开，按提示允许安装。新版本可以直接覆盖安装，存档会保留。 |
 
-## 从源码运行
+## 游戏特色
 
-**环境要求**：macOS 10.13 及以上（Intel）或 macOS 11 及以上（Apple 芯片），以及
-[Godot 4.7](https://godotengine.org)（`brew install --cask godot`）。转换好的游戏数据已包含在仓库中。
+* **完整的故事**：全部 117 个剧情与战斗脚本，从牧龙谷开场一直到各个结局。对话中的选择和战斗结果会改变剧情分支和结局。
+* **原版的战斗**：曹操传的战棋规则，加上 MOD 新增的绝招、围攻、交给指令和众多武将各自的【技】【术】技能；敌军 AI 也与原版相同。
+* **城镇与小游戏**：在城镇里买卖武器道具、换装备、选将出征、接支线任务；剧情中还有单挑、谜题等小游戏。
+* **4 倍高清画面**：游戏里的所有图像都用 AI 放大到 4 倍（[原版与高清对比](docs/HD_GRAPHICS.md)）。
+* **随时存档**：10 个存档位，剧情和战斗中都能存；另有自动存档，切到后台或关闭游戏时自动保存，标题画面选“继续游戏”就能接着玩。
+  存档文件可以在电脑和 iPhone 之间复制。
+
+<p align="center">
+  <img src="docs/images/town.jpg" width="400" alt="城镇：出征、装备、买进、卖出">
+  <img src="docs/images/shop.jpg" width="400" alt="商店">
+</p>
+
+**手机版**横屏游玩，4:3 画面居中，两侧是“菜单”“返回”“快进”按钮，点按、拖动、长按就能玩：
+
+<p align="center">
+  <img src="docs/images/phone-story.jpg" width="400" alt="手机版：剧情">
+  <img src="docs/images/phone-battle.jpg" width="400" alt="手机版：战斗">
+</p>
+
+## 操作
+
+| 电脑 | 手机 | 作用 |
+|---|---|---|
+| 左键 / 回车 | 点按 | 选择、确认、推进对话 |
+| 右键 / Esc | 点空白处 / “返回” | 取消、后退 |
+| Esc / 在空白处右键 | “菜单” | 系统菜单：存档、读档、结束回合、武将一览等 |
+| 右键点人物 | 长按人物 | 武将情报 |
+| 方向键 / 鼠标移到画面边缘 | 拖动 | 滚动战场地图 |
+| 按住空格或 Ctrl | “快进” | 快进 |
+| ⌘F / F11 / Alt+回车 | — | 全屏；拖动窗口边缘可以调整大小 |
+
+Android 的返回键等同“返回”，不会退出游戏。各个菜单、战斗指令、武将技能、存档位置和常见问题见完整的
+[游戏说明](docs/PLAYING.md)（英文）。
+
+## 与原版的不同
+
+玩法都按原版，只有以下几处是有意改动：
+
+* 自动存档单独保存，不占用存档位（原版在每个我军回合结束后轮流覆盖 1–5 号存档）。
+* 所有过场视频都可以跳过。
+* 原版的 Windows 菜单栏和工具栏改成了游戏内的列表和顶部按钮，窗口一次只开一个。
+* 通关或游戏结束后回到标题画面，而不是退出程序。
+
+## 现状
+
+* 整个游戏可以从开场玩到各个结局。所有脚本都经过自动通关测试，但还没有人工完整通关过。
+* Windows 版还没有在 Windows 实机上测试过。
+* 遇到问题欢迎在 [Issues](https://github.com/seedds/wagang-godot/issues) 反馈。
+
+## 开发者
+
+本项目用 Ghidra 反编译了原版程序（`wagan.wa`），把文件格式、剧本脚本语言、战斗公式、敌军 AI 和 MOD 对引擎的全部改动整理成文档，
+再用 **Godot 4.7** 重新实现。游戏数据（剧本、地图、图像、音乐、音效、视频）都来自原作，只转换了格式。
+
+从源码运行需要 [Godot 4.7](https://godotengine.org)（macOS 上可用 `brew install --cask godot`）：
 
 ```sh
 git clone https://github.com/seedds/wagang-godot.git
 cd wagang-godot
-./run_game.sh                 # 首次运行会先下载高清画面包（约 720 MB）并导入项目，然后启动游戏
+./run_game.sh      # 首次运行会下载高清画面包（约 720 MB）并导入项目，然后启动游戏
 ```
 
-如果直接使用 Godot，需要先执行一次导入：`godot --headless --path game --import`，然后运行 `godot --path game`。
-不导入的话，脚本的类名不会注册，游戏无法启动。
-
-高清画面包体积较大，不在 git 仓库中，而是放在名为
-[hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack) 的 release 里。`run_game.sh` 首次运行时会自动下载，
-也可以单独运行 `tools/get_hd_pack.sh`。高清包是用 `tools/upscale_assets.py` 生成的，方法见
-[docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md)。
-
-自己打包 macOS 应用：
-
-```sh
-godot --headless --path game --import                          # 仅首次需要
-godot --headless --path game --export-release "macOS" ../build/WaGang.app
-open build/WaGang.app
-```
-
-Windows 版用 `--export-release "Windows" ../build/windows/WaGang.exe` 导出。导出预设和自动发布流程见
-[docs/BUILDING.md](docs/BUILDING.md)。
-
-## 操作
-
-| 操作 | 作用 |
-|---|---|
-| 鼠标左键 / 回车 | 选择、确认、推进对话 |
-| 鼠标右键 / Esc | 取消；打开菜单（剧情中为“菜单”，战斗中为回合结束、存档、读档等） |
-| 方向键 | 移动战场光标 |
-| 鼠标移到画面边缘 / 按住中键拖动 | 滚动战场地图 |
-| 按住空格或 Ctrl | 快进 |
-| ⌘F / F11 / Alt+回车 | 切换全屏 |
-| 拖动窗口边缘 | 调整窗口大小，松开后窗口自动恢复 4:3 比例 |
-
-iPhone 和 Android 上横屏游玩，4:3 画面居中，两侧是触控按钮：
-
-| 触控 | 作用 |
-|---|---|
-| 点按 | 等同鼠标左键：选择、确认、推进对话；在战场上点一下还会显示该格的部队或地形信息 |
-| 在战场上拖动 | 滚动地图 |
-| 在长列表上上下拖动 | 滚动列表；手指在列表上滑到想要的项再松开即可选中 |
-| 点空白处 | 取消：点列表外面关闭列表（在攻击、策略等指令列表外点会撤销这次移动）；选目标时点范围外取消；选中部队后点移动范围外取消选择 |
-| 左上角“菜单”按钮 | 打开系统菜单（剧情中为“菜单”，战斗中可结束回合、存档、读档）；只在没有选中任何东西时可用 |
-| 左侧“返回”按钮 | 取消 / 后退，等同 Esc；在可以打开菜单的时候变暗 |
-| 右侧“快进”按钮 | 开关快进（等同按住 Ctrl），开启时按钮亮起 |
-| Android 返回键 / 返回手势 | 等同“返回”；“返回”变暗时打开系统菜单（不会退出游戏） |
-
-完整的游戏说明见 **[docs/PLAYING.md](docs/PLAYING.md)**（英文）。
-
-## 文档
-
-`docs/` 中的文档目前为英文。
+不用脚本的话，先执行一次 `godot --headless --path game --import`，再运行 `godot --path game`。
 
 | 文档 | 内容 |
 |---|---|
-| [docs/PLAYING.md](docs/PLAYING.md) | 游戏说明：剧情、战斗、单挑、菜单、存档、常见问题 |
+| [docs/PLAYING.md](docs/PLAYING.md) | 完整的游戏说明 |
 | [docs/BUILDING.md](docs/BUILDING.md) | 从原版游戏重新转换数据；导出 macOS / Windows / iPhone / Android 版本；自动发布流程 |
-| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 4 倍 AI 高清画面包：原理、生成、发布和模型选择 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 重制版的实现原理：模拟内存、脚本虚拟机、场景、界面 |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、逆向工作流程 |
-| [docs/README.md](docs/README.md) | 逆向分析规格文档索引（文件格式、脚本指令、规则、AI） |
+| [docs/HD_GRAPHICS.md](docs/HD_GRAPHICS.md) | 4 倍高清画面包：生成、发布和模型选择 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 实现原理：模拟内存、脚本虚拟机、场景、界面 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 调试选项、自动通关测试、界面测试、逆向工作流程 |
+| [docs/README.md](docs/README.md) | 逆向分析规格：文件格式、脚本指令、规则与 AI、MOD 补丁审计 |
 
-## 目录结构
-
-| 路径 | 内容 |
-|---|---|
-| `game/` | Godot 项目。`src/` 为 GDScript 源码，`assets/` 为转换后的游戏数据（运行时加载），`assets_hd/` 为高清画面包（下载或生成，不在 git 中） |
-| `docs/` | 使用说明与逆向分析规格文档 |
-| `tools/` | Python 转换工具、分析辅助脚本、Ghidra 无界面反编译脚本、测试脚本、AI 放大工具 |
-| `.github/` | 自动构建并发布 macOS / Windows / iPhone / Android 版本的 GitHub Actions 工作流及其脚本 |
-| `run_game.sh` | 从源码启动游戏 |
-
-以下内容不在仓库中（见 `.gitignore`）：原版游戏（`wg2025/`）、构建输出（`build/`）、临时数据（`extract/`）、
-高清画面包（`game/assets_hd/`）和 AI 放大模型（`tools/upscale_models/`）。
-
-## 现状与已知差异
-
-* 整个游戏从开场到各个结局都可以玩通。所有脚本都经过自动测试，但很多段落还没有经过人工完整试玩。
-* 原版城镇工具栏改为剧情场景顶部的“菜单”和“出征”按钮。
-* 界面沿用原版风格，但不是逐像素一致。
-* Windows 版在 macOS 上导出，并用同一份数据包验证过可以运行，但还没有在 Windows 实机上测试。
+`game/` 是 Godot 项目（`src/` 为源码，`assets/` 为转换后的游戏数据），`tools/` 是转换、测试和构建脚本，`.github/` 是自动发布流程。
+原版游戏、构建输出和高清画面包不在仓库中。`docs/` 中的文档目前为英文。
 
 ## 法律声明
 

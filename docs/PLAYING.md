@@ -124,8 +124,8 @@ branches and which of the endings you reach.
 ## Battles
 
 <p align="center">
-  <img src="images/battle-move.jpg" width="400" alt="Attack range">
-  <img src="images/battle-info.jpg" width="400" alt="Unit information">
+  <img src="images/battle-move.jpg" width="400" alt="Move (blue) and attack (red) range">
+  <img src="images/battle-info.jpg" width="400" alt="A strategy's target with its hit chance">
 </p>
 
 Each battle starts with its victory and defeat conditions (胜利条件 / 失败条件). Turns go: **your phase**, then

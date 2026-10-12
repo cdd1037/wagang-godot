@@ -4,7 +4,7 @@ extends Control
 ## 200×8 bar, the first value × 2 px in the Kao.wa pattern 0x40 (value < 16) or 0x00, the rest in 0xc0 (value < 85)
 ## or 0x40. Not in battles. Op 0x3a's add / subtract (0x40d2a9 / 0x40d3ae) step it in five steps of 3 ticks with a
 ## blinking up / down arrow, then 1 tick. The original pane sits at (342, 25) in the status window; here it goes
-## left of the top bar's buttons.
+## left of the top bar's 菜单 at (290, 25), and above the buttons (y 2) while the town toolbar shows.
 
 var value := -1                 # shown value (−1: follow GS+0x12)
 var arrow := 0                  # 1 up, −1 down, 0 none

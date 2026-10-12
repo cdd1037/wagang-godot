@@ -341,7 +341,8 @@ followed the original for most; it now also does so for these:
   over (0x6a: SE 40, 2.5 s, 再玩一次吗？), the ending credits (0x0f), the resource meter pane (0x3a kind 2), op 0x15
   in the portrait window, op 0x6b's MCALL load / play and on-screen rule, op 0x5d's turn + 1 limit, op 0x47's facing.
 * Not reproduced: the original exits the program after an ending and after the game-over question (the port goes
-  to the title; 否 quits on desktop); the meter pane sits left of the port's top-bar buttons, not at (342, 25).
+  to the title; 否 quits on desktop); the meter pane sits at (290, 25), left of the port's 菜单 button, and above
+  the buttons (y 2) while the town toolbar shows, not at (342, 25).
 
 ## 6. Memory map for script pokes (mod ops 0x77 / 0x78 / 0x79 / 0x75)
 
