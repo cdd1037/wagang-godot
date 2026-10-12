@@ -134,12 +134,11 @@ func run_file(file: String) -> void:
 		var ran: bool = await vm.poll()
 		if not ran:
 			break
-	if vm.active and vm.scene == 1 and field_ready and Game.autoplay and Game.skip_battle_scenario == Game.scenario:
-		print("== flow-test: skipping battle %s" % file)
-		Game.skip_battle_scenario = -1
-		vm.scene = mini(2, vm.scene_count() - 1)
-	elif vm.active and vm.scene == 1 and field_ready:
-		await battle_loop()
+	if vm.active and vm.scene == 1 and field_ready:
+		if Game.hooks.skip_battle(self):
+			vm.scene = mini(2, vm.scene_count() - 1)
+		else:
+			await battle_loop()
 	# aftermath scenes
 	while vm.active:
 		var ran2: bool = await vm.poll()
@@ -151,15 +150,9 @@ func run_file(file: String) -> void:
 
 
 func battle_loop() -> void:
-	var was_auto := Game.autoplay
-	if OS.get_environment("WG_INPUTBOT") != "":
-		Game.autoplay = false
 	if turn == 0:
 		turn = 1
-	if OS.get_environment("WG_TRACE_BATTLE") != "":
-		for u in units:
-			if u.exists() and u.slot < 35:
-				print("  start: slot %d %s state %d pos %s hp %d" % [u.slot, u.person.name, u.state, u.pos, u.hp])
+	Game.hooks.battle_start(self)
 	view.input_enabled = true
 	view.show_cursor = true
 	hud.visible = true
@@ -167,11 +160,6 @@ func battle_loop() -> void:
 	minimap.setup(self)
 	if Settings.on(Settings.MINIMAP) and not Game.autoplay:
 		minimap.open()
-	if OS.get_environment("WG_SAVETEST") != "" and turn >= 2:
-		var alive := 0
-		for u in units:
-			if u.active(): alive += 1
-		print("SAVETEST resumed turn %d, %d active units, hero hp %d" % [turn, alive, units[0].hp])
 	while not _battle_finished():
 		# ---- player phase
 		phase = PH_PLAYER
@@ -216,59 +204,7 @@ func battle_loop() -> void:
 					u.node.greyed = false
 		turn += 1
 		Mem.w8(0x4b3d0a, turn - 1)   # ctx+2 (0x44e851) holds turn − 1; ctx+1 is the battle-over flag
-		if OS.get_environment("WG_SAVETEST") != "" and turn == 2:
-			Game.save_game(18, save_state())     # not one of the player's slots 0-9
-			var alive := 0
-			for u in units:
-				if u.active(): alive += 1
-			print("SAVETEST saved turn %d, %d active units, hero hp %d" % [turn, alive, units[0].hp])
-			get_tree().quit()
-			return
-		var tp := OS.get_environment("WG_TRACE_PID")
-		if turn == 2 and OS.get_environment("WG_TRACE_MAP") != "":
-			# debug: the battle map's terrain codes, one row per line (hex)
-			for y in view.map_h:
-				var row := ""
-				for x in view.map_w:
-					row += "%02x" % (view.terrain_at(Vector2i(x, y)) & 0xff)
-				print("    [map %2d] %s" % [y, row])
-		if tp == "all":
-			# debug: every unit on the map at each round start, by colour
-			var rows := {}
-			for x in units:
-				if x.active():
-					rows[x.colour] = rows.get(x.colour, []) + ["%s(%d,%d)%d" % [x.person.name, x.pos.x, x.pos.y, x.hp]]
-			for k in rows:
-				print("    [units %d] turn %d: %s" % [k, turn, " ".join(rows[k])])
-		elif tp != "":
-			# debug: where person tp's unit is at each round start
-			var x := unit_by_pid(int(tp))
-			print("    [pid %s] turn %d: %s" % [tp, turn, "no unit" if x == null else "slot %d state %d hp %d/%d at %s" % [
-					x.slot, x.state, x.hp, x.max_hp(), x.pos]])
-		if Game.god and Game.autoplay and turn > 12 and FlowGoals.sparing.is_empty():
-			# debug flow-test cheat: clear the field so scripted victory can trigger. Units on the map fall as
-			# in combat (HP 0, EV[10]), and as after a fall in combat the scene is polled while they are still
-			# on the map, once per fallen unit (a poll runs one section), so every kill section gets its turn
-			# (S_13's 杨素第一次死 restores 杨素, who has to reach HP 0 three times); hidden ones just go. A
-			# pending duel's foe goes too: the duels are optional, and S_28 / S_39 need every enemy gone.
-			var fell := 0
-			for e in range(35, 115):
-				if units[e].active():
-					await actions.unit_fell(units[e])
-					fell += 1
-				elif units[e].exists() and units[e].state == BUnit.STATE_HIDDEN:
-					units[e].hp = 0
-					units[e].state = 3
-			refresh_units()
-			for k in fell:
-				if _battle_finished():
-					break
-				await checkpoint()
-		if Game.god and Game.autoplay and turn > 60:
-			# flow-test: the victory needs a scripted move the autoplay AI never makes (e.g. a duel
-			# that only starts when the hero reaches a certain enemy) — go to the aftermath
-			print("== flow-test: turn cap, skipping to aftermath of %s" % vm.name)
-			vm.scene = mini(2, vm.scene_count() - 1)
+		if await Game.hooks.round_end(self):
 			break
 		_update_weather_random()
 	view.input_enabled = false

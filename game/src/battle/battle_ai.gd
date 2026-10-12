@@ -24,7 +24,6 @@ var choice_target: BUnit:
 var forbidden := Vector2i(-1, -1)
 var retreat := false
 var usable_strats: Array[int] = []
-var flow_goal: Dictionary = {}   # flow-test harness only (FlowGoals): this unit's goal cells
 var grid: Dictionary = {}        # cell -> cost from the start of the last flood (0x4aeb38 + 0x12c0)
 
 ## Neighbour order of the original's floods and walks (0x4359f5, table 0x48df68): up, right, down, left.
@@ -120,7 +119,7 @@ func act(unit: BUnit) -> bool:
 	# act
 	if not (u.flags & BUnit.F_PASS) and u.mode != 4 and u.active():
 		if choice_strategy >= 0 and choice_target != null and choice_target.active() \
-				and FlowGoals.may_hit(flow_goal, choice_target):
+				and Game.hooks.may_hit(u, choice_target):
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
 			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
 			if choice_strategy == 57:
@@ -180,10 +179,8 @@ func decide(unit: BUnit) -> bool:
 				else:
 					dest = u.pos
 			7:
-				if flow_goal.is_empty():
+				if not Game.hooks.player_walk(self, mv):    # the flow-test harness's objectives
 					_active(mv)      # player units under autoplay (WG_AUTO)
-				else:
-					_flow_walk(mv)
 	return true
 
 
@@ -319,7 +316,7 @@ func _cell_score(c: Vector2i) -> void:
 	v = mini(255, v + _terrain_score(c))
 	if c == u.pos and atk == 0:
 		v = mini(255, v + 1)
-	if c == forbidden or FlowGoals.avoids(u, c):
+	if c == forbidden or Game.hooks.avoids(u, c):
 		v = 0
 	layer_b[c] = v
 	if v > best:
@@ -606,81 +603,6 @@ func _active(mv: int) -> void:
 
 
 
-## Flow-test harness only (FlowGoals, not the original AI): walk to the reachable cell nearest the goal cells by
-## U's move costs (other units ignored, round the areas U keeps out of when it can), or hold a goal cell already
-## reached; then attack whatever is in range.
-## A threat to a guarded cell that U can hit this turn comes first.
-func _flow_walk(mv: int) -> void:
-	var cells: Array = flow_goal["cells"]
-	if u.pos in cells and flow_goal["hold"]:
-		_flood4(u.pos, 0)
-		dest = u.pos
-		return
-	# the walk round the areas U keeps out of (FlowGoals.avoids), else straight through them
-	var far := _goal_distances(cells, true)
-	if not far.has(u.pos):
-		far = _goal_distances(cells, false)
-	if not far.has(u.pos):
-		_active(mv)
-		return
-	_flood(u.pos, mv, true, func(_n: Vector2i) -> bool: return false)
-	dest = u.pos
-	# an enemy that threatens a guarded cell (FlowGoals.threats, the nearest to it first): hit the first one U can,
-	# from the cell nearest the goal
-	for x: BUnit in FlowGoals.threats:
-		if not x.active() or not FlowGoals.may_hit(flow_goal, x):
-			continue
-		var hit := false
-		for c in grid:
-			if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c) or not st.actions.can_attack(u, x, c):
-				continue
-			if not hit or int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
-				hit = true
-				dest = c
-		if hit:
-			choice_target = x
-			return
-	for c in grid:
-		if (c != u.pos and st.unit_at(c, u) != null) or FlowGoals.avoids(u, c):
-			continue
-		if int(far.get(c, 1 << 30)) < int(far.get(dest, 1 << 30)):
-			dest = c
-
-
-## Flow-test harness: the cost of U's cheapest walk from each cell to the nearest of `cells` by its move costs,
-## other units ignored; with `around`, through no cell U keeps out of (but its own).
-func _goal_distances(cells: Array, around: bool) -> Dictionary:
-	var far := {}
-	var buckets := {0: []}
-	for c in cells:
-		if st.view.in_bounds(c) and Rules.move_cost(u, st.view.terrain_at(c)) < 255:
-			far[c] = 0
-			buckets[0].append(c)
-	var level := 0
-	while not buckets.is_empty():
-		if not buckets.has(level):
-			level += 1
-			continue
-		for c in buckets[level]:
-			if int(far[c]) != level:
-				continue
-			var step := Rules.move_cost(u, st.view.terrain_at(c))
-			for d in FDIRS:
-				var n: Vector2i = c + d
-				if not st.view.in_bounds(n) or Rules.move_cost(u, st.view.terrain_at(n)) >= 255:
-					continue
-				if around and n != u.pos and FlowGoals.avoids(u, n):
-					continue
-				if not far.has(n) or int(far[n]) > level + step:
-					far[n] = level + step
-					if not buckets.has(level + step):
-						buckets[level + step] = []
-					buckets[level + step].append(n)
-		buckets.erase(level)
-		level += 1
-	return far
-
-
 ## GoTarget (0x43afd4, codes 0 and 4): the target unit's cell (if that unit itself goes for a target, its target
 ## point is forbidden), else the target point.
 func _go_target(mv: int) -> void:
@@ -725,11 +647,11 @@ func _physical_attack() -> void:
 	if u.mode == 4 or (u.flags & BUnit.F_PASS):
 		return
 	var t := choice_target
-	if t == null or not t.active() or not st.actions.can_attack(u, t) or not FlowGoals.may_hit(flow_goal, t):
+	if t == null or not t.active() or not st.actions.can_attack(u, t) or not Game.hooks.may_hit(u, t):
 		t = null
 		for c in st.actions.attack_cells(u, u.pos):
 			var x := st.unit_at(c)
-			if x and x.active() and x.is_enemy_of(u) and FlowGoals.may_hit(flow_goal, x):
+			if x and x.active() and x.is_enemy_of(u) and Game.hooks.may_hit(u, x):
 				t = x
 	if t == null:
 		return

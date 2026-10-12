@@ -213,7 +213,6 @@ func run_file(file: String) -> void:
 var _auto_i := 0
 var _auto_idle := 0
 var _ran_secs := {}     # the sections of this file that have run ("scene.section"), for the autoplay clicks
-static var _guided: Array = Array(OS.get_environment("WG_CLICKS").split(",", false)).map(func(x: String) -> int: return int(x))
 
 
 func _wait_for_click() -> int:
@@ -224,19 +223,13 @@ func _wait_for_click() -> int:
 		var keys := click_candidates()
 		if keys.is_empty():
 			_auto_idle += 1
-			if _auto_idle > 300 and OS.get_environment("WG_AUTOSAVE") != "":
-				# flow-test: a minute with nothing to click and no section to run, e.g. a jump start that lacks
-				# the previous file's story flags (R_10 needs flag 755 from R_09) — end the file
-				print("== flow-test: idle scene, leaving %s (missing flags from the previous file? see WG_SETFLAGS)" % vm.name)
+			if Game.hooks.story_leave(self, _auto_idle, _auto_i):     # the flow-test harness's idle exit
 				vm.active = false
 			await get_tree().create_timer(0.2).timeout
 			return -2
 		_auto_idle = 0
 		_auto_i += 1
-		var cap := OS.get_environment("WG_CLICKCAP")
-		if _auto_i > (int(cap) if cap != "" else 2500) and OS.get_environment("WG_AUTOSAVE") != "":
-			# flow-test: random clicking is not solving this scene (puzzles, hubs) — end the file
-			print("== flow-test: click cap, leaving %s; story flags set: %s" % [vm.name, _flags_set()])
+		if Game.hooks.story_leave(self, 0, _auto_i):                  # its click cap
 			vm.active = false
 			return -2
 		var sp := OS.get_environment("WG_SORTIE_P")
@@ -262,29 +255,10 @@ func click_candidates() -> Array:
 ## The actor autoplay clicks among `keys` (click_candidates(), not empty); the UI bot (debug/ui_bot.gd) clicks
 ## the same one with the mouse.
 func auto_pick(keys: Array) -> int:
-	# WG_CLICKS=a,b,…: click these first, in order, each as soon as its click would run a section (guided runs)
-	if not _guided.is_empty() and keys.has(_guided[0]) and await _section_for(_guided[0]) >= 0:
-		var g: int = _guided.pop_front()
-		if OS.get_environment("WG_TRACE_TEXT") != "":
-			print("  [click] ", g, " (guided)")
-		return g
-	# flow-test: a story 单挑 move is chosen by dry runs of the rounds (DuelSim)
-	if DuelSim.enabled:
-		var mv := DuelSim.move_sections(vm)
-		var duel := keys.filter(func(k: int) -> bool: return mv.has(k) and DuelSim.section_for(vm, mv, k, {}) >= 0)
-		if not duel.is_empty():
-			var dp := DuelSim.best_move(vm, duel)
-			if dp >= 0:
-				if OS.get_environment("WG_TRACE_TEXT") != "":
-					print("  [click] ", dp, " (duel)")
-				return dp
-	# flow-test: a click puzzle whose answer is a set of story flags (R_14's verses) is solved by dry runs
-	if FlagPuzzle.enabled:
-		var pz := FlagPuzzle.best_click(vm, keys, _ran_secs)
-		if pz >= 0:
-			if OS.get_environment("WG_TRACE_TEXT") != "":
-				print("  [click] ", pz, " (puzzle)")
-			return pz
+	# the harness's picks: guided clicks (WG_CLICKS), story 单挑 (DuelSim), click puzzles (FlagPuzzle)
+	var h: int = await Game.hooks.story_pick(self, keys)
+	if h >= 0:
+		return h
 	# mostly click actors whose click runs a section that has not run yet, else actors that some section of
 	# this scene tests for (like a player would)
 	var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []

@@ -140,6 +140,10 @@ saves them), `t_storyclick` plays R_00 by hand up to the training 单挑 (the op
 until 防御 has, the click on 防御 starts it; windowed, about two minutes, run with `WG_START=0 WG_NOVIDEO=1
 WG_ACCEPT_SPAM=1`), `t_person` prints person stats.
 
+The harness, the bots and the tracing step into the game only through `Game.hooks` (`core/test_hooks.gd`, which does
+nothing; `debug/harness.gd` is loaded in its place when the build has `src/debug`). A new test feature goes into the
+harness, with a hook in `TestHooks` if the game has to call it; `t_parse` fails when game code names a debug class.
+
 Two checks need a window (they read rendered pixels or resize the window), so run them without `--headless`:
 
 ```sh

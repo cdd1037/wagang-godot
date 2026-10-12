@@ -690,12 +690,11 @@ func _decide(st: BattleStage, u: BUnit) -> Dictionary:
 	var mode := u.mode
 	var cu := st.current_unit
 	var rs := Rules.rng.state
-	if FlowGoals.enabled:
-		st.ai.flow_goal = (await FlowGoals.compute(st)).get(u.slot, {})
+	await Game.hooks.before_auto_unit(st, u)
 	var ok := st.ai.decide(u)
 	var plan := {"unit": u, "dest": st.ai.dest if ok and st.ai.dest.x >= 0 else u.pos,
 			"strategy": st.ai.choice_strategy if ok else -1, "target": st.ai.choice_target if ok else null}
-	st.ai.flow_goal = {}
+	Game.hooks.after_auto_unit()
 	Mem.set_ev(10, ev10)
 	Mem.w8(BattleActions.PREFERRED, pref)
 	Mem.w8(u.addr + 8, tslot)

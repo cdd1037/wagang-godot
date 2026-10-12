@@ -241,7 +241,7 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 		if real:
 			var r := rand(7)
 			dmg = dmg + r - 2 if r > 2 else maxi(dmg - r, 1)
-	if Game.god and att.slot < 35 and def.slot >= 35 and not FlowGoals.spared(def):
+	if Game.god and att.slot < 35 and def.slot >= 35 and not Game.hooks.spared(def):
 		dmg *= 20
 	dmg = damage_post(att, def, mini(dmg, def.hp))
 	if Game.god and def.slot < 35:
@@ -491,7 +491,7 @@ static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) ->
 	if Game.god:
 		if target.slot < 35:
 			return 0
-		if caster.slot < 35 and not FlowGoals.spared(target):
+		if caster.slot < 35 and not Game.hooks.spared(target):
 			dmg *= 20
 	return mini(dmg, target.mp if s == 22 else target.hp)
 

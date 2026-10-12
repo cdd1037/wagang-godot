@@ -9,10 +9,6 @@ var vm: EexVM
 var ui: GameUI
 var choice_result := 0
 var fast := false
-## Flow test started past the opening (WG_START > 0): the party lacks those that earlier files recruited. A run
-## from scenario 0 recruits them itself, and a forced person who is not a member yet then is not one in the original
-## either (R_08 forces 雄阔海, who joins only during S_08).
-var _jump_start := int(OS.get_environment("WG_START")) > 0 and OS.get_environment("WG_AUTOSAVE") != ""
 
 
 func _ready() -> void:
@@ -279,9 +275,11 @@ func _dialog_top(_pid: int) -> bool:
 	return false
 
 
-## Stages override to e.g. highlight/scroll to the speaking unit.
+## Stages override to e.g. highlight/scroll to the speaking unit. A coroutine here as in BattleStage (see
+## TestHooks on awaiting overrides that suspend).
 func on_speaker(_pid: int) -> void:
-	pass
+	if false:
+		await get_tree().process_frame
 
 
 func op_dialog(ins: Dictionary) -> void:
@@ -419,7 +417,8 @@ func receive_item(iid: int, lvl: int, xp: int) -> void:
 
 ## Battle stages: the unit's cheer with the item rising over it (0x45991b, flag ≠ 0).
 func get_item_show(_pid: int, _iid: int) -> void:
-	pass
+	if false:
+		await get_tree().process_frame
 
 
 func op_lose_item(ins: Dictionary) -> bool:
@@ -502,7 +501,7 @@ func build_sortie() -> bool:
 		lst.append(0)
 	for k in 9:
 		var f := Mem.r32(SORTIE_FORCED + 4 * k)
-		if f != 0 and f != 0xffff and f < 0x400 and not Game.is_member(f) and _jump_start:
+		if f != 0 and f != 0xffff and f < 0x400 and not Game.is_member(f) and Game.hooks.recruit_forced(f):
 			Game.join_party(f, 1)      # flow test from WG_START: no earlier scene recruited them
 		if f != 0 and f != 0xffff and f < 0x400 and Game.is_member(f):
 			lst.append(f)

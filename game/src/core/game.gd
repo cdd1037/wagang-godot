@@ -55,8 +55,16 @@ var touch := false               # touch controls: tap on release, drag pans the
 var fast_toggle := false         # the touch shell's 快进 button: acts like holding Ctrl
 
 
+## The test harness and bots (core/test_hooks.gd): src/debug/harness.gd when the build has src/debug, else hooks that
+## do nothing.
+const HARNESS := "res://src/debug/harness.gd"
+var hooks: TestHooks = TestHooks.new()
+
+
 func _ready() -> void:
 	load_data()
+	if ResourceLoader.exists(HARNESS):
+		hooks = load(HARNESS).new()
 
 
 func _input(ev: InputEvent) -> void:

@@ -208,6 +208,14 @@ resizes the window it snaps back to 4:3 so the picture fills it; full screen), t
 (`Engine.time_scale = 4`), the version label on the title screen (`application/config/version`, set by the release
 workflow) and the `WG_SHOTS` debug screenshots.
 
+## Test hooks
+
+The flow-test harness and the bots step into the game at a few points only: `Game.hooks` (`core/test_hooks.gd`),
+whose methods do nothing by default. When the build has `src/debug`, `Game` loads `debug/harness.gd` in its place,
+which brings the battle objectives (`FlowGoals`), the story 单挑 and puzzle solvers, the skips, caps and the god
+mode's field clear, the input and UI bots, `WG_SAVETEST` and the battle traces. No game script names a class of
+`src/debug` (t_parse checks it), so a build can leave the folder out and play the same.
+
 ## Source map
 
 | Path | Contents |
@@ -217,4 +225,4 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage` (with `battle_deploy`, `battle_phase`, `battle_unit_ops`, `battle_field_ops`), `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
-| `debug/` | `test_runner`, `input_bot`, the flow-test helpers `flow_goals` (battle objectives), `duel_sim` (story 单挑) and `flag_puzzle` (click puzzles), small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |
+| `debug/` | `harness` (the test hooks, below), `test_runner`, `input_bot`, the flow-test helpers `flow_goals` (battle objectives), `duel_sim` (story 单挑) and `flag_puzzle` (click puzzles), small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

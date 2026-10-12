@@ -6,7 +6,6 @@ var st: BattleStage
 var end_turn := false
 var idle := false              # the player phase waits at its top level (no unit selected; touch shell's 菜单)
 var waiting_cell := false      # a click on the map is awaited (any level: unit, move, target), for the UI bot
-var _bot: InputBot
 
 
 func _init(s: BattleStage) -> void:
@@ -45,24 +44,9 @@ func player_phase() -> void:
 	if not pu.is_empty():
 		await st.view.center_on(pu[0].pos)
 		st.view.cursor_cell = pu[0].pos
-	var botdir := OS.get_environment("WG_INPUTBOT")
-	if botdir != "":
-		if _bot == null:
-			_bot = InputBot.new(st, botdir)
-			st.add_child(_bot)
-		if st.turn > int(OS.get_environment("WG_BOTTURNS") if OS.get_environment("WG_BOTTURNS") != "" else "2"):
-			st.get_tree().quit()
-			return
-		_bot.run_phase()
-	elif Game.autoplay or Game.demo:
-		var fx := OS.get_environment("WG_FXTEST")
-		if fx != "":
-			# debug: cast these strategies with autoplay (dialogue skipped) and print each target's outcome
-			if _bot == null:
-				_bot = InputBot.new(st, "")
-				st.add_child(_bot)
-			await _bot.fx_test(fx.split(","))
-			return
+	if await Game.hooks.player_phase(self):     # the input bot (WG_INPUTBOT, WG_FXTEST) when the build has it
+		return
+	if Game.autoplay or Game.demo:
 		await _auto_player_phase()
 		return
 	if pu.is_empty():
@@ -108,10 +92,9 @@ func _auto_player_phase() -> void:
 		if st._battle_finished():
 			return
 		if u.active() and not u.acted:
-			if FlowGoals.enabled:
-				st.ai.flow_goal = (await FlowGoals.compute(st)).get(u.slot, {})
+			await Game.hooks.before_auto_unit(st, u)
 			var did := await st.ai.act(u)
-			st.ai.flow_goal = {}
+			Game.hooks.after_auto_unit()
 			await after_command(u, did)
 
 

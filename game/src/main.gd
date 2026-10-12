@@ -141,8 +141,7 @@ func _boot() -> void:
 		printerr("WG_AUTOSLOT=%d is one of the player's save slots 0-%d: use 11 or higher" % [_autoslot(), SAVE_SLOTS - 1])
 		get_tree().quit(2)
 		return
-	if OS.get_environment("WG_UIBOT") != "":
-		add_child(UiBot.new())       # debug: plays through real input events (debug/ui_bot.gd)
+	Game.hooks.boot(self)           # the UI bot (WG_UIBOT) when the build has src/debug
 	if OS.get_environment("WG_ACCEPT_SPAM") != "":
 		# debug: tap ui_accept every 0.6 s (advances dialogue, like a player mashing Enter)
 		var t := Timer.new()

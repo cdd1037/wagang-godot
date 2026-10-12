@@ -1,7 +1,8 @@
 extends Node
-## Loads every script under res://src so parse errors show up, and checks that every opcode the story (R_xx) and
-## battle (S_xx) scripts use has a handler on that kind of stage (EexVM.handler) or is one the VM runs itself.
-## Prints "t_parse: PASS" (N scripts, M opcodes).
+## Loads every script under res://src so parse errors show up; checks that every opcode the story (R_xx) and battle
+## (S_xx) scripts use has a handler on that kind of stage (EexVM.handler) or is one the VM runs itself, and that no
+## script outside src/debug names a class of src/debug in its code (the game reaches the harness only through
+## Game.hooks, so a build can leave src/debug out). Prints "t_parse: PASS" (N scripts, M opcodes).
 
 func _scan(dir: String, out: Array) -> void:
 	for f in DirAccess.get_files_at(dir):
@@ -49,4 +50,60 @@ func run() -> void:
 				print("t_parse: no handler for op %s in the %s scripts" % [op, "story" if kind == "R" else "battle"])
 				bad += 1
 		hosts[kind].free()
+	bad += _debug_names(files)
+	bad += _hook_coroutines()
 	print("t_parse: %s (%d scripts, %d opcodes in use, %d bad)" % ["PASS" if bad == 0 else "FAILED", files.size(), n, bad])
+
+
+## Scripts outside src/debug whose code (comments aside) names a class_name declared in src/debug.
+func _debug_names(files: Array) -> int:
+	var names: Array[String] = []
+	for f: String in files:
+		if f.begins_with("res://src/debug/"):
+			var m := RegEx.create_from_string("(?m)^class_name\\s+(\\w+)").search(FileAccess.get_file_as_string(f))
+			if m:
+				names.append(m.get_string(1))
+	var word := RegEx.create_from_string("\\b(" + "|".join(names) + ")\\b")
+	var bad := 0
+	for f: String in files:
+		if f.begins_with("res://src/debug/"):
+			continue
+		var k := 0
+		for line in FileAccess.get_file_as_string(f).split("\n"):
+			k += 1
+			var code := line
+			var h := code.find("#")
+			if h >= 0:
+				code = code.substr(0, h)
+			var m := word.search(code)
+			if m:
+				print("t_parse: %s:%d names the debug class %s" % [f, k, m.get_string(1)])
+				bad += 1
+	return bad
+
+
+## Every hook the harness awaits in awaits in TestHooks too (see core/test_hooks.gd).
+func _hook_coroutines() -> int:
+	var base := _awaiting_funcs(FileAccess.get_file_as_string("res://src/core/test_hooks.gd"))
+	var harness := _awaiting_funcs(FileAccess.get_file_as_string(Game.HARNESS))
+	var bad := 0
+	for f: String in harness:
+		if harness[f] and base.has(f) and not base[f]:
+			print("t_parse: TestHooks.%s must be a coroutine: the harness's awaits" % f)
+			bad += 1
+	return bad
+
+
+## func name → whether its body has an await.
+func _awaiting_funcs(src: String) -> Dictionary:
+	var out := {}
+	var name := ""
+	for line in src.split("\n"):
+		if line.begins_with("func "):
+			name = line.substr(5, line.find("(") - 5)
+			out[name] = false
+		elif name != "" and (line.begins_with("\t") or line == "") and "await " in line:
+			out[name] = true
+		elif not line.begins_with("\t") and line != "" and not line.begins_with("func "):
+			name = ""
+	return out
