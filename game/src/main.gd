@@ -41,8 +41,10 @@ func _process(_d: float) -> void:
 
 
 func _notification(what: int) -> void:
-	# iOS may kill a backgrounded app without notice: write the autosave on the way out (~5 s budget there)
-	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST]:
+	# iOS may kill a backgrounded app without notice: write the autosave on the way out (~5 s budget there).
+	# get_tree().quit() (结束游戏, 否 after a game over) sends no close request, but the tree still exits.
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST,
+			NOTIFICATION_EXIT_TREE]:
 		_autosave_flush()
 
 
@@ -135,6 +137,10 @@ func _ready() -> void:
 
 
 func _boot() -> void:
+	if OS.get_environment("WG_AUTOSAVE") != "" and _autoslot() < SAVE_SLOTS:
+		printerr("WG_AUTOSLOT=%d is one of the player's save slots 0-%d: use 11 or higher" % [_autoslot(), SAVE_SLOTS - 1])
+		get_tree().quit(2)
+		return
 	if OS.get_environment("WG_UIBOT") != "":
 		add_child(UiBot.new())       # debug: plays through real input events (debug/ui_bot.gd)
 	if OS.get_environment("WG_ACCEPT_SPAM") != "":
@@ -201,6 +207,7 @@ func to_title() -> void:
 ## (often the very call chain that asked for this), so it is orphaned via _flow_gen instead of
 ## being waited for; anything of it that still resumes sees the stale generation and returns.
 func _stop_flow() -> void:
+	_autosave_flush()      # 回到标题, game over, loading a slot: the last checkpoint is what 继续游戏 resumes
 	_flow_gen += 1
 	_abort_flow = true
 	_flow_running = false
@@ -214,7 +221,7 @@ func _stop_flow() -> void:
 
 
 ## Flow-test autosave slot (WG_AUTOSLOT, default 19) so parallel runs don't share one. Slots 0-9 are the
-## player's saves.
+## player's saves: _boot refuses them.
 func _autoslot() -> int:
 	var s := OS.get_environment("WG_AUTOSLOT")
 	return int(s) if s != "" else 19
@@ -400,9 +407,10 @@ func game_over() -> void:
 
 
 func ending() -> void:
-	# the game is finished: nothing to continue
+	# the game is finished: nothing to continue (a test run's ending leaves the player's autosave alone)
 	_autosave = {}
-	Game.delete_save(Game.AUTO_SLOT)
+	if _autosave_enabled():
+		Game.delete_save(Game.AUTO_SLOT)
 	await ui.video.play("end")
 	to_title()
 
@@ -473,12 +481,7 @@ var _was_menu_ready := false
 
 ## Flow tests and bots must not overwrite the player's autosave.
 func _autosave_enabled() -> bool:
-	if Game.autoplay or Game.demo:
-		return false
-	for e in ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "WG_UIBOT"]:
-		if OS.get_environment(e) != "":
-			return false
-	return true
+	return not Game.test_run
 
 
 func _autosave_watch() -> void:

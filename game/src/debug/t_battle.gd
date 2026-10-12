@@ -199,6 +199,23 @@ func run() -> void:
 		BUnit.at(i).clear(i)
 	BUnit.gen += 1
 
+	# ---- a battle save restored: the cell → unit caches see the units where the save has them
+	var ru := _unit(0, 0, 0, Vector2i(4, 4))
+	var snap := Mem.snapshot()
+	ru.pos = Vector2i(8, 8)
+	_check(Skills.unit_in_cell(Vector2i(8, 8)) != null and st.unit_at(Vector2i(8, 8)) != null, "the caches see the move")
+	Mem.restore(snap)
+	if st.vm == null:
+		st.vm = EexVM.new()
+	st.restore_state({"kind": "battle", "scene": 1, "turn": 1})
+	st._apply_restore()
+	_check(Skills.unit_in_cell(Vector2i(8, 8)) == null and Skills.unit_in_cell(Vector2i(4, 4)) != null,
+			"Skills.unit_in_cell after a restore")
+	_check(st.unit_at(Vector2i(8, 8)) == null and st.unit_at(Vector2i(4, 4)) != null, "unit_at after a restore")
+	for i in 115:
+		BUnit.at(i).clear(i)
+	BUnit.gen += 1
+
 	# ---- 史录 (0x413adc / 0x4d1679)
 	Game.history.clear()
 	Game.add_history(1, "12甲")

@@ -123,6 +123,10 @@ tools/build_android.sh --install           # ... then install and start it on th
 (pushes touching only `docs/`, Markdown files, `tools/` or `.gitignore` are skipped). It can also be started by
 hand from the repository's **Actions** tab (*Release builds → Run workflow*); runs from other branches do nothing.
 
+* **Unit checks first:** its first job runs `.github/workflows/tests.yml`, the headless unit checks
+  (`tools/test_all.sh`, see [DEVELOPMENT.md](DEVELOPMENT.md)); when one fails, nothing is built. `tests.yml` also
+  runs on its own on every push to any branch and on pull requests.
+
 * **Build number:** the workflow's run number *N*, which increases with every run. The release is tagged
   `build-N` and titled *Build N*; the game's version is `1.0.N`. The version is written into
   `application/config/version`, shown in the title screen's corner, into the macOS and iOS bundle versions and
@@ -131,21 +135,24 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*); 
 * **Steps:** on an Ubuntu runner it installs Godot 4.7.2 and the macOS and Windows export templates (cached
   between runs; the downloads are checked against pinned SHA-256 sums), imports the project, exports
   `WaGang-macOS-build-N.zip` (universal, ad-hoc signed by Godot's built-in signer) and `WaGang-Windows-build-N.zip`,
-  then creates the release with both files and install notes. A run takes about 5 minutes. The actions are pinned
+  then creates the release with both files and install notes as a **draft**, which only the repository's owners
+  see. A run takes about 5 minutes. The actions are pinned
   to commit SHAs.
-* **iPhone:** a second job (`ios`, on a macOS runner, after the release exists) installs the macOS Godot editor
+* **iPhone:** a second job (`ios`, on a macOS runner, after the draft exists) installs the macOS Godot editor
   and the iOS template, runs `tools/build_ios.sh --unsigned` and uploads `WaGang-iOS-build-N.ipa` to the same
   release.
-* **Android:** a third job (`android`, on an Ubuntu runner, after the release exists) installs Godot and the
+* **Android:** a third job (`android`, on an Ubuntu runner, after the draft exists) installs Godot and the
   Android template (`android_release.apk`), exports the **Android** preset signed with the release key from the
   repository secrets (see [Android](#android)), checks the signing certificate and the package contents, and uploads
   `WaGang-Android-build-N.apk`. The runner's JDK 17 and Android SDK are used. Each release is about 4.4 GB (macOS
   1.09 GB, Windows 1.07 GB, iPhone 1.1 GB, Android 1.13 GB; HD art only). The HD-pack and version-stamp steps the
   jobs share are `.github/scripts/add_hd_pack.sh` and `stamp_version.sh`.
-* **Latest, re-runs and clean-up:** a build becomes the repository's *Latest* release only if its commit is still
-  the newest on `main`, so re-running an old build does not replace a newer one. Re-running a build that was
-  already published replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N`
-  releases and their tags (`KEEP_BUILDS`).
+* **Publishing, Latest, re-runs and clean-up:** the last job (`publish`) makes the draft public once the
+  desktop, iPhone and Android files are all in it; if a job fails, the build stays a draft (re-run the failed jobs
+  to finish it). A build becomes the repository's *Latest* release only if its commit is still the newest on
+  `main`, so re-running an old build does not replace a newer one. Re-running a build that was already published
+  replaces its files. After publishing, the workflow deletes all but the newest 5 `build-N` releases and their
+  tags (`KEEP_BUILDS`), drafts included.
 * **HD graphics only:** the workflow downloads the HD graphics pack (`assets_hd.zip` from the release tagged
   `hd-pack`) and fails without it. It sets the presets' `exclude_filter` so the original pictures that have an HD
   version stay out of the builds: the list is the iOS and Android presets', and `tools/check_hd_exclude.py` copies

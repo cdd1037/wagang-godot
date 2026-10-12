@@ -1,6 +1,7 @@
 # Builds the game for macOS, Windows, iPhone and Android on every push to main and publishes them as a GitHub release.
 # The build number is the workflow's run number, so it increases with every build: tag build-N, version 1.0.N.
-# The iPhone .ipa (built on a macOS runner) and the Android .apk are added to the release after the others.
+# Nothing is built unless the unit checks (tests.yml) pass. The release starts as a draft; the iPhone .ipa (built on
+# a macOS runner) and the Android .apk are added to it, and it is published once all four files are in.
 # Only the newest KEEP_BUILDS builds are kept (each is about 4.4 GB).
 name: Release builds
 
@@ -32,8 +33,13 @@ env:
   KEEP_BUILDS: 5
 
 jobs:
+  tests:
+    # the unit checks gate every build
+    uses: ./.github/workflows/tests.yml
+
   build:
     # a manual run from another branch must not publish a build
+    needs: tests
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -107,7 +113,7 @@ jobs:
           grep -q "^== scenario 2" /tmp/smoke.log
           if grep -E "missing (image|json)|SCRIPT ERROR|Parse Error|Compile Error|Failed to load" /tmp/smoke.log; then exit 1; fi
 
-      - name: Publish release
+      - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -123,42 +129,28 @@ jobs:
           **Windows** (64-bit): unzip \`WaGang-Windows-build-${BUILD}.zip\` and run \`WaGang.exe\` (keep \`WaGang.pck\`
           next to it). If SmartScreen warns about an unknown publisher, choose **More info → Run anyway**.
 
-          **iPhone** (iOS 15+, iPhone XS or newer): \`WaGang-iOS-build-${BUILD}.ipa\` is added a few minutes after the
-          others. It is unsigned: install it with AltStore or Sideloadly, which sign it with your Apple ID (with a free
-          Apple ID the app has to be re-signed every 7 days). Touch controls: tap = click, drag = scroll the map or a
-          list, tap an empty spot or **返回** = cancel, **菜单** (top left) = system menu, **快进** = fast forward.
+          **iPhone** (iOS 15+, iPhone XS or newer): \`WaGang-iOS-build-${BUILD}.ipa\` is unsigned: install it with
+          AltStore or Sideloadly, which sign it with your Apple ID (with a free Apple ID the app has to be re-signed
+          every 7 days). Touch controls: tap = click, drag = scroll the map or a list, tap an empty spot or **返回** =
+          cancel, **菜单** (top left) = system menu, **快进** = fast forward.
 
-          **Android** (Android 7.0+, 64-bit ARM): \`WaGang-Android-build-${BUILD}.apk\` is added a few minutes after
-          the others. Open it on the phone and allow the browser or file manager to install apps when asked. Later
-          builds install over it and keep the saves. Touch controls as on the iPhone; the back button or gesture works
-          as **返回** (opens the **菜单** where there is nothing to go back from).
+          **Android** (Android 7.0+, 64-bit ARM): open \`WaGang-Android-build-${BUILD}.apk\` on the phone and allow
+          the browser or file manager to install apps when asked. Later builds install over it and keep the saves.
+          Touch controls as on the iPhone; the back button or gesture works as **返回** (opens the **菜单** where there
+          is nothing to go back from).
           EOF
           files=("build/WaGang-macOS-build-${BUILD}.zip" "build/WaGang-Windows-build-${BUILD}.zip")
-          # only the build of main's newest commit becomes "Latest" (not a re-run of an older one)
-          latest=false
-          if [ "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" refs/heads/main | cut -f1)" = "${GITHUB_SHA}" ]; then
-            latest=true
-          fi
           if gh release view "build-${BUILD}" > /dev/null 2>&1; then
             # a re-run of this build: replace its files
             gh release upload "build-${BUILD}" "${files[@]}" --clobber
           else
-            gh release create "build-${BUILD}" "${files[@]}" \
-              --target "${GITHUB_SHA}" --title "Build ${BUILD}" --notes-file /tmp/notes.md --latest="${latest}"
+            # a draft: nobody sees it until the publish job, after the iPhone and Android files are in
+            gh release create "build-${BUILD}" "${files[@]}" --draft \
+              --target "${GITHUB_SHA}" --title "Build ${BUILD}" --notes-file /tmp/notes.md
           fi
 
-      - name: Remove old builds
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release list --limit 200 --json tagName --jq '.[].tagName' | { grep -E '^build-[0-9]+$' || true; } \
-            | sort -t- -k2 -n -r | tail -n +$((KEEP_BUILDS + 1)) | while read -r tag; do
-              echo "deleting $tag"
-              gh release delete "$tag" --cleanup-tag --yes
-            done
-
   ios:
-    # the iPhone build: an unsigned .ipa (for sideloading) added to the release the build job published
+    # the iPhone build: an unsigned .ipa (for sideloading) added to the draft release of the build job
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: macos-latest
@@ -223,7 +215,7 @@ jobs:
         run: gh release upload "build-${BUILD}" "build/WaGang-iOS-build-${BUILD}.ipa" --clobber
 
   android:
-    # the Android build: an .apk signed with the release key, added to the release the build job published
+    # the Android build: an .apk signed with the release key, added to the draft release of the build job
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -325,3 +317,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "build-${BUILD}" "build/WaGang-Android-build-${BUILD}.apk" --clobber
+
+  publish:
+    # all four files are in: the draft becomes the public release, then the oldest builds go
+    needs: [build, ios, android]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD: ${{ github.run_number }}
+    steps:
+      - name: Publish the release
+        run: |
+          # only the build of main's newest commit becomes "Latest" (not a re-run of an older one)
+          latest=false
+          if [ "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" refs/heads/main | cut -f1)" = "${GITHUB_SHA}" ]; then
+            latest=true
+          fi
+          gh release edit "build-${BUILD}" --draft=false --latest="${latest}"
+
+      - name: Remove old builds
+        run: |
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | { grep -E '^build-[0-9]+$' || true; } \
+            | sort -t- -k2 -n -r | tail -n +$((KEEP_BUILDS + 1)) | while read -r tag; do
+              echo "deleting $tag"
+              gh release delete "$tag" --cleanup-tag --yes
+            done

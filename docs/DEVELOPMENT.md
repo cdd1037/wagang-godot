@@ -62,7 +62,7 @@ All options are environment variables read at start-up, for example
 
 | Variable | Effect |
 |---|---|
-| `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 19; 0–9 are the player's saves) after each scenario, retry from it after a game over |
+| `WG_AUTOSAVE=1`, `WG_AUTOSLOT=n` | Flow-test harness (below): autosave to slot *n* (default 19) after each scenario, retry from it after a game over. Slots 0–9 are the player's saves: the game refuses them and quits with exit code 2 |
 | `WG_INPUTBOT=dir` | Drive the player phase with synthetic mouse and keyboard events and save screenshots to *dir*. `WG_BOTTURNS=n` limits the turns |
 | `WG_UIBOT=dir` | The UI bot (`game/src/debug/ui_bot.gd`): plays from the title screen through real input events only, with the game in its normal mode, and checks the UI as it goes (see "UI playthrough test" below). With a window it saves pictures to *dir*. `WG_UIBOT_TIME` (default 3600 s), `WG_UIBOT_STALL` (90 s), `WG_UIBOT_SEED`; `WG_UIBOT_GALLERY=n` (with a window) also saves the whole screen at each window, menu, dialogue page, move range and town toolbar it meets, up to *n* of each per scenario, in the touch shell with its side buttons (the README's screenshots: e.g. `WG_UIBOT=dir WG_UIBOT_GALLERY=3 WG_SAVEDIR=shots WG_LOADSLOT=n`) |
 | `WG_SAVEDIR=name` | Keep every save in `user://name/` instead of `user://`. The UI bot uses `user://uibot/` |
@@ -79,9 +79,11 @@ All options are environment variables read at start-up, for example
 | `WG_SHELLSHOT=dir` | Touch shell only: the same for the whole screen, side buttons included (`user://…` works on a phone) |
 | `WG_SHELLSIZE=WxH` | Touch shell on a desktop: open the window at this size, e.g. `1734x800` (iPhone shape) or `1334x750` (16:9) |
 
-The player's autosave (`user://autosave.json`, the title screen's 继续游戏) is neither read nor written while
-`WG_AUTO`, `WG_DEMO`, `WG_START`, `WG_AUTOSAVE` or `WG_INPUTBOT` is set, so tests and bots leave it alone. Other runs,
-`WG_LOADSLOT` among them, keep it up to date like normal play.
+While `WG_AUTO`, `WG_DEMO`, `WG_START`, `WG_AUTOSAVE`, `WG_INPUTBOT`, `WG_UIBOT` or the unit checks' `TEST` is set
+(`Game.test_run`), tests and bots leave the player's files alone: the autosave (`user://autosave.json`, the title
+screen's 继续游戏) is neither read nor written, and the endings and items record `niuniu.bin` is a copy in the run's
+own folder (`WG_SAVEDIR`'s, else `user://test/`), taken from the player's when the run starts so the run sees the
+player's 环境设定. Other runs, `WG_LOADSLOT` among them, keep the autosave up to date like normal play.
 
 Example: watch the first battle play itself:
 `WG_START=1 WG_DEMO=1 WG_NOVIDEO=1 ./run_game.sh`
@@ -93,28 +95,34 @@ The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
 | Script | Purpose |
 |---|---|
 | `tools/flowtest.sh [seconds] [stop]` | Long autoplay run with autosave and retry: continues from slot 19 (`WG_AUTOSLOT`) if it exists, else (or with `FRESH=1`) starts a new game → `extract/flow.log` |
-| `tools/flowtrace.sh [seconds] [stop]` | The same with section and text tracing → `extract/flow_trace.log` |
+| `tools/flowtrace.sh [seconds] [stop]` | The same (slot 19 too) with section and text tracing → `extract/flow_trace.log` |
 | `tools/flowpar.sh START STOP SLOT [seconds] [PARTY]` | Jump-start a scenario range (for running ranges in parallel) → `extract/flow_par_START.log` |
 | `tools/flowres.sh SLOT STOP LOG [seconds]` | Resume such a run from its autosave slot |
 | `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
-| `tools/gtest.sh t_name` | Run `game/src/debug/t_name.gd` under the headless test runner |
+| `tools/test_all.sh [t_name…]` | Run every headless unit check (below) and print a summary; exit status 1 if one failed. CI runs it on every push (`.github/workflows/tests.yml`) and before every release build |
+| `tools/gtest.sh t_name [seconds]` | Run one check, `game/src/debug/t_name.gd`, under the headless test runner; exit status 0 passed, 1 failed, 2 timed out (default 120 s) |
 | `tools/uitest.sh [stop] [seconds]` | UI playthrough test: the UI bot from a new game to scenario *stop* (default 5, after R_02) → `extract/uibot/uitest.log`; prints `uitest: PASS` or `uitest: FAIL` |
 
 The autosave slot numbers are save files in the game's user folder: use **11 or higher**, since slots 0–9 are the
-player's own saves. Run several ranges in parallel with bash, for example
-`bash -c 'for r in "0 16 11" "16 32 12"; do set -- $r; tools/flowpar.sh $1 $2 $3 1500 & done; wait'`. The tests also
-write `niuniu.bin` (the endings record).
+player's own saves (the scripts and the game refuse them). Run several ranges in parallel with bash, for example
+`bash -c 'for r in "0 16 11" "16 32 12"; do set -- $r; tools/flowpar.sh $1 $2 $3 1500 & done; wait'`. The endings
+the runs reach go to `user://test/niuniu.bin`, not the player's record.
 
-Headless unit checks (`tools/gtest.sh NAME`): `t_parse` loads every script (catches parse errors anywhere),
+Headless unit checks (`tools/test_all.sh`, one with `tools/gtest.sh NAME`). Each prints `t_name: PASS` or
+`t_name: FAILED` (after `t_name: FAIL …` lines); the test runner (`debug/test_runner.gd`) turns that into the exit
+status, fails a check that hits a script error, and stops one still running after `TEST_TIMEOUT` seconds.
+`t_parse` loads every script (catches parse errors anywhere),
 `t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
-`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling), `t_rpgwalk` story
+`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling; a drag or cursor
+key that stops a camera scroll lets whoever awaits it go on), `t_rpgwalk` story
 walking (route order and facing per step, 0x429159), `t_dialog` the message box growing to fit long texts (the
 9-line 胜利条件 window), `t_info` the 武将情报 window (status line, 技能 box, strategy list, item effect texts, pages,
 上一/下一, closing, the details, a pointer right click versus Esc on the map, long presses, story-scene right
 clicks; with `OUT=file.png` and a window it also saves a screenshot of each page and of the details),
 `t_battle` the battle state the scripts see (EV[10] and the removal of fallen units after a command, the 暗杀
 countdown, fire with op 0x21 and its undo with op 0x58, script attr 8, op 0x3b in a battle, the AI's score for
-an area attack's extra targets, the default victory and defeat of ops 0x42 / 0x43, the 史录 rules),
+an area attack's extra targets, the default victory and defeat of ops 0x42 / 0x43, the cell → unit caches after a
+restored battle save, the 史录 rules),
 `t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
 连续策略, the move record), `t_skills` the character skills (the 【技】 techniques with an attack trace, the
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,

@@ -1312,6 +1312,7 @@ func _apply_restore() -> void:
 	_restore = {}
 	if d.get("kind", "") != "battle":
 		return
+	BUnit.gen += 1      # the units came back with the memory: the occupancy caches (Skills, unit_at) are stale
 	vm.scene = int(d.get("scene", 0))
 	turn = int(d.get("turn", 1))
 	if bool(d.get("field_ready", false)):

@@ -27,6 +27,10 @@ var scenario_jumped := false
 var autoplay := OS.get_environment("WG_AUTO") != ""
 var demo := OS.get_environment("WG_DEMO") != ""
 var god := OS.get_environment("WG_GOD") != ""   # debug: player side invulnerable & strong
+## A test or bot run (autoplay, a jump start, the flow-test harness, the bots, the unit checks): it leaves the
+## player's autosave and endings record (niuniu.bin) alone.
+var test_run := autoplay or demo or ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "WG_UIBOT", "TEST"].any(
+		func(e: String) -> bool: return OS.get_environment(e) != "")
 var history: Array = []
 var ending_reached := false
 var skip_battle_scenario := -1   # flow-test: skip this battle (jump to its aftermath)
@@ -438,6 +442,9 @@ const AUTO_SLOT := -1          # the autosave (继续游戏), a file of its own 
 ## Debug: WG_SAVEDIR=name keeps every save in user://name/ instead of user://, so tests that go through the save
 ## menu leave the player's slots alone. The UI bot (WG_UIBOT) uses user://uibot/ unless WG_SAVEDIR says otherwise.
 var save_dir := _save_dir()
+## Where a test run keeps its other files (SpecialFuncs' copy of niuniu.bin): its save folder when that is its
+## own (WG_SAVEDIR, the UI bot's), else user://test/.
+var test_dir := save_dir if save_dir != "user://" else "user://test/"
 
 
 static func _save_dir() -> String:

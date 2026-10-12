@@ -247,8 +247,8 @@ winner may gain experience when the duel closes.
   leaves the old save intact; a damaged save, or one from a newer version of the game, is refused instead of
   loaded.
 * **Autosave**: the game keeps `autosave.json` (same folder) and writes it when the app goes to the background,
-  loses focus or is closed, at the start of every scenario, and at most once a minute while playing, so on a phone it
-  is safe to switch away or swipe the app closed at any time. **继续游戏** on the title screen resumes it. A running
+  loses focus or is closed, when you return to the title screen or quit, at the start of every scenario, and at most
+  once a minute while playing, so on a phone it is safe to switch away or swipe the app closed at any time. **继续游戏** on the title screen resumes it. A running
   scene cannot be saved halfway, so it resumes at the last point where the game waited for the player: a story
   scene waiting for a click, the battle's player phase with nothing selected, or the start of the scenario. It
   does not use one of the 10 slots.

@@ -1,0 +1,58 @@
+# The headless unit checks (tools/test_all.sh, game/src/debug/t_*.gd) on every push and pull request. The release
+# workflow runs them too, and builds nothing when one fails.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+  # SHA-256 of the Godot download (the same as in release.yml)
+  GODOT_SHA256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+
+      - name: Cache the Godot download
+        id: cache-godot
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
+        with:
+          path: ~/godot-dl
+          key: godot-${{ env.GODOT_VERSION }}-linux-zip
+
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot-dl
+          curl -sSL --fail -o ~/godot-dl/godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+
+      - name: Install Godot
+        # the checksum is checked on every run, from the cache too
+        run: |
+          echo "${GODOT_SHA256}  $HOME/godot-dl/godot.zip" | sha256sum -c -
+          unzip -q ~/godot-dl/godot.zip -d /tmp/godot
+          mkdir -p ~/godot
+          mv "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" ~/godot/godot
+          echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - name: Import the project
+        run: godot --headless --path game --import
+
+      - name: Unit checks
+        # the bundled font: the runner has no Chinese system fonts, and some checks measure text
+        env:
+          WG_BUNDLED_FONT: "1"
+        run: tools/test_all.sh

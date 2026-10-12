@@ -182,4 +182,38 @@ func _map_tests() -> void:
 	esc.pressed = true
 	await _push(esc)
 	_check(clicks.size() == 1 and clicks[0][1] == MOUSE_BUTTON_RIGHT, "Esc cancels: %s" % [clicks])
+	await _scroll_stop_tests(v)
 	v.queue_free()
+
+
+## A drag or a cursor key that stops a camera scroll lets whoever awaits the scroll go on (the enemy phase
+## following a unit): a killed Tween never emits `finished`, and the battle froze.
+func _scroll_stop_tests(v: BattleView) -> void:
+	var done := [false]
+	var follow := func() -> void:
+		await v.center_on(Vector2i(v.map_w - 1, v.map_h - 1))
+		done[0] = true
+	v.camera.position = Vector2.ZERO
+	follow.call()
+	_check(not done[0], "the follow scroll animates")
+	await get_tree().process_frame
+	var p0 := Vector2(300, 300)
+	await _button(p0, true)
+	await _motion(p0, Vector2(280, 280))
+	await _button(Vector2(280, 280), false)
+	for k in 3:
+		await get_tree().process_frame
+	_check(done[0], "a drag that stops the camera scroll lets its awaiter go on")
+	done[0] = false
+	v.camera.position = Vector2.ZERO
+	follow.call()
+	await get_tree().process_frame
+	v.cursor_cell = Vector2i(1, 1)
+	var up := InputEventKey.new()
+	up.keycode = KEY_UP
+	up.physical_keycode = KEY_UP
+	up.pressed = true
+	await _push(up)
+	for k in 3:
+		await get_tree().process_frame
+	_check(done[0], "a cursor key that scrolls the camera lets the earlier scroll's awaiter go on")

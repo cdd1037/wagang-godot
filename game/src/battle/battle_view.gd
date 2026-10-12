@@ -299,14 +299,29 @@ func ensure_visible(c: Vector2i, animate := true) -> void:
 
 
 func _scroll_to(target: Vector2, animate: bool) -> void:
-	if _cam_tween:
-		_cam_tween.kill()
+	stop_scroll()
 	if not animate or Game.autoplay or camera.position.distance_to(target) < 1:
 		camera.position = target
 		return
-	_cam_tween = create_tween()
-	_cam_tween.tween_property(camera, "position", target, clampf(camera.position.distance_to(target) / 900.0, 0.12, 0.45))
-	await _cam_tween.finished
+	var t := create_tween()
+	_cam_tween = t
+	t.tween_property(camera, "position", target, clampf(camera.position.distance_to(target) / 900.0, 0.12, 0.45))
+	await t.finished
+
+
+## Stop the camera scroll in progress. Whoever awaits it (the enemy phase following a unit, a script's camera
+## move) resumes after this frame: a killed Tween never emits `finished` by itself, so a drag or a cursor key
+## during an enemy move used to freeze the battle.
+func stop_scroll() -> void:
+	var t := _cam_tween
+	_cam_tween = null
+	if t and t.is_valid():
+		t.kill()
+		_scroll_stopped.call_deferred(t)
+
+
+func _scroll_stopped(t: Tween) -> void:
+	t.finished.emit()
 
 
 func scroll_by(d: Vector2) -> void:
@@ -364,8 +379,7 @@ func _touch_input(ev: InputEventMouse) -> void:
 			scroll_by(-mm.relative)
 		elif mm.position.distance_to(_drag_from) > TAP_SLOP:
 			_touch_panned = true
-			if _cam_tween:
-				_cam_tween.kill()
+			stop_scroll()
 			scroll_by(_drag_from - mm.position)     # include the slop, so the map stays under the finger
 		return
 	var mb := ev as InputEventMouseButton

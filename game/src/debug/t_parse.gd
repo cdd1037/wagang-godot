@@ -1,5 +1,5 @@
 extends Node
-## Loads every script under res://src so parse errors show up. Prints "t_parse: N scripts".
+## Loads every script under res://src so parse errors show up. Prints "t_parse: PASS" (N scripts).
 
 func _scan(dir: String, out: Array) -> void:
 	for f in DirAccess.get_files_at(dir):
@@ -18,4 +18,4 @@ func run() -> void:
 		if s == null or not s.can_instantiate():
 			print("t_parse: cannot load ", f)
 			bad += 1
-	print("t_parse: %d scripts, %d bad" % [files.size(), bad])
+	print("t_parse: %s (%d scripts, %d bad)" % ["PASS" if bad == 0 else "FAILED", files.size(), bad])

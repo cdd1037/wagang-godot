@@ -18,7 +18,7 @@
 ## 下载
 
 到 [Releases 页面](https://github.com/seedds/wagang-godot/releases) 下载最新的 **Build N**。游戏每次更新都会自动发布新版本，
-每个平台约 1.1 GB；iPhone 和 Android 安装包比电脑版晚几分钟上传。
+每个平台约 1.1 GB。
 
 | 平台 | 文件 | 安装 |
 |---|---|---|

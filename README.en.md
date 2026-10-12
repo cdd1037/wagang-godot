@@ -19,8 +19,7 @@ AI, shops and menus work as in the original, and every picture is AI-upscaled to
 ## Download
 
 Get the newest **Build N** from the [Releases page](https://github.com/seedds/wagang-godot/releases). Every update
-publishes a new build automatically; each platform's file is about 1.1 GB, and the iPhone and Android files arrive a
-few minutes after the desktop ones.
+publishes a new build automatically; each platform's file is about 1.1 GB.
 
 | Platform | File | Install |
 |---|---|---|

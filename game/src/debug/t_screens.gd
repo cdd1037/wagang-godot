@@ -18,7 +18,8 @@ func _shot(name: String) -> void:
 		DisplayServer.window_move_to_foreground()
 	for k in 3:
 		await get_tree().process_frame
-		await RenderingServer.frame_post_draw
+		if out != "":
+			await RenderingServer.frame_post_draw     # (never comes headless, where nothing is drawn)
 	if out != "":
 		get_viewport().get_texture().get_image().save_png(out.path_join(name + ".png"))
 
