@@ -105,8 +105,8 @@ static func cell(t: int, row: Dictionary, actionable: bool, selected: bool) -> A
 		KIND:
 			var ty := int(it.get("type", 0))
 			if ty < 0x12:
-				return [Mem.str_ptr(0x48bc20, ty >> 1), null]
-			return [Mem.str_ptr(0x48bc20, 10 if cat == 3 else 9), null]
+				return [Mem.str_ptr(Addr.WEAPON_KIND_NAMES, ty >> 1), null]
+			return [Mem.str_ptr(Addr.WEAPON_KIND_NAMES, 10 if cat == 3 else 9), null]
 		USE:
 			var code := (int(it.get("special", 0x12)) if cat < 2 else int(it.get("type", 0))) - 0x12
 			return [DetailPanel.effect_name(code) if code >= 0 else "", null]

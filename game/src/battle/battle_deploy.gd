@@ -18,10 +18,10 @@ const AI_CODE := [3, 1, 2, 0, 0, 4, 4]
 func op_battle_init(_ins: Dictionary) -> void:
 	for i in 256:
 		Mem.set_flag(i, false)
-	Mem.w32(0x55e9d4, 0)
+	Mem.w32(Addr.TOWN_DEPLOY_ON, 0)
 	for i in 115:
 		st.deploy[i] = {"person": 0xffff, "flags": 0}
-		Mem.w8(0x55a500 + i, 0)
+		Mem.w8(BUnit.GRUDGE + i, 0)
 	# players = sortie list. 0x412230 resets only an entry's person and flags (+0, +8): a player without an op 0x4b
 	# in this battle keeps the position an earlier battle gave its entry (S_08's seventh unit)
 	var lst := sortie_list()
@@ -34,7 +34,7 @@ func op_battle_init(_ins: Dictionary) -> void:
 func sortie_list() -> Array[int]:
 	var out: Array[int] = []
 	for k in 32:
-		var v := Mem.r32(0x48b350 + 4 * k) & 0xffff
+		var v := Mem.r32(Addr.SORTIE + 4 * k) & 0xffff
 		if v == 0xffff:
 			break
 		out.append(v)
@@ -43,8 +43,8 @@ func sortie_list() -> Array[int]:
 
 func set_sortie_list(lst: Array) -> void:
 	for k in lst.size():
-		Mem.w32(0x48b350 + 4 * k, int(lst[k]))
-	Mem.w32(0x48b350 + 4 * lst.size(), 0xffff)
+		Mem.w32(Addr.SORTIE + 4 * k, int(lst[k]))
+	Mem.w32(Addr.SORTIE + 4 * lst.size(), 0xffff)
 
 
 func op_battle_settings(ins: Dictionary) -> void:
@@ -178,7 +178,7 @@ func create_battlefield(id: int) -> void:
 		if u.node:
 			u.node.queue_free()
 			u.node = null
-	Mem.fill(0x569f00, 115, 0)
+	Mem.fill(BattleStage.ASSASSIN_MARK, 115, 0)
 	var base := maxi(1, trimmed_mean_level() + st.level_offset)
 	var next_p := 0
 	var next_f := 15

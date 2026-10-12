@@ -132,7 +132,7 @@ static func skill_info(p: Person) -> Array:
 	var pid := p.id
 	var codes := 0x4dc100
 	var cap := ""
-	for g in [[0x55ac04, 0x555700], [0x55ac40, 0x5558c0], [0x55ac48, 0x555860], [0x55ac44, 0x555870], [0x55ac60, 0x555900]]:
+	for g in [[Addr.SANBANFU, 0x555700], [Addr.TIANMO, 0x5558c0], [Addr.BORUO, 0x555860], [Addr.MOGONG, 0x555870], [Addr.DUANZAO, 0x555900]]:
 		if pid == Mem.r32(g[0]):
 			cap = Mem.str_at(g[1])
 			break
@@ -175,9 +175,9 @@ static func skill_active(p: Person, code: int) -> bool:
 	if code >= 0xae:
 		return false
 	match code:
-		0: return Mem.r32(0x55ac04) == 1
-		1: return Mem.r32(0x55ac60) == 16
-		2: return Mem.r32(0x55ac48) == 15
+		0: return Mem.r32(Addr.SANBANFU) == 1
+		1: return Mem.r32(Addr.DUANZAO) == 16
+		2: return Mem.r32(Addr.BORUO) == 15
 		0x24: return p.cls == 0x29
 	return true
 
@@ -191,7 +191,7 @@ static func status_text(u: BUnit) -> String:
 		if u.status & int(part[0]):
 			s += part[1] + " "
 	s += _buff_word(u.buff(0), "攻击")
-	if Mem.r8(0x569f00 + u.slot) != 0:
+	if Mem.r8(BattleStage.ASSASSIN_MARK + u.slot) != 0:
 		s += "暗杀 "
 	s += _buff_word(u.buff(2), "精神") + _buff_word(u.buff(1), "防御") + _buff_word(u.buff(3), "反应") + _buff_word(u.buff(4), "士气")
 	if s == "":
@@ -397,14 +397,14 @@ func _page_class() -> void:
 	var wk := "--"
 	for i in 7:
 		if eq.size() > 2 * i and int(eq[2 * i]) != 0:
-			wk = Mem.str_ptr(0x48bc20, i)
+			wk = Mem.str_ptr(Addr.WEAPON_KIND_NAMES, i)
 			break
 	var ak := "--"
 	if eq.size() > 16:
 		if int(eq[14]) != 0:
-			ak = Mem.str_ptr(0x48bc20, 7)
+			ak = Mem.str_ptr(Addr.WEAPON_KIND_NAMES, 7)
 		elif int(eq[16]) != 0:
-			ak = Mem.str_ptr(0x48bc20, 8)
+			ak = Mem.str_ptr(Addr.WEAPON_KIND_NAMES, 8)
 	text(pr(41, 15, 22, 8), "武器:", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(pr(63, 15, 30, 8), wk, HORIZONTAL_ALIGNMENT_LEFT, UIStyle.TEXT_COLOR, SMALL_SIZE)
 	text(pr(41, 25, 22, 8), "护具:", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)

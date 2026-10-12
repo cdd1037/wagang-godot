@@ -117,9 +117,9 @@ func op_test_flags(ins: Dictionary) -> bool:
 func op_clear_flags(_ins: Dictionary) -> void:
 	for i in 256:
 		Mem.set_flag(i, false)
-	Mem.fill(0x569f00, 115, 0)
+	Mem.fill(BattleStage.ASSASSIN_MARK, 115, 0)
 	Mem.w16(0x55ac06, 0)
-	Mem.w32(0x55e9d4, 1)
+	Mem.w32(Addr.TOWN_DEPLOY_ON, 1)
 
 
 func _src_value(kind: int, v: int) -> int:
@@ -184,7 +184,7 @@ func op_set_byte_var(ins: Dictionary) -> void:
 
 
 func op_set_4ce004(ins: Dictionary) -> void:
-	Mem.w32(0x4ce004, arg(ins, 0))
+	Mem.w32(Addr.SAVE_ALLOWED, arg(ins, 0))
 
 
 func op_copy_person_byte(ins: Dictionary) -> bool:
@@ -522,8 +522,8 @@ func build_sortie() -> bool:
 				cands.append(c)
 		lst = await SortieScreen.choose(ui, self, maxn, cands, forced)
 	for k in lst.size():
-		Mem.w32(0x48b350 + 4 * k, lst[k])
-	Mem.w32(0x48b350 + 4 * lst.size(), 0xffff)
+		Mem.w32(Addr.SORTIE + 4 * k, lst[k])
+	Mem.w32(Addr.SORTIE + 4 * lst.size(), 0xffff)
 	if OS.get_environment("WG_TRACE_BATTLE") != "":
 		print("  sortie forced=%d max=%d -> %s" % [forced, maxn, lst])
 	return not lst.is_empty()
@@ -531,8 +531,8 @@ func build_sortie() -> bool:
 
 ## op 0x07 (0x415c46): true once after the player chose 出征 (flag 0x4ae4c0), which is then cleared.
 func op_test_pending(_ins: Dictionary) -> bool:
-	if Mem.r32(0x4ae4c0) != 0:
-		Mem.w32(0x4ae4c0, 0)
+	if Mem.r32(Addr.SORTIE_CHOSEN) != 0:
+		Mem.w32(Addr.SORTIE_CHOSEN, 0)
 		return true
 	return false
 
@@ -559,12 +559,12 @@ func op_op_52(ins: Dictionary) -> void:
 ## 出战位置 view (0x4db375) draws). With [0x55e9d4] == 0 it writes a deployment entry instead, which the next battle's
 ## op 0x44 resets, so nothing here.
 func op_op_4b(ins: Dictionary) -> void:
-	if Mem.r32(0x55e9d4) == 0:
+	if Mem.r32(Addr.TOWN_DEPLOY_ON) == 0:
 		return
 	var k := arg(ins, 0)
 	if k < 0 or k >= 15:
 		return
-	var a := 0x55e9d8 + 3 * k
+	var a := Addr.TOWN_DEPLOY + 3 * k
 	Mem.w8(a, arg(ins, 1))
 	Mem.w8(a + 1, arg(ins, 2))
 	Mem.w16(a + 2, 0xff00 | (arg(ins, 4) & 0xff))

@@ -30,7 +30,7 @@ var _pressed := false         # a button went down on this window (the release o
 
 ## In a battle the plain boxes stand in for the merchant window (0x46d9a4: 0x40b922).
 static func _plain() -> bool:
-	return Mem.r8(0x4ac63c) == 3
+	return Mem.r8(Addr.SCENE_MODE) == 3
 
 
 static func _make(ui: CanvasLayer, who: int, text: String) -> MerchantBox:

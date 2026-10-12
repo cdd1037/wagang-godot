@@ -95,7 +95,7 @@ func special_enabled() -> bool:
 			return true
 		1:
 			# 三板斧: once R_11 taught it ([0x55ac04]), while [0x55ac05] and [0x55ac06] are clear
-			return Mem.r8(0x55ac04) != 0 and Mem.r8(0x55ac05) == 0 and Mem.r8(0x55ac06) == 0
+			return Mem.r8(Addr.SANBANFU) != 0 and Mem.r8(0x55ac05) == 0 and Mem.r8(0x55ac06) == 0
 		5:
 			var u5 := st.unit_by_pid(5)
 			return u5 != null and not (u5.status & BUnit.ST_PARALYSIS)
@@ -190,7 +190,7 @@ func _san_ban_fu(u: BUnit, t: BUnit) -> void:
 func _ta_po_lian_ying(u: BUnit, t: BUnit) -> void:
 	var d := Vector2i(0, -1 if t.pos.y < u.pos.y else 1) if u.pos.x == t.pos.x else Vector2i(-1 if t.pos.x < u.pos.x else 1, 0)
 	await _banner("踏破连营")
-	Mem.w32(0x55ac64, 1)
+	Mem.w32(Addr.TAPO, 1)
 	await _blow(u, t)
 	if not (u.status & BUnit.ST_PARALYSIS):
 		var c := u.pos
@@ -214,7 +214,7 @@ func _ta_po_lian_ying(u: BUnit, t: BUnit) -> void:
 			if x.slot < 35:
 				break
 		await st.view.set_dim(false)
-	Mem.w32(0x55ac64, 0)
+	Mem.w32(Addr.TAPO, 0)
 
 
 ## 横扫千军 (雄阔海), on an orthogonally adjacent target: the five cells across his line of attack centred on it.
@@ -472,7 +472,7 @@ func _siege_break(t: BUnit, a: BUnit) -> bool:
 			ok = Rules.chance(mini(t.morale() * 50 / maxi(a.morale(), 1), 100))
 			if ok and t.pid == 14:
 				Mem.w8(0x55ac68, 1)
-		elif Mem.r32(0x55ac54) == 1:
+		elif Mem.r32(BattleActions.T_SHUANGLEI) == 1:
 			ok = true
 	if ok and st.actions.can_attack(t, a):
 		_face_each_other(t, a)

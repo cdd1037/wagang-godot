@@ -182,8 +182,8 @@ func _boot() -> void:
 			var ids := Game.party_ids()
 			var n := mini(ids.size(), 12)
 			for i in n:
-				Mem.w32(0x48b350 + 4 * i, ids[i])
-			Mem.w32(0x48b350 + 4 * n, 0xffff)
+				Mem.w32(Addr.SORTIE + 4 * i, ids[i])
+			Mem.w32(Addr.SORTIE + 4 * n, 0xffff)
 		if OS.get_environment("WG_AUTOSAVE") != "":
 			Game.save_game(_autoslot(), {})
 		_run_flow()
@@ -435,7 +435,7 @@ func _slot_labels() -> Array:
 
 func save_menu() -> void:
 	# 保存 (0x474c90 → mod 0x4d009f): refused while the scripts forbid saving (op 0x74 → u32 [0x4ce004] = 0)
-	if Mem.r32(0x4ce004) == 0:
+	if Mem.r32(Addr.SAVE_ALLOWED) == 0:
 		await ui.message("目前不可存盘。")
 		return
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")

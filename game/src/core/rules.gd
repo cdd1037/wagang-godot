@@ -115,7 +115,7 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 ## 双雷引's hit penalty (cave 0x40762a): while [0x55ac54] == 1, 26 less, at least 1. The mod jumps to it only from
 ## the effect-55 branch of HitRate and from the 绝招 rates, so other hits keep their rate.
 static func _shuanglei(h: int) -> int:
-	if Mem.r32(0x55ac54) == 1:
+	if Mem.r32(BattleActions.T_SHUANGLEI) == 1:
 		return h - 26 if h > 26 else 1
 	return h
 
@@ -149,7 +149,7 @@ static func double_rate(att: BUnit, def: BUnit, counter: bool) -> int:
 		return 100
 	if counter:
 		return 0
-	if Mem.r32(0x55ac54) == 2:
+	if Mem.r32(BattleActions.T_SHUANGLEI) == 2:
 		return 100
 	var a := att.formation_agi()
 	var d := maxi(def.formation_agi(), 1)
@@ -257,7 +257,7 @@ const PREV_TARGET := 0x55a6cc
 ## combat object's target list. That is the previous target of the loop: the target itself on a one-target strike,
 ## the one before it (or the last of the previous strike, for the first) on an area strike.
 static func _count_hit() -> void:
-	var s := Mem.r8(0x492800 + (Mem.r32(PREV_TARGET) & 0xff))
+	var s := Mem.r8(Addr.TARGETS + (Mem.r32(PREV_TARGET) & 0xff))
 	var c := Mem.r8(BUnit.GRUDGE + s)
 	if c != 0xff:
 		Mem.w8(BUnit.GRUDGE + s, c + 1)

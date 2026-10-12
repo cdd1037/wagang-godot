@@ -77,6 +77,9 @@ Important locations:
 | 0x55ee00..0x55ee07 | 并蒂's hit counters |
 | EV[3970..3999] | the dynamic skill slots: the person holding each skill |
 
+Addresses that more than one file uses have names in `core/addr.gd` (`Addr.SORTIE`, `Addr.SCENE_MODE` …); a file's
+own addresses are constants in that file.
+
 `Person` (`core/person.gd`) and `BUnit` (`battle/bunit.gd`) are **views**: thin objects whose properties read and
 write the record in `Mem`. Every change a script makes by address is therefore visible to the engine, and the
 other way round.
@@ -210,7 +213,7 @@ workflow) and the `WG_SHOTS` debug screenshots.
 | Path | Contents |
 |---|---|
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
-| `core/` | `assets`, `audio`, `mem`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `settings`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
+| `core/` | `assets`, `audio`, `mem`, `addr`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `settings`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
 | `story/` | `story_stage`, `rpg_actor` |
 | `battle/` | `battle_stage` (with `battle_deploy`, `battle_phase`, `battle_unit_ops`, `battle_field_ops`), `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
 | `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |

@@ -86,7 +86,7 @@ static func unit_in_cell(c: Vector2i) -> BUnit:
 ## 0x477adc: in a battle (scene mode 3, 0x40b922), the first unit slot whose state is not 0 that holds person
 ## `pid`, else null.
 static func battle_unit(pid: int) -> BUnit:
-	if Mem.r8(0x4ac63c) != 3 or pid < 0:
+	if Mem.r8(Addr.SCENE_MODE) != 3 or pid < 0:
 		return null
 	for s in 115:
 		var a := Mem.UNITS + s * Mem.UNIT_SIZE

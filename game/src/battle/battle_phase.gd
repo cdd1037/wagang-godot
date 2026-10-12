@@ -22,7 +22,7 @@ func _phase_start_effects(a: int, b: int) -> void:
 		await _phase_skills(u)
 		await _status_recovery(u)
 		_buff_decay(u)
-		Mem.w32(0x55ee00, Mem.r32(0x55ee04))       # 并蒂: the hit counts of the last phase (0x4d1e21)
+		Mem.w32(Addr.BINGDI_LAST, Mem.r32(Addr.BINGDI))       # 并蒂: the hit counts of the last phase (0x4d1e21)
 	if a == 0:
 		Mem.fill(BUnit.GRUDGE + 35, 80, 0)          # 0x44ee15
 	else:
@@ -82,11 +82,11 @@ func _phase_skills(u: BUnit) -> void:
 			var m := mini(u.level() / 4 + 1, t.max_mp() - t.mp)    # 0x4d4928
 			t.mp += maxi(m, 0)
 			return "策略 +%d" % m)
-	if p == Mem.r32(0x55ac40):
+	if p == Mem.r32(Addr.TIANMO):
 		for t in _aura_units(u, false):
 			for c in [0x31, 0x33, 0x35, 0x37]:
 				st.actions._stat_code(t, c)       # code 0xaf through 0x4224a8
-	if p == Mem.r32(0x55ac44):
+	if p == Mem.r32(Addr.MOGONG):
 		for t in _aura_units(u, true):
 			await st.commands.change_unit(t, 6, BUnit.ST_POISON)    # code 0x70 through 0x4224a8
 	if p == 42:
@@ -209,7 +209,7 @@ func _regen(u: BUnit) -> void:
 	var p := u.person
 	var mult := (100 + (p.equip_bonus(8) & 0xff)) & 0xff
 	var e := (p.effect_value(64) & 0xff) * mult / 100 if p.has_effect(64) else 0
-	Mem.w32(0x55ee04, 0)               # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
+	Mem.w32(Addr.BINGDI, 0)               # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
 	var we := (p.effect_value(22) & 0xff) * mult / 100 if p.has_effect(22) else 0
 	var ae := (p.effect_value(23) & 0xff) * mult / 100 if p.has_effect(23) else 0
 	if e > 0:

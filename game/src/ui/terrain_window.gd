@@ -118,7 +118,7 @@ func _draw_dialog() -> void:
 			var pr := Rect2(x0 + 1, y, 48, 48)
 			if pic and pr.position.x >= inner.position.x:
 				draw_texture_rect(pic, pr, false)
-			_clip_text(Rect2(x0 + 53, y, FIRST_W - 58, 30), Mem.str_ptr(0x48bdb0, t), HORIZONTAL_ALIGNMENT_LEFT,
+			_clip_text(Rect2(x0 + 53, y, FIRST_W - 58, 30), Mem.str_ptr(Addr.TERRAIN_NAMES, t), HORIZONTAL_ALIGNMENT_LEFT,
 				UIStyle.TEXT_COLOR, TEXT_SIZE, inner)
 			var ix := x0 + 50
 			for e in ELEMENTS:

@@ -314,7 +314,7 @@ func actor_poll(u: BUnit) -> void:
 
 ## op 0x4b: player deployment entry k → position (x, y), dir.
 func op_op_4b(ins: Dictionary) -> void:
-	if Mem.r32(0x55e9d4) != 0:
+	if Mem.r32(Addr.TOWN_DEPLOY_ON) != 0:
 		super.op_op_4b(ins)
 		return
 	var k := arg(ins, 0)
@@ -347,7 +347,7 @@ func open_menu() -> void:
 
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
-	Mem.w8(0x4ac63c, mode)        # scene object {mode, value}: mode 3 = the battlefield (0x40b922)
+	Mem.w8(Addr.SCENE_MODE, mode)        # scene object {mode, value}: mode 3 = the battlefield (0x40b922)
 	if mode == 3:
 		var v := arg(ins, 4)
 		if v == 0xffff:
@@ -461,7 +461,7 @@ func on_field_written(_field: int, _id: int) -> void:
 ## 0x40b922: the scene object (0x4ac63c) is in mode 3, i.e. from change_scene 3 (the battlefield) on. Before it
 ## (deployment) and after a later change_scene (aftermath pictures) a battle file counts as story mode.
 func in_battle() -> bool:
-	return Mem.r8(0x4ac63c) == 3
+	return Mem.r8(Addr.SCENE_MODE) == 3
 
 
 ## Record the player's move (start cell, then each step) as the original does while walking.

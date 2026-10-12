@@ -334,7 +334,7 @@ func stat(s: int) -> int:
 		b = get_stat_word(s) * b / 100
 	if not Skills.in_battle():
 		if s == 0:
-			Mem.w32(0x55ee04, 0)       # the attack getter clears 并蒂's hit counters in towns (0x4dbcf6)
+			Mem.w32(Addr.BINGDI, 0)       # the attack getter clears 并蒂's hit counters in towns (0x4dbcf6)
 		return maxi(_min_add(_scar(s, get_stat_word(s)), b, 9999), 0)
 	var v := mini(get_stat_word(s) + b, 9999)
 	match s:

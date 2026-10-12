@@ -192,7 +192,7 @@ func text(index: int) -> String:
 func terrain_name(t: int) -> String:
 	if t < 0 or t >= terrain_names.size():
 		return ""
-	var s := Mem.str_at(Mem.r32(0x48bdb0 + 4 * t), 16)
+	var s := Mem.str_at(Mem.r32(Addr.TERRAIN_NAMES + 4 * t), 16)
 	return s if s != "" else str(terrain_names[t])
 
 
@@ -576,7 +576,7 @@ func load_game(slot: int) -> Variant:
 		else:
 			add_history(1, str(h))      # saves before the categories: "<number><text>"
 	Mem.restore(d["mem"])
-	Mem.w32(0x4ce004, 1)          # LoadGame (0x41adc1 → mod 0x4d0c29): saving is allowed again after a load
+	Mem.w32(Addr.SAVE_ALLOWED, 1)          # LoadGame (0x41adc1 → mod 0x4d0c29): saving is allowed again after a load
 	scenario = int(d["scenario"])
 	return d.get("extra", {})
 

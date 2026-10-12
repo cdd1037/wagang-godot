@@ -517,4 +517,4 @@ static func forecast_for(st: BattleStage, f: Dictionary, t: BUnit) -> Dictionary
 
 
 static func _strat_effect_name(s: int) -> String:
-	return Mem.str_ptr(0x48bd40, int(Game.strategy(s).get("effect", 0)))
+	return Mem.str_ptr(Addr.EFFECT_NAMES, int(Game.strategy(s).get("effect", 0)))

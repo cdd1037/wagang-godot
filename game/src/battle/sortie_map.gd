@@ -59,7 +59,7 @@ func _draw_dialog() -> void:
 			if t:
 				draw_texture(t, origin + Vector2(x, y) * T)
 	for k in 15:
-		var a := 0x55e9d8 + 3 * k
+		var a := Addr.TOWN_DEPLOY + 3 * k
 		var x := Mem.r8(a)
 		if x == 0xff:
 			break

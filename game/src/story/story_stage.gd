@@ -525,7 +525,7 @@ func op_change_scene(ins: Dictionary) -> void:
 		val += 0x100
 	scene_kind = mode
 	scene_image = val
-	Mem.w8(0x4ac63c, mode)
+	Mem.w8(Addr.SCENE_MODE, mode)
 	Mem.w16(0x4ac63d, val)
 	ui.wipe_captions()
 	var entry := val + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
@@ -663,7 +663,7 @@ func do_sortie() -> bool:
 	# toolbar 出征 (0x41973c case 3): sortie list built, toolbar hidden, pending flag set; the next
 	# poll runs the scene's own test_pending section (出战), which leaves the scene / jumps scenario
 	sortie_enabled = false
-	Mem.w32(0x4ae4c0, 1)
+	Mem.w32(Addr.SORTIE_CHOSEN, 1)
 	return true
 
 

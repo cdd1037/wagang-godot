@@ -167,7 +167,7 @@ func _draw_item() -> void:
 	text(r(11, 38, 22, 8), "属性∶", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	var t := int(it.get("type", 0))
 	var grp := (t >> 1) if t < 0x12 else (10 if t >= 0x3f and t <= 0x50 else 9)   # 0x40c63a
-	text(r(31, 38, 26, 8), Mem.str_ptr(0x48bc20, grp), HORIZONTAL_ALIGNMENT_LEFT, UIStyle.TEXT_COLOR, SMALL_SIZE)
+	text(r(31, 38, 26, 8), Mem.str_ptr(Addr.WEAPON_KIND_NAMES, grp), HORIZONTAL_ALIGNMENT_LEFT, UIStyle.TEXT_COLOR, SMALL_SIZE)
 	text(r(11, 50, 22, 8), "价格∶", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	var price := int(it.get("price", 0xff))
 	text(r(31, 50, 25, 8), "---" if price == 0xff else str(price * 100), HORIZONTAL_ALIGNMENT_RIGHT, UIStyle.TEXT_COLOR, SMALL_SIZE)
@@ -220,7 +220,7 @@ func _draw_strategy() -> void:
 	_frame(r(4, 32, 89, 31))
 	text(r(10, 38, 30, 8), "效果", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(r(41, 38, 6, 8), ":", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
-	text(r(48, 38, 44, 8), Mem.str_ptr(0x48bd40, int(s.get("effect", 0))), HORIZONTAL_ALIGNMENT_LEFT, UIStyle.TEXT_COLOR, SMALL_SIZE)
+	text(r(48, 38, 44, 8), Mem.str_ptr(Addr.EFFECT_NAMES, int(s.get("effect", 0))), HORIZONTAL_ALIGNMENT_LEFT, UIStyle.TEXT_COLOR, SMALL_SIZE)
 	text(r(10, 50, 33, 8), "消耗ＭＰ", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(r(41, 49, 6, 8), ":", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(r(60, 50, 23, 8), str(strategy_mp(sid)), HORIZONTAL_ALIGNMENT_RIGHT, UIStyle.TEXT_COLOR, SMALL_SIZE)

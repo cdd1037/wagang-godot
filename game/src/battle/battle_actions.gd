@@ -261,8 +261,8 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 	var targets: Array[BUnit] = [def]
 	targets.append_array(secondary_targets(att, def, code))
 	for i in targets.size():
-		Mem.w8(0x492800 + i, targets[i].slot)
-	Mem.w8(0x492800 + targets.size(), 0xff)
+		Mem.w8(Addr.TARGETS + i, targets[i].slot)
+	Mem.w8(Addr.TARGETS + targets.size(), 0xff)
 	await view().ensure_visible(def.pos)
 	face(att, def.pos)
 	face(def, att.pos)
@@ -456,7 +456,7 @@ func area_code(u: BUnit) -> int:
 	var a := Mem.r8(0x409191 + u.cls())
 	if Mem.r8(0x55ac2c) == 1:
 		a = 10                        # 横推八马倒
-	elif Mem.r8(0x55ac64) == 1:
+	elif Mem.r8(Addr.TAPO) == 1:
 		a = 12                        # 踏破连营
 	if u.pid == 178:
 		a = 6                         # 文士弘 长缨奔破
@@ -548,9 +548,9 @@ func _bingdi_count(t: BUnit) -> void:
 	if w == null or g == null or Skills.distance(w.pos, g.pos) >= 0x9a:
 		return
 	if t.slot == w.slot:
-		Mem.w8(0x55ee04, (Mem.r8(0x55ee04) + 1) & 0xff)
+		Mem.w8(Addr.BINGDI, (Mem.r8(Addr.BINGDI) + 1) & 0xff)
 	elif t.slot == g.slot:
-		Mem.w8(0x55ee06, (Mem.r8(0x55ee06) + 1) & 0xff)
+		Mem.w8(Addr.BINGDI_GUANYI, (Mem.r8(Addr.BINGDI_GUANYI) + 1) & 0xff)
 
 
 ## 轩辕神枪 (hit check 0x43b504 → 0x4dc924): an attacker on one of the 8 cells around 管毅 that missed him is
@@ -796,9 +796,9 @@ func end_action(u: BUnit) -> void:
 		return
 	var n := Mem.r8(BattleStage.PATH_LEN)
 	var skill := 0
-	if u.pid == 15 and Mem.r8(0x55ac48) != 0:
+	if u.pid == 15 and Mem.r8(Addr.BORUO) != 0:
 		skill = 15
-	elif u.pid == 16 and Mem.r8(0x55ac60) != 0:
+	elif u.pid == 16 and Mem.r8(Addr.DUANZAO) != 0:
 		skill = 16
 	if skill == 0 or n < 2:
 		return
