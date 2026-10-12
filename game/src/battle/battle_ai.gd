@@ -45,7 +45,7 @@ func _compute_order(a: int, b: int) -> void:
 		func(x: BUnit) -> bool: return _wounded(x),
 		func(x: BUnit) -> bool: return x.family() in [8, 10, 18],
 		func(x: BUnit) -> bool: return x.family() in Rules.RANGED_FAMILIES,
-		func(x: BUnit) -> bool: return x.family() in [0, 3, 5, 7, 11, 12, 13, 15, 16, 17, 20, 24],
+		func(x: BUnit) -> bool: return Rules.mounted_family(x.family()),
 		func(_x: BUnit) -> bool: return true,
 	]
 	for p in passes:

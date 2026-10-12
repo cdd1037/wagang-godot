@@ -377,7 +377,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 				var main := st.unit_at(c)
 				if main and not st.actions.usable_on(u, s, main):
 					# 0x420422's messages for a player-commanded caster
-					var cat: int = Rules.STRAT_CATEGORY[s] if s < Rules.STRAT_CATEGORY.size() else 17
+					var cat := Rules.strat_category(s) if s < 0x3e else 17
 					if cat <= 3:
 						await st.ui.message("不能在这里使用。")
 					elif cat == 15 and main == u:

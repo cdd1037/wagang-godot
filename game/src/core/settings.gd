@@ -100,14 +100,11 @@ static func message_hold() -> float:
 	return float(message_speed() + 1)
 
 
-## Battle walk, one cell (0x44201b): 48 / s frames of 50 ms, s from the speed and whether the family is one of
-## the mounted ones (0x43ff6e, table 0x43ffc4).
-const FAST_FAMILIES := [0, 3, 5, 7, 11, 12, 13, 15, 16, 17, 20, 24]
-
-
+## Battle walk, one cell (0x44201b): 48 / s frames of 50 ms, s from the speed and whether the family is a mounted
+## one (Rules.mounted_family).
 static func cell_time(family: int) -> float:
 	var sp := clampi(move_speed(), 0, 2)
-	var s: int = ([48, 24, 12] if family in FAST_FAMILIES else [48, 12, 6])[sp]
+	var s: int = ([48, 24, 12] if Rules.mounted_family(family) else [48, 12, 6])[sp]
 	return 0.05 * (48 / s)
 
 

@@ -275,13 +275,16 @@ static func damage_post(att: BUnit, def: BUnit, dmg: int) -> int:
 
 
 # ------------------------------------------------------------------ strategies
-const STRAT_POWER := {
-	0: 75, 1: 90, 2: 50, 3: 70, 4: 100,      # 焦热 烈焰 炎雷 炼狱 赤链
-	5: 75, 6: 90, 7: 50, 8: 70, 9: 100,      # 浊流 惊涛 潮汐 海啸 狂澜
-	10: 50, 11: 75, 12: 40, 13: 60, 14: 20,  # 烟尘 飞沙 萧瑟 龙挂 飓风
-	15: 70, 16: 100, 17: 60, 18: 90, 19: 120, # 落石 塌方 碎岩 地裂 移山
-	20: 70, 22: 20, 33: 70, 34: 50, 35: 60, 36: 40, 38: 120, 64: 70, 65: 100,
-}
+## Strategy power in % (byte table 0x43c35c of the program image, read by 0x43bfaa at 0x43c0d0; 0 for strategies
+## without damage): 焦热 75 烈焰 90 炎雷 50 炼狱 70 赤链 100, the water / wind / earth series alike, 暗算 70 暗鬼 20
+## 毒烟 70 瘴雾 50 陷阱 60 濠壑 40 八阵 120 青龙 70 朱雀 100. Read from Mem, so a mod's exe_image.bin changes it.
+const STRAT_POWER_TABLE := 0x43c35c
+
+
+static func strat_power(s: int) -> int:
+	return Mem.r8(STRAT_POWER_TABLE + s) if s >= 0 and s <= 0x41 else 0
+
+
 const DAMAGE_STRATS := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 33, 34, 35, 36, 38, 64, 65]
 # hit factor numerator/denominator per strategy (table 0x43bc07)
 const STRAT_HIT_9_10 := [1, 2, 6, 7, 11, 13, 14, 16, 22, 23, 25, 33]
@@ -317,9 +320,19 @@ static func element_ok(e: int, t: int) -> bool:
 	return t in [3, 4]
 
 
-## Strategy category per id 0..0x3d (table 0x42093c), which picks the check in 0x420422.
-const STRAT_CATEGORY := [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 17, 5, 6, 6, 6, 6, 6, 6, 6, 6,
-	7, 7, 8, 8, 9, 9, 10, 17, 11, 11, 11, 11, 11, 15, 15, 13, 13, 17, 14, 14, 14, 14, 14, 14, 14, 14, 15, 17, 17, 17, 16]
+## Strategy category per id 0..0x3d (byte table 0x42093c of the program image, the index of 0x420422's switch), which
+## picks the usability check; -1 for ids ≥ 0x3e (always usable).
+const STRAT_CATEGORY_TABLE := 0x42093c
+
+
+static func strat_category(s: int) -> int:
+	return Mem.r8(STRAT_CATEGORY_TABLE + s) if s >= 0 and s < 0x3e else -1
+
+
+## A mounted family (0x43ff6e: its switch's index table 0x43ffc4 has 0 for families 0..0x18 that are), which walks
+## faster (0x44201b) and acts in the AI's fifth order pass (0x44da7a).
+static func mounted_family(f: int) -> bool:
+	return f >= 0 and f <= 0x18 and Mem.r8(0x43ffc4 + f) == 0
 
 
 ## Can `caster` use strategy s on `target` (0x420422)? Element strategies (categories 0-3) need a fitting target
@@ -331,9 +344,9 @@ const STRAT_CATEGORY := [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3
 ## of the player's colour. Category 17 (暗杀, 八阵, 急行, weather) goes to the mod's 0x4dbf8a, which compares the
 ## category with 0x15 and so always allows.
 static func strat_usable(s: int, caster: BUnit, target: BUnit, target_terrain: int) -> bool:
-	if s < 0 or s >= STRAT_CATEGORY.size():
+	var cat := strat_category(s)
+	if cat < 0:
 		return true
-	var cat: int = STRAT_CATEGORY[s]
 	if cat <= 3:
 		return strat_terrain_ok(s, caster, target_terrain)
 	var ai := caster.mode != 7
@@ -455,7 +468,7 @@ static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) ->
 		dmg += (I - J) / 3
 	else:
 		dmg = sat_sub(dmg, (J - I) / 3)
-	dmg = dmg * int(STRAT_POWER.get(s, 0)) / 100
+	dmg = dmg * strat_power(s) / 100
 	match target.cls():
 		39: dmg = dmg * 9 / 10
 		42, 43, 49, 50: dmg = dmg * 11 / 10

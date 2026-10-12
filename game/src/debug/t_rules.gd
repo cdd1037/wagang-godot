@@ -94,6 +94,7 @@ func run() -> void:
 	_imitation()
 	_kuanglan()
 	await _regen_exp()
+	_exe_tables()
 
 	Game.main = old_main
 	print("t_rules: PASS" if _ok else "t_rules: FAILED")
@@ -382,3 +383,21 @@ func _regen_exp() -> void:
 	u.colour = 1
 	await st.phase_fx._regen(u)
 	_check(p.armor_exp == 3, "red units only")
+
+
+## The tables Rules reads from the program image (0x43c35c power, 0x42093c category, 0x43ffc4 mounted families)
+## give what the hard-coded copies they replaced did, and a patched byte (a mod's exe_image.bin) changes them.
+func _exe_tables() -> void:
+	var power := {0: 75, 1: 90, 2: 50, 3: 70, 4: 100, 5: 75, 6: 90, 7: 50, 8: 70, 9: 100, 10: 50, 11: 75, 12: 40,
+		13: 60, 14: 20, 15: 70, 16: 100, 17: 60, 18: 90, 19: 120, 20: 70, 22: 20, 33: 70, 34: 50, 35: 60, 36: 40,
+		38: 120, 64: 70, 65: 100}
+	var cat := [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 17, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 8,
+		8, 9, 9, 10, 17, 11, 11, 11, 11, 11, 15, 15, 13, 13, 17, 14, 14, 14, 14, 14, 14, 14, 14, 15, 17, 17, 17, 16]
+	for s in 0x48:
+		_check(Rules.strat_power(s) == int(power.get(s, 0)), "strategy %d power %d" % [s, Rules.strat_power(s)])
+		_check(Rules.strat_category(s) == (cat[s] if s < cat.size() else -1), "strategy %d category" % s)
+	for f in 32:
+		_check(Rules.mounted_family(f) == (f in [0, 3, 5, 7, 11, 12, 13, 15, 16, 17, 20, 24]), "family %d mounted" % f)
+	Mem.w8(Rules.STRAT_POWER_TABLE, 150)
+	_check(Rules.strat_power(0) == 150, "a patched power byte is read")
+	Mem.w8(Rules.STRAT_POWER_TABLE, 75)

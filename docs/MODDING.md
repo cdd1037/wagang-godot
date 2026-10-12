@@ -44,6 +44,10 @@ tools/venv/bin/python -I tools/make_mod.py /path/to/modified-copy mymod.zip
 tools/venv/bin/python -I tools/make_mod.py /path/to/modified-copy mymod.zip extra/   # plus pictures, sounds …
 ```
 
+The program image (`data/exe_image.bin`) carries the built-in tables the game reads from it: strategy power and
+category, the mounted families, terrain and other names, the area codes and more, so an edit to them in the copy's
+`wagan.wa` reaches the game. Rules that are code in the original (and GDScript here) do not change that way.
+
 `make_mod.py` converts the copy's scripts (`tools/eex.py`), data tables (`tools/conv_data.py`) and program image
 (`tools/dump_image.py`), compares each file with the game's own, and packs only those that differ or are new.
 Run on the unmodified original it finds nothing to pack: the converters reproduce `game/assets` exactly. `extra/`

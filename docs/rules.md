@@ -843,7 +843,8 @@ All units of the side get order 0xff; then a counter n=0 is handed out in 6 pass
 4. ranged families {4 弓兵, 5 间谍, 15 弓骑兵, 23 箭车} (table 0x44007a);
 5. mobile families (table 0x43ffc4 == 0): {0,3,5,7,11,12,13,15,16,17,20,24};
 6. everybody else (pass 6 pre-increments: first order value used is n+1 — harmless).
-The phase loop (§9.1, 0x44e9ce) then lets units act in increasing order value, re-scanning from 0 after each action.
+The phase loop (§10.5.4, 0x44e851) then lets units act in increasing order value, once each: it goes on with the next
+order after an action and starts again at 0 only after a 战备 (ctx+0x504).
 
 ### 10.5 AI turn of one unit (AIAct 0x43ad1c)
 Decision globals ("choice" @0x4b2c1c): +4 dest pos (0x4b2c20), 0x4b2c24 bit0 = retreat mode, 0x4b2c28 target unit,
