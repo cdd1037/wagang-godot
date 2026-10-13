@@ -9,8 +9,34 @@ extends RefCounted
 ## clear although the battle went on (Godot 4.7, S_03 flow tests); as a coroutine here it goes on.
 
 
-## Boot (main.gd): start a bot.
-func boot(_main: Node) -> void:
+## Boot (main.gd): start a bot; true when the harness started a run itself (or refused one), so no intro and
+## no title screen.
+func boot(_main: Node) -> bool:
+	return false
+
+
+## The title screen is due (回到标题, after a game over): true when the harness goes on instead.
+func title(_main: Node) -> bool:
+	return false
+
+
+## Scenario n starts (main's scenario loop): true ends the run here.
+func scenario_start(_n: int) -> bool:
+	return false
+
+
+## A scenario ended and the loop goes on to Game.scenario.
+func scenario_end() -> void:
+	pass
+
+
+## The last scenario is over: true when the harness ends the run instead of the ending.
+func game_end() -> bool:
+	return false
+
+
+## Game over in scenario n.
+func game_over(_n: int) -> void:
 	pass
 
 

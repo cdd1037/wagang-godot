@@ -14,8 +14,6 @@ var _abort_flow := false
 var _flow_running := false
 var _flow_gen := 0          # bumped to orphan a running scenario loop (load / title / retry)
 var _pending_load: Dictionary = {}
-var _retries: Dictionary = {}
-var _lost_scenario := -1            # flow-test: the scenario game_over left (it zeroes GS+7)
 
 
 func _enter_tree() -> void:
@@ -37,7 +35,6 @@ func _process(_d: float) -> void:
 	var fast := (Input.is_key_pressed(KEY_SPACE) or Game.skip_held()) and not ui.video.visible
 	Engine.time_scale = 4.0 if fast else 1.0
 	_autosave_watch()
-	_debug_shots()
 
 
 func _notification(what: int) -> void:
@@ -46,23 +43,6 @@ func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_CLOSE_REQUEST,
 			NOTIFICATION_EXIT_TREE]:
 		_autosave_flush()
-
-
-var _shot_t := 0.0
-var _shot_n := 0
-
-
-## Debug: WG_SHOTS=dir saves a screenshot every WG_SHOT_EVERY seconds (default 3).
-func _debug_shots() -> void:
-	var dir := OS.get_environment("WG_SHOTS")
-	if dir == "":
-		return
-	var now := Time.get_ticks_msec() / 1000.0
-	if now - _shot_t < float(OS.get_environment("WG_SHOT_EVERY") if OS.get_environment("WG_SHOT_EVERY") != "" else "3"):
-		return
-	_shot_t = now
-	_shot_n += 1
-	get_viewport().get_texture().get_image().save_png("%s/%03d.png" % [dir, _shot_n])
 
 
 func _fit_window() -> void:
@@ -137,55 +117,7 @@ func _ready() -> void:
 
 
 func _boot() -> void:
-	if OS.get_environment("WG_AUTOSAVE") != "" and _autoslot() < SAVE_SLOTS:
-		printerr("WG_AUTOSLOT=%d is one of the player's save slots 0-%d: use 11 or higher" % [_autoslot(), SAVE_SLOTS - 1])
-		get_tree().quit(2)
-		return
-	Game.hooks.boot(self)           # the UI bot (WG_UIBOT) when the build has src/debug
-	if OS.get_environment("WG_ACCEPT_SPAM") != "":
-		# debug: tap ui_accept every 0.6 s (advances dialogue, like a player mashing Enter)
-		var t := Timer.new()
-		t.wait_time = 0.6
-		t.autostart = true
-		t.timeout.connect(func() -> void:
-			if Game.has_meta("bot_owns_input"):
-				return
-			for pressed in [true, false]:
-				var ev := InputEventAction.new()
-				ev.action = "ui_accept"
-				ev.pressed = pressed
-				Input.parse_input_event(ev)
-				for k in 2:
-					await get_tree().process_frame)
-		add_child(t)
-	var ls := OS.get_environment("WG_LOADSLOT")
-	if ls != "":
-		var extra: Variant = Game.load_game(int(ls))
-		_pending_load = extra if extra is Dictionary else {}
-		print("== loaded slot %s at scenario %d" % [ls, Game.scenario])
-		_run_flow()
-		return
-	var start := OS.get_environment("WG_START")
-	if start != "":
-		# debug: WG_START=<scenario number> jumps straight into a scenario
-		Game.new_game_state()
-		Game.scenario = int(start)
-		var party := OS.get_environment("WG_PARTY")
-		if party != "":
-			for x in party.split(","):
-				Game.join_party(int(x), 1)
-		for fl in OS.get_environment("WG_SETFLAGS").split(",", false):
-			Mem.set_flag(int(fl), true)          # debug: story flags an earlier branch would have set
-		if Game.scenario % 2 == 1:
-			# starting at a battle: no story scene built the sortie list (u32[] @0x48b350, 0xffff end)
-			var ids := Game.party_ids()
-			var n := mini(ids.size(), 12)
-			for i in n:
-				Mem.w32(Addr.SORTIE + 4 * i, ids[i])
-			Mem.w32(Addr.SORTIE + 4 * n, 0xffff)
-		if OS.get_environment("WG_AUTOSAVE") != "":
-			Game.save_game(_autoslot(), {})
-		_run_flow()
+	if Game.hooks.boot(self):       # the harness started a run itself (WG_START, WG_LOADSLOT; debug/harness.gd)
 		return
 	if OS.get_environment("WG_NOVIDEO") == "":
 		await ui.video.play("pre")
@@ -194,18 +126,22 @@ func _boot() -> void:
 
 # ------------------------------------------------------------------ title
 func to_title() -> void:
-	_stop_flow()
-	if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "" and not Game.save_info(_autoslot()).is_empty():
-		# flow-test: retry from the last autosave instead of restarting the game
-		_retry_autosave.call_deferred()
+	stop_flow()
+	if Game.hooks.title(self):      # a flow test retries from its autosave instead
 		return
 	_title_screen.call_deferred()
+
+
+## Start the scenario loop at Game.scenario, its stage restored from `extra` (a save's stage state) when given.
+func start_flow(extra: Dictionary = {}) -> void:
+	_pending_load = extra
+	_run_flow()
 
 
 ## Abandon the running scenario loop and its stage. The loop may be suspended inside the stage
 ## (often the very call chain that asked for this), so it is orphaned via _flow_gen instead of
 ## being waited for; anything of it that still resumes sees the stale generation and returns.
-func _stop_flow() -> void:
+func stop_flow() -> void:
 	_autosave_flush()      # 回到标题, game over, loading a slot: the last checkpoint is what 继续游戏 resumes
 	_flow_gen += 1
 	_abort_flow = true
@@ -217,43 +153,6 @@ func _stop_flow() -> void:
 		stage.queue_free()
 		stage = null
 	SoundMap.stop_loop()
-
-
-## Flow-test autosave slot (WG_AUTOSLOT, default 19) so parallel runs don't share one. Slots 0-9 are the
-## player's saves: _boot refuses them.
-func _autoslot() -> int:
-	var s := OS.get_environment("WG_AUTOSLOT")
-	return int(s) if s != "" else 19
-
-
-func _retry_autosave() -> void:
-	# the scenario that just ended in game over (which zeroes it, GS+7) or an ending
-	var failed := _lost_scenario if _lost_scenario >= 0 else Game.scenario
-	_lost_scenario = -1
-	var was_ending := Game.ending_reached
-	Game.ending_reached = false
-	if was_ending and failed >= 106:
-		# the endgame (R_53 / R_54 hub) ends the game: the playthrough is complete
-		print("== flow-test: reached an ending in %s" % scenario_file(failed))
-		get_tree().quit()
-		return
-	_stop_flow()
-	await get_tree().process_frame
-	var saved: Variant = Game.load_game(_autoslot())
-	_pending_load = saved if saved is Dictionary else {}
-	var tries := int(_retries.get(failed, 0)) + 1
-	_retries[failed] = tries
-	# a battle random play keeps losing (scripted objective): jump to its aftermath on the next try
-	if failed % 2 == 1 and tries >= 3:
-		Game.skip_battle_scenario = failed   # cleared by the battle when it is used
-	print("== retry from autosave at scenario %d (scenario %d failed, try %d)" % [Game.scenario, failed, tries])
-	if failed % 2 == 0 and tries >= 30 and Game.scenario == failed:
-		# a story scene random play keeps losing (chained 单挑 mini-games) — move on
-		print("== flow-test: skipping story %s" % scenario_file(failed))
-		_pending_load = {}
-		Game.scenario += 1
-		Game.save_game(_autoslot(), {})      # don't come back to it on the next retry
-	_run_flow()
 
 
 func _title_screen() -> void:
@@ -341,18 +240,13 @@ func _run_flow() -> void:
 		var n := Game.scenario
 		var file := scenario_file(n)
 		if not Assets.exists("scripts/%s.json" % file):
-			if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
-				print("== flow-test: reached the end of the game")
-				get_tree().quit()
-				return
-			await ending()
+			if not Game.hooks.game_end():
+				await ending()
 			return
 		# a new game, the next scenario or a loaded save: the start of this stage is a checkpoint
 		_autosave_checkpoint(_pending_load, true)
 		print("== scenario %d: %s" % [n, file])
-		var stop := OS.get_environment("WG_STOP")
-		if stop != "" and n >= int(stop):
-			get_tree().quit()
+		if Game.hooks.scenario_start(n):
 			return
 		ui.wipe_captions()        # a new stage paints its own view
 		stage_starting.emit(n)
@@ -375,8 +269,7 @@ func _run_flow() -> void:
 		stage.queue_free()
 		stage = null
 		Game.scenario = (Game.scenario + 1) & 0xff
-		if OS.get_environment("WG_AUTOSAVE") != "":
-			Game.save_game(_autoslot(), {})
+		Game.hooks.scenario_end()
 	if gen == _flow_gen:
 		_flow_running = false
 
@@ -385,7 +278,7 @@ func _run_flow() -> void:
 ## original exits either way (yes asks its launcher to start the game again); here yes goes to the title, no quits
 ## (on phones, which should not quit themselves, also the title).
 func game_over() -> void:
-	_lost_scenario = Game.scenario
+	Game.hooks.game_over(Game.scenario)
 	Mem.w8(Mem.GS + 7, 0)
 	Audio.stop_bgm()
 	Audio.se(40)
@@ -459,7 +352,7 @@ func _load_slot(i: int) -> bool:
 	if Game.read_save(i) == null:
 		await ui.popup("无法读取这个进度。", 1.2)
 		return false
-	_stop_flow()
+	stop_flow()
 	var extra: Variant = Game.load_game(i)
 	if extra == null:
 		extra = {}

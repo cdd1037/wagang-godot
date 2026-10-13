@@ -28,7 +28,6 @@ var test_run := autoplay or demo or ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "
 		func(e: String) -> bool: return OS.get_environment(e) != "")
 var history: Array = []
 var ending_reached := false
-var skip_battle_scenario := -1   # flow-test: skip this battle (jump to its aftermath)
 var _name_index: Dictionary = {}
 
 ## GS+7: scenario counter. even = R_(n/2) story file, odd = S_(n/2) battle file.

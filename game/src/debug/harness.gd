@@ -7,18 +7,160 @@ extends TestHooks
 ## The flow goal of the player unit autoplay is playing (FlowGoals.compute), else empty. The UI bot sets it too.
 var goal: Dictionary = {}
 var _bot: InputBot
+var _skip_battle := -1      # flow test: this battle goes straight to its aftermath (a third loss in a row)
+var _lost := -1             # flow test: the scenario of the last game over (which zeroes GS+7)
+var _retries := {}          # flow test: tries per scenario
 
 
-func boot(main: Node) -> void:
+# ------------------------------------------------------------------ the run (main.gd)
+## Flow-test autosave slot (WG_AUTOSLOT, default 19) so parallel runs don't share one. Slots 0-9 are the player's
+## saves: boot refuses them.
+static func autoslot() -> int:
+	var s := OS.get_environment("WG_AUTOSLOT")
+	return int(s) if s != "" else 19
+
+
+func boot(main: Node) -> bool:
+	var autosave := OS.get_environment("WG_AUTOSAVE") != ""
+	if autosave and autoslot() < main.SAVE_SLOTS:
+		printerr("WG_AUTOSLOT=%d is one of the player's save slots 0-%d: use 11 or higher" % [autoslot(), main.SAVE_SLOTS - 1])
+		main.get_tree().quit(2)
+		return true
 	if OS.get_environment("WG_UIBOT") != "":
 		main.add_child(UiBot.new())       # plays through real input events (debug/ui_bot.gd)
+	if OS.get_environment("WG_ACCEPT_SPAM") != "":
+		_accept_spam(main)
+	if OS.get_environment("WG_SHOTS") != "":
+		_shots(main)
+	var ls := OS.get_environment("WG_LOADSLOT")
+	if ls != "":
+		var extra: Variant = Game.load_game(int(ls))
+		print("== loaded slot %s at scenario %d" % [ls, Game.scenario])
+		main.start_flow(extra if extra is Dictionary else {})
+		return true
+	var start := OS.get_environment("WG_START")
+	if start == "":
+		return false
+	# WG_START=<scenario number> jumps straight into a scenario
+	Game.new_game_state()
+	Game.scenario = int(start)
+	for x in OS.get_environment("WG_PARTY").split(",", false):
+		Game.join_party(int(x), 1)
+	for fl in OS.get_environment("WG_SETFLAGS").split(",", false):
+		Mem.set_flag(int(fl), true)          # story flags an earlier branch would have set
+	if Game.scenario % 2 == 1:
+		# starting at a battle: no story scene built the sortie list (u32[] @0x48b350, 0xffff end)
+		var ids := Game.party_ids()
+		var n := mini(ids.size(), 12)
+		for i in n:
+			Mem.w32(Addr.SORTIE + 4 * i, ids[i])
+		Mem.w32(Addr.SORTIE + 4 * n, 0xffff)
+	if autosave:
+		Game.save_game(autoslot(), {})
+	main.start_flow()
+	return true
+
+
+## WG_ACCEPT_SPAM: ui_accept every 0.6 s (advances dialogue, like a player mashing Enter) until a bot owns the input.
+func _accept_spam(main: Node) -> void:
+	var t := Timer.new()
+	t.wait_time = 0.6
+	t.autostart = true
+	t.timeout.connect(func() -> void:
+		if Game.has_meta("bot_owns_input"):
+			return
+		for pressed in [true, false]:
+			var ev := InputEventAction.new()
+			ev.action = "ui_accept"
+			ev.pressed = pressed
+			Input.parse_input_event(ev)
+			for k in 2:
+				await main.get_tree().process_frame)
+	main.add_child(t)
+
+
+## WG_SHOTS=dir: a screenshot every WG_SHOT_EVERY seconds (default 3).
+func _shots(main: Node) -> void:
+	var t := Timer.new()
+	t.wait_time = float(OS.get_environment("WG_SHOT_EVERY")) if OS.get_environment("WG_SHOT_EVERY") != "" else 3.0
+	t.autostart = true
+	var n := [0]
+	t.timeout.connect(func() -> void:
+		n[0] += 1
+		main.get_viewport().get_texture().get_image().save_png("%s/%03d.png" % [OS.get_environment("WG_SHOTS"), n[0]]))
+	main.add_child(t)
+
+
+## Flow test: back at the title after a loss or an ending, retry from the last autosave instead.
+func title(main: Node) -> bool:
+	if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "" and not Game.save_info(autoslot()).is_empty():
+		_retry.call_deferred(main)
+		return true
+	return false
+
+
+func _retry(main: Node) -> void:
+	# the scenario that just ended in game over (which zeroes it, GS+7) or an ending
+	var failed := _lost if _lost >= 0 else Game.scenario
+	_lost = -1
+	var was_ending := Game.ending_reached
+	Game.ending_reached = false
+	if was_ending and failed >= 106:
+		# the endgame (R_53 / R_54 hub) ends the game: the playthrough is complete
+		print("== flow-test: reached an ending in %s" % main.scenario_file(failed))
+		main.get_tree().quit()
+		return
+	main.stop_flow()
+	await main.get_tree().process_frame
+	var saved: Variant = Game.load_game(autoslot())
+	var pending: Dictionary = saved if saved is Dictionary else {}
+	var tries := int(_retries.get(failed, 0)) + 1
+	_retries[failed] = tries
+	# a battle random play keeps losing (scripted objective): jump to its aftermath on the next try
+	if failed % 2 == 1 and tries >= 3:
+		_skip_battle = failed            # cleared by the battle when it is used
+	print("== retry from autosave at scenario %d (scenario %d failed, try %d)" % [Game.scenario, failed, tries])
+	if failed % 2 == 0 and tries >= 30 and Game.scenario == failed:
+		# a story scene random play keeps losing (chained 单挑 mini-games) — move on
+		print("== flow-test: skipping story %s" % main.scenario_file(failed))
+		pending = {}
+		Game.scenario += 1
+		Game.save_game(autoslot(), {})      # don't come back to it on the next retry
+	main.start_flow(pending)
+
+
+## WG_STOP=n: the run ends when scenario n starts.
+func scenario_start(n: int) -> bool:
+	var stop := OS.get_environment("WG_STOP")
+	if stop != "" and n >= int(stop):
+		Engine.get_main_loop().quit()
+		return true
+	return false
+
+
+## Flow test (WG_AUTOSAVE): the autosave slot holds the start of each scenario.
+func scenario_end() -> void:
+	if OS.get_environment("WG_AUTOSAVE") != "":
+		Game.save_game(autoslot(), {})
+
+
+func game_end() -> bool:
+	if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
+		print("== flow-test: reached the end of the game")
+		Engine.get_main_loop().quit()
+		return true
+	return false
+
+
+func game_over(n: int) -> void:
+	_lost = n
 
 
 # ------------------------------------------------------------------ battles
 func skip_battle(st: BattleStage) -> bool:
-	if Game.autoplay and Game.skip_battle_scenario == Game.scenario:
+	if Game.autoplay and _skip_battle == Game.scenario:
 		print("== flow-test: skipping battle %s" % st.vm.name)
-		Game.skip_battle_scenario = -1
+		_skip_battle = -1
 		return true
 	return false
 

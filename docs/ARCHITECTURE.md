@@ -199,22 +199,25 @@ re-applies it whenever Mem is reset or restored.
    (recorded in `user://niuniu.bin`, like the original's `Niuniu.wa`).
 2. `_run_flow()`: for scenario *n* load `R_(n/2)` if *n* is even, else `S_(n/2)`; run it; then *n* + 1, unless a
    script jumped with `goto_scenario`.
-3. Game over, endings, title and loading all go through `_stop_flow()`, which abandons the running stage and
+3. Game over, endings, title and loading all go through `stop_flow()`, which abandons the running stage and
    stops a looping sound effect. The
    scenario loop is tagged with a generation counter, so an orphaned loop can never continue.
 
 Also in `main.gd`: window handling (the initial size is the largest of 3×–1× that fits the screen; after the user
 resizes the window it snaps back to 4:3 so the picture fills it; full screen), the Space/Ctrl fast-forward
 (`Engine.time_scale = 4`), the version label on the title screen (`application/config/version`, set by the release
-workflow) and the `WG_SHOTS` debug screenshots.
+workflow).
 
 ## Test hooks
 
 The flow-test harness and the bots step into the game at a few points only: `Game.hooks` (`core/test_hooks.gd`),
 whose methods do nothing by default. When the build has `src/debug`, `Game` loads `debug/harness.gd` in its place,
-which brings the battle objectives (`FlowGoals`), the story 单挑 and puzzle solvers, the skips, caps and the god
-mode's field clear, the input and UI bots, `WG_SAVETEST` and the battle traces. No game script names a class of
-`src/debug` (t_parse checks it), so a build can leave the folder out and play the same.
+which brings the jump starts (`WG_START`, `WG_LOADSLOT`, `WG_STOP`), the flow test's autosave slot and its retries
+from it, the battle objectives (`FlowGoals`), the story 单挑 and puzzle solvers, the skips, caps and the god mode's
+field clear, the input and UI bots, `WG_SAVETEST`, `WG_SHOTS` and the battle traces. No game script names a class
+of `src/debug` (t_parse checks it), so a build can leave the folder out and play the same. The release builds keep
+it: their smoke test plays the exported pack from a jump start (`WG_START=0 … WG_STOP=3`), and without the
+variables the harness does nothing.
 
 ## Source map
 
