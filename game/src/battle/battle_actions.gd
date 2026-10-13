@@ -346,7 +346,8 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			if att.slot < 15:
 				best_exp = maxi(best_exp, _phys_exp(att, t, killed))
 		if step:
-			for f in [T_LONGYIN, T_FENGWU, T_FIRST, 0x55ac28, T_HENGTUI, T_GAIMA, 0x55ac34, T_GUIMEN, T_NUMU, 0x55ac58]:
+			# [T_LONGYIN .. T_GUIMEN], T_NUMU and 0x55ac58 (no technique of this mod uses 0x55ac28 / 0x55ac34 / 0x55ac58)
+			for f in range(T_LONGYIN, T_GUIMEN + 4, 4) + [T_NUMU, 0x55ac58]:
 				Mem.w32(f, 0)
 			if Mem.r32(T_SHA) == 1:
 				Mem.w32(T_SHA, 2)
@@ -452,10 +453,10 @@ func _gaima(att: BUnit) -> void:
 ## from memory because 秦琼's 回旋杀手锏 patches it for one strike. Then the technique flags, 文士弘 (178) and the
 ## effects 21 and 43.
 func area_code(u: BUnit) -> int:
-	if Mem.r32(0x55ac20) == 1:
+	if Mem.r32(T_FENGWU) == 1:
 		return 2                      # 凤舞九天
 	var a := Mem.r8(0x409191 + u.cls())
-	if Mem.r8(0x55ac2c) == 1:
+	if Mem.r8(T_HENGTUI) == 1:
 		a = 10                        # 横推八马倒
 	elif Mem.r8(Addr.TAPO) == 1:
 		a = 12                        # 踏破连营
@@ -630,7 +631,7 @@ func _phys_exp(a: BUnit, t: BUnit, killed: bool) -> int:
 	var lt := t.level()
 	var e := 0
 	if killed:
-		e = mini((lt - la) * 8 + 32, 200) if la < lt else maxi(Rules.sat_sub(32, (la - lt) * 4), 10)
+		e = Rules.kill_exp(la, lt)
 		if t.pid == st.boss_pid:
 			e *= 2
 	else:
@@ -1258,9 +1259,9 @@ func _strat_exp(u: BUnit, t: BUnit, killed: bool, damage_strat: bool) -> int:
 	var la := u.level()
 	var lt := t.level()
 	if t.is_enemy_of(u) and damage_strat and killed:
-		var e := mini((lt - la) * 8 + 32, 200) if la < lt else maxi(Rules.sat_sub(32, (la - lt) * 4), 10)
+		var e := Rules.kill_exp(la, lt)
 		return e * (2 if t.pid == st.boss_pid else 1)
-	return mini((lt - la) * 4 + 10, 100) if la < lt else maxi(Rules.sat_sub(10, (la - lt) / 2), 5)
+	return Rules.strategy_exp(la, lt)
 
 
 func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
@@ -1272,7 +1273,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 	if not hit:
 		if not Game.autoplay:
 			st.hud.popup_number("失败", t.pos, Color(0.7, 0.7, 0.7))
-		return _strat_exp(u, t, false, false) if not t.is_enemy_of(u) else (mini((t.level() - u.level()) * 4 + 10, 100) if u.level() < t.level() else maxi(Rules.sat_sub(10, (u.level() - t.level()) / 2), 5))
+		return _strat_exp(u, t, false, false)
 	if s == 21:
 		# 暗杀 (0x43c058): no damage; the target is marked (0x569f00[t] = 2, assassin 0x569f73[t]) and drops
 		# to 1 HP two phase starts later (BattleStage._assassination_countdown). The hit still counts as one
@@ -1283,7 +1284,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		if not Game.autoplay:
 			st.hud.popup_number("暗杀", t.pos, Color(0.8, 0.5, 1))
 		return _strat_exp(u, t, false, false)
-	if damage_set and s != 38 and s != 66:
+	if damage_set:
 		var dmg := Rules.strat_damage(u, t, s, false)
 		if s == 22:
 			t.mp = maxi(t.mp - dmg, 0)

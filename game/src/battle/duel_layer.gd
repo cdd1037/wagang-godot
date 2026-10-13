@@ -693,7 +693,7 @@ func result(winner: int) -> void:
 	if w == 1 and u1 != null and u1.colour == 0:
 		var lw := Game.person(pids[1]).level
 		var ll := Game.person(pids[0]).level
-		var e := mini(32 + 8 * (ll - lw), 200) if lw < ll else maxi(Rules.sat_sub(32, 4 * (lw - ll)), 10)
+		var e := Rules.kill_exp(lw, ll)
 		if pids[0] == stage.boss_pid:
 			e *= 2
 		exp_award = e

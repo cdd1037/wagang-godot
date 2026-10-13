@@ -444,7 +444,7 @@ func siege(a: BUnit, t: BUnit, hs: Array[BUnit]) -> void:
 		no_counter = true                       # [0x4d002c]
 		var m := siege_counter(t.pid)
 		if m != 0:
-			Mem.w32(0x55ac24, m)
+			Mem.w32(BattleActions.T_FIRST, m)
 			await st.actions.attack(t, a)
 			broken = true
 	if not broken:
@@ -471,13 +471,13 @@ func _siege_break(t: BUnit, a: BUnit) -> bool:
 		elif t.pid in [101, 136, 14]:
 			ok = Rules.chance(mini(t.morale() * 50 / maxi(a.morale(), 1), 100))
 			if ok and t.pid == 14:
-				Mem.w8(0x55ac68, 1)
+				Mem.w8(BattleActions.T_DOUBLE, 1)
 		elif Mem.r32(BattleActions.T_SHUANGLEI) == 1:
 			ok = true
 	if ok and st.actions.can_attack(t, a):
 		_face_each_other(t, a)
 		return true
-	Mem.w8(0x55ac68, 0)
+	Mem.w8(BattleActions.T_DOUBLE, 0)
 	return false
 
 

@@ -20,6 +20,18 @@ static func sat_sub(x: int, y: int) -> int:
 	return x - y if x > y else 0
 
 
+## EXP for felling a unit of level lt at level la (0x40379b, 0x420efb, and a won duel): La < Lt ?
+## min((Lt − La)·8 + 32, 200) : max(32 − (La − Lt)·4, 10), saturating. The callers double it for the commander.
+static func kill_exp(la: int, lt: int) -> int:
+	return mini((lt - la) * 8 + 32, 200) if la < lt else maxi(sat_sub(32, (la - lt) * 4), 10)
+
+
+## EXP for a strategy that fells nothing, or on an ally (0x420efb): La < Lt ? min((Lt − La)·4 + 10, 100) :
+## max(10 − (La − Lt)/2, 5).
+static func strategy_exp(la: int, lt: int) -> int:
+	return mini((lt - la) * 4 + 10, 100) if la < lt else maxi(sat_sub(10, (la - lt) / 2), 5)
+
+
 ## 4-band curve shared by physical hit and strategy hit (a = attacker value, d = defender value).
 static func band_curve(a: int, d: int) -> int:
 	d = maxi(d, 1)
