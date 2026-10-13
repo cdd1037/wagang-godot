@@ -24,13 +24,43 @@ static func dyn(k: int) -> int:
 ## {"dyn": k} (dynamic slot k, set by the scripts), {"dyns": [..]}, {"mem": address} (a u32 the scripts set) or
 ## {"beside": pid} (that person standing next to the unit). What a skill does stays in the code that asks.
 static var _by_id := {}
+## Per skill id, its holder taken apart when the table loads (the lookups run in hot paths: stat getters, the AI):
+## [kind, values, class or -1], kind 0 fixed persons, 1 dynamic slots, 2 memory u32s, 3 beside.
+static var _holder := {}
+## 连理's aura per stat 0..4: [dynamic slot, partner] or [] (skill "lianli").
+static var lianli: Array = []
+## 宿痕's entries by person, in the table's order (skill "suhen"; the stat getters of every person ask in towns).
+static var suhen := {}
+const _NONE := [-1, [], -1]
 
 
 static func index(records: Array) -> void:
 	_by_id.clear()
+	_holder.clear()
 	for r in records:
 		if r is Dictionary and r.has("id"):
-			_by_id[str(r["id"])] = _ints(r)
+			var rec: Dictionary = _ints(r)
+			var id := str(rec["id"])
+			_by_id[id] = rec
+			var h: Dictionary = rec.get("holder", {})
+			var c := int(rec.get("if", {}).get("class", -1))
+			if h.has("pid") or h.has("pids"):
+				_holder[id] = [0, ([h["pid"]] if h.has("pid") else []) + h.get("pids", []), c]
+			elif h.has("dyn") or h.has("dyns"):
+				_holder[id] = [1, ([h["dyn"]] if h.has("dyn") else []) + h.get("dyns", []), c]
+			elif h.has("mem"):
+				_holder[id] = [2, [h["mem"]], c]
+			elif h.has("beside"):
+				_holder[id] = [3, [h["beside"]], c]
+	suhen.clear()
+	for e in rule("suhen").get("entries", []):
+		if not suhen.has(int(e["pid"])):
+			suhen[int(e["pid"])] = []
+		suhen[int(e["pid"])].append(e)
+	lianli = [[], [], [], [], []]
+	for a in rule("lianli").get("auras", []):
+		if int(a["stat"]) >= 0 and int(a["stat"]) < 5:
+			lianli[int(a["stat"])] = [int(a["dyn"]), int(a["partner"])]
 
 
 ## JSON numbers come as floats; whole ones become ints, so `in` and == compare as the code's constants did.
@@ -58,33 +88,43 @@ static func num(id: String, key: String, default := 0) -> int:
 
 ## The persons who hold skill `id` now (a dynamic slot or memory holder as set at this moment; 1024 = nobody).
 static func holders(id: String) -> Array[int]:
-	var h: Dictionary = rule(id).get("holder", {})
+	var h: Array = _holder.get(id, _NONE)
 	var out: Array[int] = []
-	if h.has("pid"):
-		out.append(int(h["pid"]))
-	for p in h.get("pids", []):
-		out.append(int(p))
-	if h.has("dyn"):
-		out.append(dyn(int(h["dyn"])))
-	for k in h.get("dyns", []):
-		out.append(dyn(int(k)))
-	if h.has("mem"):
-		out.append(Mem.r32(int(h["mem"])))
+	for v in h[1]:
+		match int(h[0]):
+			0, 3: out.append(v)
+			1: out.append(dyn(v))
+			2: out.append(Mem.r32(v))
 	return out
 
 
 ## Person `pid` holds skill `id`, and the record's "if" (a class) holds for unit `u` when one is given.
 static func holds(id: String, pid: int, u: BUnit = null) -> bool:
-	if pid < 0 or not pid in holders(id):
+	if pid < 0:
 		return false
-	var c: Variant = rule(id).get("if", {}).get("class")
-	return c == null or (u != null and u.cls() == int(c))
+	var h: Array = _holder.get(id, _NONE)
+	var found := false
+	for v in h[1]:
+		match int(h[0]):
+			0: found = v == pid
+			1: found = dyn(v) == pid
+			2: found = Mem.r32(v) == pid
+		if found:
+			break
+	if not found:
+		return false
+	return h[2] < 0 or (u != null and u.cls() == h[2])
 
 
 ## The first holder of skill `id` (-1 if the record has none).
 static func holder(id: String) -> int:
-	var h := holders(id)
-	return h[0] if not h.is_empty() else -1
+	var h: Array = _holder.get(id, _NONE)
+	if h[1].is_empty():
+		return -1
+	match int(h[0]):
+		1: return dyn(h[1][0])
+		2: return Mem.r32(h[1][0])
+	return h[1][0]
 
 
 ## For a {"beside": pid} skill: its holder stands next to `u` on u's side (beside()).

@@ -340,9 +340,10 @@ func stat(s: int) -> int:
 		return maxi(_min_add(_scar(s, get_stat_word(s)), b, 9999), 0)
 	var v := mini(get_stat_word(s) + b, 9999)
 	var d := _aura_distance(s)
-	var within := Skills.num("lianli", "within")
-	if d >= 0 and d < within:
-		return v * (100 + Skills.num("lianli", "percent") * (within - d)) / 100
+	if d >= 0:
+		var within := Skills.num("lianli", "within")
+		if d < within:
+			return v * (100 + Skills.num("lianli", "percent") * (within - d)) / 100
 	if s == 0:
 		if d >= 0:
 			return v            # the aura's holder, too far: no 并蒂 either (0x4db4c5 returns first)
@@ -356,14 +357,10 @@ func stat(s: int) -> int:
 ## slot 0 near 鲁明月 (29): +5 % per cell closer than 5. Returns the distance |dx| + |dy| when this person holds the
 ## slot of stat s's aura and both units are on the map, else -1.
 func _aura_distance(s: int) -> int:
-	var aura: Dictionary = {}
-	for a in Skills.rule("lianli").get("auras", []):
-		if int(a["stat"]) == s:
-			aura = a
-	if aura.is_empty() or id != Skills.dyn(int(aura["dyn"])):
+	if s < 0 or s >= Skills.lianli.size() or Skills.lianli[s].is_empty() or id != Skills.dyn(Skills.lianli[s][0]):
 		return -1
 	var me := Skills.unit_on_map(id)
-	var p := Skills.unit_on_map(int(aura["partner"]))
+	var p := Skills.unit_on_map(Skills.lianli[s][1])
 	if me == null or p == null:
 		return -1
 	return Skills.distance(me.pos, p.pos)
@@ -383,8 +380,8 @@ static func _min_add(a: int, b: int, mx: int) -> int:
 ## EV[3223] ≥ 3 (贯石).
 func _scar(s: int, w: int) -> int:
 	# skill "suhen": the entries in the original's order; the first that fits stat s and this person counts
-	for e: Dictionary in Skills.rule("suhen").get("entries", []):
-		if int(e["stat"]) != s or int(e["pid"]) != id or Mem.r8(Mem.EV + 4 * int(e["flag_ev"])) < 1:
+	for e: Dictionary in Skills.suhen.get(id, []):
+		if int(e["stat"]) != s or Mem.r8(Mem.EV + 4 * int(e["flag_ev"])) < 1:
 			continue
 		if (e.has("weapon") and weapon != int(e["weapon"])) or (e.has("armor") and armor != int(e["armor"])):
 			continue
