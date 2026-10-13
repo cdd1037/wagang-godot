@@ -107,3 +107,7 @@ slot 4, 夺面鞭, only ever holds 尉迟恭), so the table's single order plays
 
 `t_tables` compares every record with the constant it replaced and shows that a changed record changes the game.
 `t_skills`, `t_rules`, `t_commands`, `t_strat` and the flow runs pass unchanged.
+
+The old code (863c171) and the new one were also run with the same seed (`WG_SEED`, HD off) from scenarios 0, 40
+and 80. Each pair printed identical traces of battles, sections and dialogue (about 150,000–200,000 lines each)
+until the time limit. That is the same game, roll for roll.
