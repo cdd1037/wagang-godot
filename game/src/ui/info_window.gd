@@ -267,7 +267,7 @@ func _side_color(c: int) -> Color:
 
 
 func _sunken(rect: Rect2) -> void:
-	draw_rect(rect, Color(0, 0, 0.05, 0.35))
+	draw_rect(rect, UIStyle.SUNKEN)
 	draw_rect(rect, Color(0, 0, 0, 0.55), false, 1.0)
 
 
@@ -367,7 +367,7 @@ func _page_strategy() -> void:
 	_strat_rh = rh
 	var sb := 16.0 if _strats.size() > STRAT_ROWS else 0.0      # scroll buttons' column
 	var head := Rect2(box.position, Vector2(box.size.x, rh))
-	draw_rect(head, Color(0.16, 0.24, 0.46, 0.9))
+	draw_rect(head, UIStyle.HEADER)
 	text(Rect2(head.position + Vector2(4, 0), head.size), "策略名", HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
 	text(Rect2(head.position, head.size - Vector2(6 + sb, 0)), "MP", HORIZONTAL_ALIGNMENT_RIGHT, CAPTION, SMALL_SIZE)
 	if _strats.is_empty():

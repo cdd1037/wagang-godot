@@ -82,7 +82,7 @@ func _table_w() -> float:
 func _draw_dialog() -> void:
 	var body := tabs(r(4, 2, 387, 233), TABS, tab)
 	_area = body.grow(-4)
-	draw_rect(_area, Color(0, 0, 0.05, 0.35))
+	draw_rect(_area, UIStyle.SUNKEN)
 	var sbh := 16.0
 	var inner := Rect2(_area.position, _area.size - Vector2(16, sbh))
 	var page := maxi(int((inner.size.y - HEAD) / RH), 1)
@@ -91,7 +91,7 @@ func _draw_dialog() -> void:
 	var f := Assets.font()
 	var x0 := inner.position.x - left
 	# header
-	draw_rect(Rect2(inner.position, Vector2(inner.size.x, HEAD)), Color(0.16, 0.24, 0.46, 0.9))
+	draw_rect(Rect2(inner.position, Vector2(inner.size.x, HEAD)), UIStyle.HEADER)
 	for c in 28:
 		var cx := x0 + (0.0 if c == 0 else FIRST_W + COL_W * (c - 1))
 		var cw := FIRST_W if c == 0 else COL_W

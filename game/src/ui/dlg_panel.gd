@@ -174,7 +174,7 @@ func group(rect: Rect2, caption := "", caption_color := CAPTION) -> void:
 
 
 func button(rect: Rect2, label: String, key: Variant, enabled := true, size := TEXT_SIZE) -> void:
-	draw_rect(rect, Color(0.12, 0.18, 0.36, 0.9) if enabled else Color(0.1, 0.1, 0.16, 0.7))
+	draw_rect(rect, UIStyle.BUTTON if enabled else UIStyle.BUTTON_OFF)
 	if enabled and hovered(key):
 		draw_rect(rect, HOVER)
 	draw_rect(rect, UIStyle.BORDER_IN if enabled else DIM, false, 1.0)
@@ -206,7 +206,7 @@ func bar(rect: Rect2, v: int, v2: int, maxv: int, style: int, label := "") -> vo
 	if int(tiles[1]) >= 0:
 		_tile(int(tiles[1]), Rect2(rect.position, Vector2(sec_end - rect.position.x, rect.size.y)))
 	_tile(int(tiles[0]), Rect2(rect.position, Vector2(main_end - rect.position.x, rect.size.y)))
-	draw_rect(rect, Color(0, 0, 0, 0.6), false, 1.0)
+	draw_rect(rect, UIStyle.BUTTON_EDGE, false, 1.0)
 	if label == "":
 		if style == 5 and v == 0xff:
 			label = "MAX"
@@ -369,15 +369,15 @@ func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) ->
 	lv.rect = rect
 	lv.row_h = rh
 	_lists.append(lv)
-	draw_rect(rect, Color(0, 0, 0.05, 0.35))
-	draw_rect(rect, Color(0, 0, 0, 0.55), false, 1.0)
+	draw_rect(rect, UIStyle.SUNKEN)
+	draw_rect(rect, UIStyle.SUNKEN_EDGE, false, 1.0)
 	var hh := rh if lv.header else 0.0
 	lv.page = maxi(int((rect.size.y - hh) / rh), 1)
 	lv.top = clampi(lv.top, 0, maxi(lv.rows.size() - lv.page, 0))
 	var sb := 16.0 if lv.rows.size() > lv.page else 0.0
 	var head := Rect2(rect.position, Vector2(rect.size.x, hh))
 	if lv.header:
-		draw_rect(head, Color(0.16, 0.24, 0.46, 0.9))
+		draw_rect(head, UIStyle.HEADER)
 	var xs: Array[float] = []
 	var x := rect.position.x
 	var total := 0.0
@@ -398,7 +398,7 @@ func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) ->
 				draw_rect(hr, HOVER)
 			hit(hr, [key, -100 - ci])
 		if ci > 0:
-			draw_line(Vector2(xs[ci], head.position.y + 2), Vector2(xs[ci], head.end.y - 2), Color(0, 0, 0, 0.5))
+			draw_line(Vector2(xs[ci], head.position.y + 2), Vector2(xs[ci], head.end.y - 2), UIStyle.HEADER_RULE)
 	for k in range(lv.top, mini(lv.top + lv.page, lv.rows.size())):
 		var row: Dictionary = lv.rows[k]
 		var rr := Rect2(rect.position.x, rect.position.y + hh + rh * (k - lv.top), rect.size.x - sb, rh)
@@ -445,7 +445,7 @@ func list_scroll_hit(key: Variant, lv: ListView, name: String) -> bool:
 func tabs(rect: Rect2, labels: Array, cur: int, key := "tab", icons: Array = []) -> Rect2:
 	var th := 13 * dlu_scale.y
 	var body := Rect2(rect.position + Vector2(0, th), rect.size - Vector2(0, th))
-	draw_rect(body, Color(0, 0, 0.08, 0.25))
+	draw_rect(body, UIStyle.TAB_BODY)
 	draw_rect(body, FRAME, false, 1.0)
 	var f := Assets.font()
 	var x := rect.position.x
@@ -454,7 +454,7 @@ func tabs(rect: Rect2, labels: Array, cur: int, key := "tab", icons: Array = [])
 		var iw := 20.0 if ic else 0.0
 		var tw := f.get_string_size(str(labels[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x + 20 + iw
 		var tr := Rect2(x, rect.position.y + (0.0 if i == cur else 2.0), tw, th - (0.0 if i == cur else 2.0))
-		draw_rect(tr, Color(0.16, 0.24, 0.46, 0.95) if i == cur else Color(0.08, 0.1, 0.2, 0.85))
+		draw_rect(tr, UIStyle.TAB_ON if i == cur else UIStyle.TAB_OFF)
 		if i != cur and hovered([key, i]):
 			draw_rect(tr, HOVER)
 		draw_rect(tr, FRAME, false, 1.0)

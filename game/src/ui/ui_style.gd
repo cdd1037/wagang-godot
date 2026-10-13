@@ -12,6 +12,17 @@ const BG2 := Color(0.12, 0.18, 0.36, 0.92)
 const BORDER_OUT := Color(0.55, 0.45, 0.22)
 const BORDER_IN := Color(0.95, 0.85, 0.55)
 const HILITE := Color(0.95, 0.75, 0.25, 0.35)
+## The dialog windows' (DlgPanel) controls: buttons, sunken areas (lists, tables), list and table headers, tabs.
+const BUTTON := Color(0.12, 0.18, 0.36, 0.9)
+const BUTTON_OFF := Color(0.1, 0.1, 0.16, 0.7)
+const BUTTON_EDGE := Color(0, 0, 0, 0.6)
+const SUNKEN := Color(0, 0, 0.05, 0.35)
+const SUNKEN_EDGE := Color(0, 0, 0, 0.55)
+const HEADER := Color(0.16, 0.24, 0.46, 0.9)
+const HEADER_RULE := Color(0, 0, 0, 0.5)
+const TAB_BODY := Color(0, 0, 0.08, 0.25)
+const TAB_ON := Color(0.16, 0.24, 0.46, 0.95)
+const TAB_OFF := Color(0.08, 0.1, 0.2, 0.85)
 
 
 static func panel_box() -> StyleBoxFlat:
