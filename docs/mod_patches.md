@@ -496,6 +496,10 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     0x4121b0, EV[10] = 1 and RemoveUnit at once. **Done** (`ScriptHost.unit_hp_written`, `t_battle`).
 43. **Buff and debuff percentages from EV[3000..3003]**: mod code in a .text gap at 0x44d158, not in the site table;
     see rules.md §2.2. **Done** (`BUnit._buffed`, `t_rules`).
+44. **Grade of a level-up without the jitter, and Promote**: 0x4072fc's ≥ 70 test reads a stale class pointer, so
+    abilities below 80 grade 2 in Promote (0x4089cb) and in LevelUp without the jitter (rules.md §2). Promote also adds
+    to the class with no tier cap and grows by 0x4089cb's sum instead of LevelUp. **Done** (`Person.stale_grade`,
+    `promote_growth`, `BattleDeploy._promote`, `t_rules`).
 
 ### Deliberate differences (port design, keep unless asked)
 

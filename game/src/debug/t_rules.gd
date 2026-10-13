@@ -335,6 +335,55 @@ func _level_up() -> void:
 	p.bonus_counter = 5
 	_check(Game.person(3).bonus_counter == 5, "bonus counter is global")
 	p.bonus_counter = 0
+	_stale_grade()
+
+
+## 0x4072fc with the class pointer still in its slot: below 80 everything grades 2. Promote (0x4089cb) always, LevelUp
+## when it skips the jitter (a bonus count or byte +0x2a ≠ 0); a party member's plain level-up keeps the real grade.
+func _stale_grade() -> void:
+	_check([Person.stale_grade(40), Person.stale_grade(65), Person.stale_grade(79), Person.stale_grade(80),
+			Person.stale_grade(95), Person.stale_grade(100)] == [2, 2, 2, 3, 4, 5], "stale grades")
+	var p := Game.person(300)
+	Game.reset_person(300)
+	p.cls = 0                   # 游侠: attack growth 4
+	p.set_raw(0, 40)
+	var a0 := p.get_stat_word(0)
+	# Promote to level 30 (class 0 has no tier below): 29 levels of (4 + 2) >> 1 = 3
+	p.level = 30
+	_check(p.promote_growth(0) == 87, "promote attack, raw 40, level 30: %d (87)" % p.promote_growth(0))
+	# tier 2 at level 35: 15 levels of class 1, 15 of class 1 again, 4 of class 2
+	p.cls = 2
+	p.level = 35
+	_check(p.promote_growth(0) == 34 * 3, "promote tier 2: %d" % p.promote_growth(0))
+	p.cls = 0
+	# LevelUp: a joiner (byte +0x2a ≠ 0, no jitter) gets 3 a level; a member with a bonus count (4 + 2 + 1) >> 1 = 3
+	p.level = 1
+	p.member_byte = 0xff
+	p.bonus_counter = 0
+	var before := p.get_stat_word(0)
+	p.level_up(29)
+	_check(p.get_stat_word(0) - before == 87, "joiner level-up 1 → 30: +%d (87)" % (p.get_stat_word(0) - before))
+	p.member_byte = 0
+	p.bonus_counter = 5
+	before = p.get_stat_word(0)
+	p.level_up(1)
+	_check(p.get_stat_word(0) - before == 3, "bonus level-up: +%d (3)" % (p.get_stat_word(0) - before))
+	_check(p.bonus_counter == 0, "the count is used up")
+	# a member's plain level-up keeps the real grade 0: (4 ± jitter + 0) >> 1 lies in 1..2
+	for k in 20:
+		before = p.get_stat_word(0)
+		p.level_up(1)
+		var d := p.get_stat_word(0) - before
+		if d < 1 or d > 2:
+			_check(false, "member level-up: +%d" % d)
+			break
+	Game.reset_person(300)
+	_check(p.get_stat_word(0) == a0, "reset")
+	# Promote has no cap at a line's top tier: 活佛 (26) with promo 2 at level 20 becomes 智士 (27)
+	p.cls = 26
+	st.deployment._promote(p, 2, 20)
+	_check(p.cls == 27 and p.level == 20, "promo 2 from 活佛 at 20: class %d level %d" % [p.cls, p.level])
+	Game.reset_person(300)
 
 
 # ------------------------------------------------------------------ 引导攻击 (B5 0x43db51)

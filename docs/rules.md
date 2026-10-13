@@ -143,7 +143,8 @@ for i in 0..6:
     j = (member and bonus_counter == 0) ? jitter(g) : g     # 0x433510 → 0x448b09, for i 5 and 6 too (rolls
                                                             #   drawn, the result is not used)
     if i <= 4:
-        grade = ability_grade(raw_ability[i])          # 0x4072fc: ≥100→5, ≥90→4, ≥80→3, ≥70→2, ≥60→1, else 0
+        grade = ability_grade(raw_ability[i])          # 0x4072fc: ≥100→5, ≥90→4, ≥80→3, ≥70→2, ≥60→1, else 0;
+                                                       #   without the jitter call, below 80 → 2 (see below)
         if bonus_counter > 0: bonus_counter -= 1; grade += 1      # [0x4cf2b8], one global count, set to 5 by 仙人果
         g = (grade + j) >> 1                                       #   and the mod's SetExp option
     else if member and person.mp_base != 1:
@@ -801,7 +802,17 @@ Place (0x442b03): hidden → stays state 1 (off-map). state 1 → state 2, (x,y)
 by the unit's movement type (0x43f040), occupancy map updated (0x435900(&pos, index)); state 2 (already on map) →
 moved to exactly (x,y). Promote (0x442890(promo, level)): `promo 0: none; 1: if class ≤ 38 and level ≥ 20: class+1;
 2: if class ≤ 38: level ≥ 40 → class+2, level ≥ 20 → class+1` (persons ≥ 0x400 always use promo 2 when GS+6 ≤ 3);
-then SetLevel(level) (0x40e010) and recompute the 7 stats (0x406e17(i, 0x4089cb(i))).
+then SetLevel(level) (0x40e010) and recompute the 7 stats (0x406e17(i, 0x4089cb(i))). No cap at a line's top tier:
+a class-26 活佛 with promo 2 becomes 27 智士 at level 20 (S_12's 自安大师 when the party is that strong).
+0x4089cb sums level − 1 levels of the class growth, (growth + grade) >> 1 for stats 0..4; in tiers 1 and 2 the first
+15 levels use class − 1, and in tier 2 from level 30 the next 15 too (both blocks read class − 1).
+
+The grade 0x4072fc writes the raw ability into the low byte of a local and tests ≥ 100 / 90 / 80 / 60 on that byte,
+but ≥ 70 as `cmp ecx, 0x46` (0x407381) on the whole dword. Its callers call the class-growth getter 0x4095a0 just
+before at the same stack depth, which leaves the class-record pointer (0x4abfa0 + 27·class) in that slot, so every
+ability below 80 grades 2: always in 0x4089cb (Promote), and in LevelUp whenever the jitter is skipped (bonus count
+> 0, or byte +0x2a ≠ 0, e.g. a joiner levelled before op 0x3b sets it). The jitter call 0x448b09 pushes 0x32 into
+the slot, so a member's plain level-up gets the real grade.
 
 Unit struct U (0x24 bytes):
 | off | type | meaning |

@@ -461,6 +461,42 @@ static func ability_grade(r: int) -> int:
 	return 0
 
 
+## 0x4072fc's grade when its local still holds the class-record pointer the class-growth getter 0x4095a0 left in the
+## same stack slot: only the low byte is the ability, and the ≥ 70 test (0x407381 `cmp ecx, 0x46`) compares the
+## whole dword, so every ability below 80 grades 2. Promote's 0x4089cb always calls it so, and LevelUp does when it
+## skips the jitter rolls (0x433510 / 0x4d02ec: a bonus count, or person byte +0x2a ≠ 0); the jitter call 0x448b09
+## pushes 0x32 into that slot, which gives the plain grade.
+static func stale_grade(r: int) -> int:
+	if r >= 100: return 5
+	if r >= 90: return 4
+	if r >= 80: return 3
+	return 2
+
+
+## 0x4089cb: what Promote (0x442890) adds to stat i for the person's class and level, over level − 1 levels. A
+## level's gain is the class growth, for stats 0..4 (growth + stale grade) >> 1. In a class line's tiers 1 and 2 the
+## first 15 levels use the class below, and in tier 2 from level 30 the 15 after them too (0x408a4a / 0x408ad1 both
+## read class − 1); classes above 38 have no tiers.
+func promote_growth(i: int) -> int:
+	var keys := ["attack", "defense", "spirit", "agility", "morale", "hp", "mp"]
+	var per := func(c: int) -> int:
+		var g := int((Game.cls(c & 0xff).get("growth", {}) as Dictionary).get(keys[i], 0))
+		if i <= 4:
+			g = (g + stale_grade(get_raw(i))) >> 1
+		return g
+	var n := level - 1
+	if cls > 38:
+		return n * per.call(cls)
+	var sum := 0
+	if cls % 3 == 2 and n + 1 >= 30:
+		sum += 15 * per.call(cls - 1)
+		n = maxi(n - 15, 0)
+	if cls % 3 != 0 and n + 1 >= 15:
+		sum += 15 * per.call(cls - 1)
+		n = maxi(n - 15, 0)
+	return sum + n * per.call(cls)
+
+
 ## LevelUp (0x4073b8) by n levels, as the mod patches it. Returns what each stat [atk, def, spi, agi, mor, hp, mp]
 ## changed by on the last repetition (0x407497: new − old, 0 when the new value is 0). The HP and MP growth of a
 ## party member drops by the catch-up penalty; their jitter rolls are drawn but not used (0x433510: they go to a
@@ -477,10 +513,11 @@ func level_up(n := 1) -> Array:
 	for i in 7:
 		var g := int(growth.get(gkeys[i], 0))
 		var jittered := g
-		if member_byte == 0 and bonus_counter == 0:
+		var jitter := member_byte == 0 and bonus_counter == 0
+		if jitter:
 			jittered = _jitter(g)
 		if i <= 4:
-			var grade := ability_grade(get_raw(i))
+			var grade := ability_grade(get_raw(i)) if jitter else stale_grade(get_raw(i))
 			if bonus_counter > 0:
 				bonus_counter -= 1
 				grade += 1

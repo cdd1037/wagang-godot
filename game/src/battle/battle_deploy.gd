@@ -240,20 +240,22 @@ func create_battlefield(id: int) -> void:
 	Mem.w8(0x4b3d08, st.map_id)
 
 
-## Promote (0x442890): promo 0 none; 1 → +1 tier at level ≥ 20; 2 → +1 at ≥ 20, +2 at ≥ 40 (classes ≤ 38).
+## Promote (0x442890): for a class up to 38, promo 1 adds 1 to the class at level ≥ 20, promo 2 adds 1 at ≥ 20 and
+## 2 at ≥ 40, with no cap at the line's top tier (S_12's 活佛 26 becomes 智士 27 from level 20). Then the level is
+## set and each of the 7 stats grows by 0x4089cb's sum (AddStat 0x406e17): no jitter, no 天运, no unit HP.
 func _promote(p: Person, promo: int, level: int) -> void:
-	if p.cls <= 38:
-		var t := p.cls % 3
-		var base_c := p.cls - t
-		if promo == 1 and level >= 20:
-			p.cls = mini(p.cls + 1, base_c + 2)
+	var c := p.cls
+	if c < 0x27:
+		if promo == 1 and level > 0x13:
+			p.cls = c + 1
 		elif promo == 2:
-			if level >= 40:
-				p.cls = mini(p.cls + 2, base_c + 2)
-			elif level >= 20:
-				p.cls = mini(p.cls + 1, base_c + 2)
-	if level > p.level:
-		p.level_up(level - p.level)
+			if level >= 0x28:
+				p.cls = c + 2
+			elif level > 0x13:
+				p.cls = c + 1
+	p.level = level
+	for i in 7:
+		p.add_stat(i, p.promote_growth(i))
 
 
 ## SetAI (0x459d8b): ai_mode 0..6 → AI code (table 0x48e380) and clears flag 0x80; modes 3 and 5 also
