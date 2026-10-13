@@ -158,7 +158,8 @@ hand from the repository's **Actions** tab (*Release builds → Run workflow*); 
   version stay out of the builds: the list is the iOS and Android presets', and `tools/check_hd_exclude.py` copies
   it into the macOS and Windows presets and fails if it leaves out a picture without an HD version (palettes,
   index files, the terrain-patch index images and the Qusi.wa tile tables stay). It then plays the first scenarios headless from the exported `.pck` and fails if the game exits with an error, a
-  picture or data file is missing, or a script fails to compile. After rebuilding the pack, re-upload it (see
+  picture or data file is missing, or a script fails to compile. The pack must be the one `tools/hd_pack.sha256`
+  pins; after rebuilding it, publish it with `tools/publish_hd_pack.sh` and commit the pin (see
   [HD_GRAPHICS.md](HD_GRAPHICS.md)).
 
 ## Re-generating the game data

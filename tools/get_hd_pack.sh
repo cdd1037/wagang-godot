@@ -18,17 +18,13 @@ mkdir -p build
 tmp=$(mktemp -d "$PWD/build/hdpack.XXXXXX") || exit 1    # same volume as game/, so the final mv is a rename
 trap 'rm -rf "$tmp"' EXIT
 curl -L --fail --progress-bar -o "$tmp/assets_hd.zip" "$URL" || exit 1
-# GitHub publishes each release asset's SHA-256; check the download against it when the API answers
-want=$(curl -sL --fail "https://api.github.com/repos/$REPO/releases/tags/hd-pack" \
-  | python3 -c 'import json,sys
-for a in json.load(sys.stdin).get("assets", []):
-    if a.get("name") == "assets_hd.zip": print((a.get("digest") or "").replace("sha256:", ""))' 2>/dev/null)
-if [ -n "$want" ]; then
-  have=$(shasum -a 256 "$tmp/assets_hd.zip" | cut -d' ' -f1)
-  if [ "$have" != "$want" ]; then
-    echo "The download is damaged (SHA-256 mismatch); please try again." >&2
-    exit 1
-  fi
+# the checkout pins the pack's SHA-256 (tools/publish_hd_pack.sh writes it)
+want=$(cut -d' ' -f1 tools/hd_pack.sha256)
+have=$(shasum -a 256 "$tmp/assets_hd.zip" | cut -d' ' -f1)
+if [ "$have" != "$want" ]; then
+  echo "The download is not the pack tools/hd_pack.sha256 pins: it is damaged (try again), or the hd-pack" >&2
+  echo "release has a newer pack than this checkout (git pull)." >&2
+  exit 1
 fi
 mkdir -p "$tmp/out" && unzip -q "$tmp/assets_hd.zip" -d "$tmp/out" || exit 1
 mv "$tmp/out" game/assets_hd || exit 1

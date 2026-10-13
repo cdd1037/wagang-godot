@@ -18,6 +18,7 @@ on:
       - "tools/check_hd_exclude.py"
       - "tools/test_all.sh"
       - "tools/gtest.sh"
+      - "tools/hd_pack.sha256"
   workflow_dispatch:
 
 permissions:

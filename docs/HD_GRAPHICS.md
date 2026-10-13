@@ -16,8 +16,9 @@ Released builds contain only the HD art; there is no switch.
 ## Where it lives
 
 * The pack (4,133 files, about 780 MB) is too big for the git repository. It is published as `assets_hd.zip` in
-  the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack).
-* **Release builds** (`.github/workflows/release.yml`) download it (also checked against GitHub's SHA-256), and
+  the release tagged [hd-pack](https://github.com/seedds/wagang-godot/releases/tag/hd-pack), and the repository pins
+  its SHA-256 in `tools/hd_pack.sha256`: a commit names the pack it is built with.
+* **Release builds** (`.github/workflows/release.yml`) download it, fail unless it is the pinned pack, and
   leave out the original pictures that have an HD version, so a build draws only the HD art.
   * The list is the `exclude_filter` of the iOS and Android presets in `game/export_presets.cfg`.
     `tools/check_hd_exclude.py --apply` copies it into the macOS and Windows presets and fails if it leaves out a
@@ -28,9 +29,10 @@ Released builds contain only the HD art; there is no switch.
     upscaler's `icons/*/*/*.png` rule only matches the item and strategy icons, one folder deeper.
   * The workflow then plays the first scenarios from the exported data to make sure no picture is missing.
 * **From source:** `run_game.sh` downloads it into `game/assets_hd/` on first run (`tools/get_hd_pack.sh`, which
-  checks the download against the SHA-256 GitHub publishes for the asset). Without it the game falls back to the
-  original PNGs in `game/assets/`, as it does for any picture an older pack lacks (delete `game/assets_hd` to
-  fetch the current pack). `WG_HD=0` shows the original art for comparisons.
+  checks the download against `tools/hd_pack.sha256`; a checkout older than the published pack refuses it, so
+  `git pull` first). Without it the game falls back to the original PNGs in `game/assets/`, as it does for any
+  picture an older pack lacks (delete `game/assets_hd` to fetch the current pack). `WG_HD=0` shows the original art
+  for comparisons.
 * **Local exports** include `game/assets_hd/` when it exists (`include_filter` in `game/export_presets.cfg`).
 
 ## How the game uses it
@@ -65,16 +67,17 @@ A picture the game starts to draw needs a rule in `RULES` (in `tools/upscale_ass
 Android presets' `exclude_filter`; `python3 -I tools/check_hd_exclude.py` then shows that each left-out original
 has its HD version. Without both, the build keeps the original, and the HD game shows it unscaled.
 
-After rebuilding, publish the new pack so the release builds use it:
+After rebuilding, publish the new pack and commit its pin, so the release builds use it:
 
 ```sh
-rm -f build/assets_hd.zip            # zip adds to an existing archive
-(cd game/assets_hd && zip -0 -qr ../../build/assets_hd.zip . -x '*.tmp' -x '*.DS_Store')
-gh release upload hd-pack build/assets_hd.zip --clobber
+tools/publish_hd_pack.sh --dry-run   # zips game/assets_hd into build/assets_hd.zip, shows whether it changed
+tools/publish_hd_pack.sh             # uploads it to the hd-pack release and writes tools/hd_pack.sha256
+git commit -m "HD pack: …" tools/hd_pack.sha256 && git push    # this push builds a release with the new pack
 ```
 
-`--clobber` deletes the old file before the new one is uploaded, so release builds that start during the upload
-fail; upload when no push is building.
+The upload replaces the old file (`--clobber`), so a release build that starts between the upload and the push of
+the pin fails (it finds a pack its commit does not pin); upload when no push is building, and push the pin right
+after. The zip is the same byte for byte when the pictures are, so an unchanged pack is not uploaded again.
 
 Options: `--only SUBSTR` limits the run to paths containing *SUBSTR* (e.g. `--only maps/`), `--force` redoes
 existing files, `--list` prints what would be done. `tools/upscale.py MODEL in.png out.png` upscales a single

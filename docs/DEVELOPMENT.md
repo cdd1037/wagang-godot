@@ -342,7 +342,8 @@ example, this plays one battle turn through the touch path with screenshots:
 ## HD graphics and releases
 
 * `tools/get_hd_pack.sh` downloads the HD graphics pack into `game/assets_hd/`. `tools/upscale_assets.py`
-  rebuilds it, and `tools/upscale.py` upscales single images for trying models. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
+  rebuilds it, `tools/publish_hd_pack.sh` publishes it and pins its SHA-256 (`tools/hd_pack.sha256`), and
+  `tools/upscale.py` upscales single images for trying models. See [HD_GRAPHICS.md](HD_GRAPHICS.md).
 * Every push to `main` that changes the game builds and publishes *Build N* for macOS, Windows, iPhone and Android; see
   "Automatic releases" in [BUILDING.md](BUILDING.md). Check a run with `gh run list --workflow release.yml`.
 
