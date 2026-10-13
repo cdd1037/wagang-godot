@@ -144,10 +144,14 @@ rpg_sprites/backgrounds/screens), effects (`tools/gfx_effects.py`). Shared helpe
 * **Storage:** entries 0..39 and 114 are plain row-major; all others are stored as **8x8 tiles in
   row-major tile order (80x50 tiles)** (verified visually + tile-boundary statistics; the blitter 0x47e09b
   itself is row-major, so the de-tiling happens in the scene compositor). Converter outputs plain images.
-* Buha.wa (296 entries, index = scene image id, word 0x4ac63d → 0x428857 → buffer 0x4aeb38): 14-byte header
-  (LE words `[id, 100, 100, 1, 200, 100, 1]`), 2 bytes, then a 200x100 byte grid with values 0xFF/0xF0
-  (scene walk/occlusion mask; exact semantics unverified). Word@8 (200) feeds the actor transform below.
-  Exported as greyscale `backgrounds/buha/NNN.png`.
+* Buha.wa (296 entries, index = scene image id, word 0x4ac63d → 0x428857 → buffer 0x4aeb38, loaded on entering
+  the RPG mode 0x429ff6): 16-byte header (LE words `[id, W 100, H 100, D 1, 200, 100, 1]` + 2 bytes; the loader
+  writes the image id over word 0), then W × H × D words (0x4270d3: word (z·W·H + y·W + x) at +0x10, 0xf000
+  outside). The story actors' walk grid: a word with the high byte 0xF0 is blocked (the low byte is always 0xFF,
+  the high one 0xFF or 0xF0; 34 entries, 0..73 and 149, have blocked cells). An actor's footprint is 3 × 3 cells
+  (actor +0xa / +0xc, 0x42abb6), rows y − 2 .. y and columns x .. x + 2 (0x4271c7); routing in eex.md op 0x32.
+  Word@8 (200) feeds the actor transform below. Exported as greyscale `backgrounds/buha/NNN.png` (200 × 100 bytes,
+  the words' bytes in order).
 * Output: `gfx/backgrounds/NNN.png` + `backgrounds/index.json` (`images:[{entry, file, palette, storage,
   scene_kind, scene_image, blank}]`, `buha`).
 
@@ -256,7 +260,6 @@ rpg_sprites/backgrounds/screens), effects (`tools/gfx_effects.py`). Shared helpe
 * 64x64 attack-frame anchor (−8,−8) taken from CCZ convention, not re-verified in the blitter.
 * Giji 8x8-tile storage: de-tiling location in the exe not found (rule used: entries 0..39 and 114 plain,
   rest tiled — verified visually on all samples).
-* Buha mask semantics (0xFF/0xF0) and exact mapping to iso coordinates; header words 100,100,1,200,100,1.
 * RPG action ids → frame numbers (script agent: ops 0x30/0x34); camera values set by change_scene.
 * Nima patch → map/position selection (script op), so the correct palette per patch is only guessed.
 * Kao.wa region table partially inferred (some items in the 48x48 run are not 48x48); Qusi 12-14 dims.

@@ -594,6 +594,13 @@ not ported.
     code 6 (a line beyond the centre), which finds nobody; no class learns 青龙, 朱雀, 玄武 or 白虎 and no item
     teaches them, so the port keeps its plain damage handler for them. The MCALL strategies' follow-up Xben effect
     on the targets (0x4214bf's remap: 1, 3, 5, 7, 0x16, 0x39, 0x0a) is not played either.
+53. **Story walks on the scene's grid** (op 0x32 → 0x429159): Buha.wa's grid for the RPG scene (gfx.md §5.1) and
+    a distance field from the target (0x429266) that stops when it reaches the walker; the walk goes downhill from
+    there (0x42869c / 0x42836e), the last direction first. Blocked cells are walked around; a target the field
+    cannot reach means no walk and no turn; a step needs x + 2 < 100 and y − 4 ≥ 0 (0x4281c7), so exits to x 98
+    or 99 stop at 97. Of the 16,843 walks of the R scripts (read in order), 87 take another way than the port's
+    straight-axis path and 7 do not happen (R_16, R_17, R_18, R_23 and R_25's 管毅 walk to (28, 22) on grid 66;
+    one on grid 39 in R_18 and one on grid 0 in R_49). **Done** (`RpgActor.route`, `load_grid`; `t_rpgwalk`).
 
 ### Deliberate differences (port design, keep unless asked)
 

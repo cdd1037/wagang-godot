@@ -273,6 +273,8 @@ func op_change_scene(ins: Dictionary) -> void:
 	scene_image = val
 	Mem.w8(Addr.SCENE_MODE, mode)
 	Mem.w16(0x4ac63d, val)
+	if mode == 2:
+		RpgActor.load_grid(val)     # entering the RPG mode loads the scene's walk grid (0x429ff6 → 0x428857)
 	ui.wipe_captions()
 	var entry := val + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
 	if mode == 3:
@@ -507,6 +509,8 @@ func _apply_restore() -> void:
 	if mode >= 0 and mode != 3:
 		scene_kind = mode
 		scene_image = int(d.get("scene_image", 0))
+		if mode == 2:
+			RpgActor.load_grid(scene_image)
 		var entry := scene_image + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
 		bg.texture = Assets.tex("gfx/backgrounds/%03d.png" % entry)
 		# the status panes from the save's texts (load 0x41adc6 draws the title; a town, mode 2, draws both again,
