@@ -273,8 +273,8 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 	face(att, def.pos)
 	face(def, att.pos)
 	var best_exp := 0
+	var weapon_exp := 0
 	var total_damage := 0
-	var weapon_hit := false
 	var fallen: Array[BUnit] = []
 	if not special:
 		Mem.w8(STRIKE, 0)
@@ -287,9 +287,11 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 		var hits: Array[bool] = []
 		var dmgs: Array[int] = []
 		var mps: Array[int] = []
+		var alive: Array[bool] = []
 		var crit := false
 		for i in targets.size():
 			var t := targets[i]
+			alive.append(t.active())
 			var mode := 1 if counter else 0
 			if i > 0 and _halved(att, code):
 				mode += 2
@@ -333,11 +335,20 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 				t.status |= BUnit.ST_POISON      # 张善相 (0x4d568d): hit or miss
 			if mps[i] > 0:
 				t.mp = maxi(t.mp - mps[i], 0)
+			var killed := t.hp - dmgs[i] <= 0
+			if alive[i]:
+				# every target, hit or miss (0x406068..0x406160 in 0x405e03): the attacker's experience (0x40379b) and
+				# the weapon's (0x40397d) keep their largest values for the end of the attack; the armour of a red
+				# wearer gets 0x403a85's at each strike (0x405b7d)
+				var damaged := dmgs[i] != 0 or mps[i] != 0
+				if att.slot < 15:
+					best_exp = maxi(best_exp, _phys_exp(att, t, killed))
+					weapon_exp = maxi(weapon_exp, _weapon_gain(att, t, damaged))
+				if t.colour == 0:
+					await add_equip_exp(t.person, false, _armor_gain(t, att, damaged))
 			if not hits[i]:
 				continue
 			total_damage += dmgs[i] if i == 0 else 0
-			weapon_hit = weapon_hit or dmgs[i] > 0
-			var killed := t.hp - dmgs[i] <= 0
 			_apply_damage(t, dmgs[i])
 			if killed:
 				fallen.append(t)
@@ -348,8 +359,6 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 				# 笼屉 (effect 62 使用馒头) once the unit is 100 or more below its maximum (mod 0x4d681c)
 				if t.hp + 100 <= t.max_hp() and t.has_effect(62):
 					await eat_bun(t)
-			if att.slot < 15:
-				best_exp = maxi(best_exp, _phys_exp(att, t, killed))
 		if step:
 			# [T_LONGYIN .. T_GUIMEN], T_NUMU and 0x55ac58 (no technique of this mod uses 0x55ac28 / 0x55ac34 / 0x55ac58)
 			for f in range(T_LONGYIN, T_GUIMEN + 4, 4) + [T_NUMU, 0x55ac58]:
@@ -370,11 +379,9 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 		att.hp = mini(att.hp + total_damage / 2, att.max_hp())
 	for t in fallen:
 		await unit_fell(t)
-	# equipment experience
-	if att.slot < 15:
-		await _equip_exp(att, true, def, weapon_hit)
-	if def.slot < 15 and def.active():
-		await _equip_exp(def, false, att, total_damage > 0)
+	# 0x405cad / 0x405cc2: the attacker's and the weapon's experience, once
+	if att.slot < 15 and weapon_exp > 0:
+		await add_equip_exp(att.person, true, weapon_exp)
 	if best_exp > 0:
 		await gain_exp(att, best_exp)
 	return true
@@ -970,26 +977,21 @@ func _show_level_up(p: Person, g: Array) -> void:
 			await st.ui.message(texts[i])
 
 
-func _equip_exp(u: BUnit, weapon: bool, other: BUnit, damaged: bool) -> void:
-	var p := u.person
-	var iid := p.weapon if weapon else p.armor
-	if iid < 0:
-		return
-	var lvl := p.weapon_lvl if weapon else p.armor_lvl
-	var cur := p.weapon_exp if weapon else p.armor_exp
-	if cur == 0xff:
-		return
-	var la := u.level()
-	var lt := other.level()
-	var gain: int
-	if weapon:
-		gain = (2 if la > lt else 3) if damaged else 1
-	else:
-		gain = (3 if la < lt else 4) if damaged else 1
-	gain = gain * exp_mult(u) / 100
-	if lvl >= 9:
-		gain = 1
-	await add_equip_exp(p, weapon, gain)
+## 0x40397d: the weapon experience a strike at target `t` is worth: 3 when it took HP or MP damage, 2 when the
+## attacker's level is the higher, else 1; times the attacker's EXP bonus, and 1 from weapon level 9 (mod 0x4e00a5).
+func _weapon_gain(att: BUnit, t: BUnit, damaged: bool) -> int:
+	var g := (2 if att.level() > t.level() else 3) if damaged else 1
+	g = g * exp_mult(att) / 100
+	return 1 if att.person.weapon_lvl >= 9 else g
+
+
+## 0x403a85: the armour experience of target `t` (its own colour 0 only, 0x43ff54) for a strike by `att`: 4 when it
+## took HP or MP damage, 3 when the attacker's level is the lower, else 1; times the wearer's EXP bonus, and 1 from
+## armour level 9 (mod 0x4e01a5).
+func _armor_gain(t: BUnit, att: BUnit, damaged: bool) -> int:
+	var g := (3 if att.level() < t.level() else 4) if damaged else 1
+	g = g * exp_mult(t) / 100
+	return 1 if t.person.armor_lvl >= 9 else g
 
 
 ## 0x4082d6: `amount` experience for the weapon or the armour. 100 a level, 150 for a treasure (250 from its level

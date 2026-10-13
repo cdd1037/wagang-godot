@@ -97,9 +97,50 @@ func run() -> void:
 	_exe_tables()
 	_add_stat()
 	_buff_rates()
+	await _strike_exp()
 
 	Game.main = old_main
 	print("t_rules: PASS" if _ok else "t_rules: FAILED")
+
+
+## 0x405e03: experience for every target, hit or miss; armour experience per strike (attacker below the wearer → 3,
+## else 4); weapon experience per target.
+func _strike_exp() -> void:
+	_clear()
+	# a Lv 30 archer misses a Lv 49 target in 雁翎锁子甲 (effect 56: ranged hit rate 0): non-kill EXP 19·2 + 8 = 46
+	var a := _unit(0, 3, Vector2i(2, 2), 30, 100, 12)
+	var d := _unit(40, 300, Vector2i(3, 2), 49, 100)
+	d.person.armor = 44
+	a.person.weapon = 0
+	a.person.weapon_lvl = 1
+	a.person.weapon_exp = 0
+	a.person.exp = 0
+	_check(Rules.hit_rate(a, d) == 0, "effect 56 makes the hit rate 0")
+	await st.actions.strikes(a, d)
+	_check(a.person.exp == 46, "a miss gives the non-kill experience: %d (46)" % a.person.exp)
+	_check(a.person.weapon_exp == 1, "a miss gives the weapon 1: %d" % a.person.weapon_exp)
+	# a Lv 30 enemy hits a Lv 10 player unit: its armour gets 4 a strike (the attacker is not below the wearer)
+	_clear()
+	var e := _unit(41, 301, Vector2i(5, 5), 30, 100, 0)
+	var w := _unit(1, 4, Vector2i(6, 5), 10, 100, 0)
+	w.person.armor = 44
+	w.person.armor_lvl = 1
+	w.person.armor_exp = 0
+	w.status = BUnit.ST_CONFUSION          # hit rate 100
+	await st.actions.strikes(e, w)
+	var n: int = st.actions._strikes_done
+	_check(w.person.armor_exp == 4 * n, "armour: %d after %d strikes (4 each)" % [w.person.armor_exp, n])
+	# the weapon's experience compares levels with each target
+	var t30 := _unit(42, 302, Vector2i(9, 9), 30, 100)
+	var t10 := _unit(43, 303, Vector2i(9, 10), 10, 100)
+	var a20 := _unit(2, 5, Vector2i(9, 11), 20, 100)
+	a20.person.weapon_lvl = 1
+	t10.person.armor_lvl = 1
+	t30.person.armor_lvl = 1
+	_check(st.actions._weapon_gain(a20, t30, true) == 3 and st.actions._weapon_gain(a20, t10, true) == 2
+			and st.actions._weapon_gain(a20, t10, false) == 1, "weapon gain per target")
+	_check(st.actions._armor_gain(t10, t30, true) == 4 and st.actions._armor_gain(t30, t10, true) == 3,
+			"armour gain: 4 unless the attacker is the lower")
 
 
 ## 0x44d158 before 0x43f54c: 120 % / 80 %, a player's buff from byte EV[3001] and an enemy's debuff from byte

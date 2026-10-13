@@ -603,6 +603,7 @@ else:
 e = e * exp_mult / 100
 ```
 The attack sequence awards max(e over all targets & strikes) once (ctx+0x428), applied after the sequence (0x405c6c).
+Every target counts, hit or miss: a miss has damage 0 (CalcDamage rolls the hit itself), so it gives the no-kill e.
 ### 8.2 Strategies (0x420efb; ctx+0x4a8 must be set)
 ```
 target side enemy & damage strategy (not 22): kill → as 8.1 kill formula (×2 vs commander);
@@ -617,9 +618,10 @@ The level is only tested on entry, so a large total keeps levelling past 70. (mo
 the +1 grade bonus counter (= 5) on every level-up.) Battle experience, Regen and 仙人果 call it with show = 1.
 仙人果 (type 75, 0x41d3d9): 0x55a400[pid] += 1, bonus counter = 5, SetExp(exp + value, 1), then HP and MP to full.
 ### 8.4 Weapon / armor exp
-Weapon (0x40397d, attacker): `(damage>0 ? (La > Lt ? 2 : 3) : 1) * exp_mult/100`; armor (0x403a85, defender, only
-player-side units 0x43ff54): `(damage>0 ? (La < Lt ? 3 : 4) : 1) * exp_mult(defender)/100`; mod: if the item is already
-level ≥ 9 the gain is 1. Item level-up (0x4082d6(slot, gain)):
+Weapon (0x40397d, attacker, per target): `(HP or MP damage ? (La > Lt ? 2 : 3) : 1) * exp_mult/100`, the largest over
+targets and strikes (ctx+0x42c) added once after the attack (0x405cc2); armor (0x403a85, each target whose unit kind is
+0, 0x43ff54; La = attacker, Lt = wearer): `(HP or MP damage ? (La < Lt ? 3 : 4) : 1) * exp_mult(wearer)/100`, added to
+each such target at every strike (0x405b7d); mod 0x4e00a5 / 0x4e01a5: if the item is already level ≥ 9 the gain is 1. Item level-up (0x4082d6(slot, gain)):
 ```
 threshold = 100 (+50 if treasure (odd weapon/armor type)) (+100 more if treasure at level 9)
 max_level = treasure ? 10 : 3

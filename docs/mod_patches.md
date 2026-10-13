@@ -500,6 +500,9 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     abilities below 80 grade 2 in Promote (0x4089cb) and in LevelUp without the jitter (rules.md §2). Promote also adds
     to the class with no tier cap and grows by 0x4089cb's sum instead of LevelUp. **Done** (`Person.stale_grade`,
     `promote_growth`, `BattleDeploy._promote`, `t_rules`).
+45. **Experience for every target of a strike**: a miss gives the attacker the no-kill experience; the weapon's is
+    judged per target; the armour of each red target gains at every strike, 3 only when the attacker is the lower
+    (rules.md §8.1, §8.4). **Done** (`BattleActions.strikes`, `_weapon_gain`, `_armor_gain`, `t_rules`).
 
 ### Deliberate differences (port design, keep unless asked)
 
