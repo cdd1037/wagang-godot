@@ -542,8 +542,13 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
       leaves (else slot 0's), result 3, which ends the game (0x42c223 sets 0x20).
     * After a battle ended by op 0x49 (result 2, 0x44ebfd → 0x44ed5b), once the next file is loaded: "保存进度吗？"
       (style 1 = 是/否 box), 是 opens the save list (0x41a466, no 目前不可存盘 check).
-    **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`;
-    `t_battle`, `t_menus`).
+    * Effect animations play SE 100 + the low byte of their header id at the first record unless its sound byte
+      (record byte 16) is 2, and at each record whose byte is 3 (Xben 0x401e5c → 0x4031e8 / 0x40205e, MCALL
+      0x403014 → 0x403262 / 0x403147); `gfx/effects/index.json` keeps the byte as `sound`.
+    * Casting (0x4214bf → 0x4218d6, every strategy but 青龙): SE 8 after 8 ticks with the casting pose, then SE 39
+      and the strategy's name in a timed box.
+    **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`,
+    `EffectPlayer`, `BattleActions.cast`; `t_battle`, `t_menus`).
 
 ### Deliberate differences (port design, keep unless asked)
 

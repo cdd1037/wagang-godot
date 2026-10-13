@@ -109,6 +109,18 @@ func _turn_end(st: BattleStage) -> void:
 	m.queue_free()
 
 
+## An effect animation plays SE 100 + its id at its first record (Xben 9: id 25 → se_m_25), once.
+func _effect_sound() -> void:
+	var ses: Array[String] = []
+	var on_se := func(n: String) -> void: ses.append(n)
+	Audio.se_played.connect(on_se)
+	var e := EffectPlayer.create("xben", 9)
+	add_child(e)
+	await e.done
+	Audio.se_played.disconnect(on_se)
+	_check(ses == ["se_m_25"], "Xben 9 plays se_m_25 once: %s" % [ses])
+
+
 func run() -> void:
 	Game.new_game_state()
 	Game.autoplay = true          # no waiting for clicks or animations
@@ -203,6 +215,7 @@ func run() -> void:
 	_check(f3.state == BUnit.STATE_ON_MAP and f3.hp == 7 and Mem.ev(10) == 0, "op 0x78 HP 7 write: stays")
 	await _script_flow(st)
 	await _turn_end(st)
+	await _effect_sound()
 	# AIAct resets EV[10] (0x43ad2b)
 	await st.ai.act(_unit(37, 302, 2, Vector2i(9, 9)))
 	_check(Mem.ev(10) == 0, "AIAct start resets EV[10]")

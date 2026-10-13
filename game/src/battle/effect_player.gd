@@ -6,6 +6,7 @@ extends Node2D
 var frames: Array = []
 var images: Array[Texture2D] = []
 var delay := 0.05
+var sound := -1                 # SE 100 + the low byte of the header's id (Xben 0x40205e, MCALL 0x403147)
 var _i := 0
 var _t := 0.0
 var _cur: Dictionary = {}
@@ -37,6 +38,7 @@ static func create(kind: String, id: int) -> EffectPlayer:
 	var e := EffectPlayer.new()
 	e.delay = maxf(float(a.get("delay_ms", 50)) / 1000.0, 0.02)
 	e.frames = a.get("records", [])
+	e.sound = 100 + (int(a.get("id", 0)) & 0xff)
 	for k in int(a.get("images", 0)):
 		e.images.append(Assets.tex("gfx/effects/%s/%02d/img_%02d.png" % [kind, id, k]))
 	return e
@@ -54,6 +56,10 @@ func _show(i: int) -> void:
 		queue_free()
 		return
 	_cur = frames[i]
+	# 0x4031e8 / 0x403262: the sound at the first record unless its sound byte is 2, and at each record whose byte is 3
+	var flag := int(_cur.get("sound", 0))
+	if (i == 0 and flag != 2) or flag == 3:
+		Audio.play_se(SoundMap.se_name(sound))
 	queue_redraw()
 
 

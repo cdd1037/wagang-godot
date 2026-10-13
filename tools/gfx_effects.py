@@ -31,7 +31,7 @@ def parse_anim(d):
     for r in range(nr):
         b = d[20 + r * 20: 40 + r * 20]
         recs.append({'image': b[0], 'layer': None if b[1] == 0xff else b[1], 'p2': b[2], 'p3': b[3],
-                     'mode': struct.unpack('<I', b[4:8])[0]})
+                     'mode': struct.unpack('<I', b[4:8])[0], 'sound': b[16]})
     base = 20 + nr * 20
     imgs = [d[base + k * w * h: base + (k + 1) * w * h] for k in range(ni)]
     base += ni * w * h
@@ -61,6 +61,9 @@ ANIM_DOC = {
               '(4-bit, B,R,G order)',
     'playback': 'one record per tick of delay_ms (0x403014 waits [obj+0x20]); frame centred on the target '
                 'point (x-W/2, y-H/2) (0x402cb5)',
+    'sound': 'the animation plays SE 100 + (id & 0xff) at its first record unless that record\'s sound byte '
+             '(record byte 16) is 2, and at every record whose sound byte is 3 (Xben 0x401e5c -> 0x4031e8 / '
+             '0x40205e, MCALL 0x403014 -> 0x403262 / 0x403147)',
     'record': {'image': 'index into img_NN', 'layer': 'extra layer select (<40) or null (0xff)',
                'mode 1': 'alpha-map blend: alpha image = p2, strength = p3 (0..16) (0x430369 -> 0x4300c8)',
                'mode 0': 'weighted blend: background weight p2, image weight p3 (0..16) via the RGB444 LUT '

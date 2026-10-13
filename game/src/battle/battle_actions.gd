@@ -1216,9 +1216,17 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
 	if not Game.instant:
-		st.hud.popup_number(str(sd.get("name", "")), u.pos, Color(0.8, 0.9, 1))
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.CHEER, u.dir)
+		if s != 64:
+			# 0x4218d6 (every strategy but 青龙): 8 ticks, SE 8 with the caster in its casting pose, then SE 39 and the
+			# strategy's name in a timed box (0x42f699 style 2), at least 20 ticks in all
+			var t0 := Time.get_ticks_msec()
+			await wait(8 * 0.05)
+			Audio.se(8)
+			Audio.se(39)
+			await st.ui.message(str(sd.get("name", "")))
+			await wait(maxf(1.0 - (Time.get_ticks_msec() - t0) / 1000.0, 0.0))
 		await _play_strategy_effect(s, target, targets)
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
