@@ -9,6 +9,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | developers | how the code works: emulated memory, script VM, stages, UI, source map |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | developers | debug options, automated play-through tests, reverse-engineering workflow |
 | [MODDING.md](MODDING.md) | modders | mods: what they can change, the mods folder, making one from a modified copy of the original (`tools/make_mod.py`) |
+| [CONTENT_TABLES.md](CONTENT_TABLES.md) | developers | proposal (not built): skills, strategies and items as data tables a mod can edit |
 | [HD_GRAPHICS.md](HD_GRAPHICS.md) | builders | the 4× AI-upscaled graphics pack: how the game uses it, building and publishing it, which model is used for what |
 
 ## Reverse-engineering specifications
