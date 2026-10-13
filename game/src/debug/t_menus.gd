@@ -204,6 +204,11 @@ func _windows(ui: GameUI) -> void:
 	ui.add_child(il)
 	await get_tree().process_frame
 	_check(il.lists[1].rows.size() >= 1, "consumables tab")
+	var rows: Array = [{"id": 3}, {"id": 1}, {"id": 2}, {"id": 1}]
+	_check(DlgPanel.sorted_by(rows, func(r: Dictionary) -> int: return int(r["id"])) == [rows[1], rows[3], rows[2], rows[0]],
+			"the list sort is stable")
+	_check(DlgPanel.sorted_by(rows, func(r: Dictionary) -> int: return int(r["id"]), true) == [rows[0], rows[2], rows[1], rows[3]],
+			"reversed too")
 	await _shot("itemlist")
 	il.close()
 	il.queue_free()
@@ -214,6 +219,22 @@ func _windows(ui: GameUI) -> void:
 	await get_tree().process_frame
 	_check(tw._heads[0] == "地形" and tw._heads[1] == "英雄", "family headers from 0x558100 (%s %s)" % [tw._heads[0], tw._heads[1]])
 	_check(tw._cell(0, 0)[0] == "10", "英雄 on 平原: 10")
+	# a header click sorts by that column (high first), stably; the same column again reverses it (0x464e1f)
+	var before: Array = tw.rows[0].duplicate()
+	tw._sort(2)
+	var vals: Array = tw.rows[0].map(func(t: int) -> int: return tw._value(1, t))
+	var hi := vals.duplicate()
+	hi.sort()
+	hi.reverse()
+	_check(vals == hi and tw.rows[0].size() == before.size(), "terrain: a column sorts high first (%s)" % [vals])
+	var ties: Array = tw.rows[0].filter(func(t: int) -> bool: return tw._value(1, t) == vals[0])
+	_check(ties == before.filter(func(t: int) -> bool: return ties.has(t)), "terrain: equal values keep their order")
+	tw._sort(2)
+	vals = tw.rows[0].map(func(t: int) -> int: return tw._value(1, t))
+	hi.reverse()
+	_check(vals == hi, "terrain: the same column again sorts low first (%s)" % [vals])
+	tw._sort(0)
+	_check(tw.rows[0] == before, "terrain: the first column restores the terrain order")
 	await _shot("terrain")
 	tw._on_hit(["tab", 1])
 	await _shot("terrain_cost")

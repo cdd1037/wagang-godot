@@ -175,15 +175,7 @@ static func sort_key(t: int, row: Dictionary) -> int:
 
 ## A stable sort of rows (list-view rows when `wrapped`: the row is in "data") by column type t.
 static func sort_rows(rows: Array, t: int, reverse := false, wrapped := false) -> Array:
-	var dec := []
-	for i in rows.size():
-		var d: Dictionary = rows[i]["data"] if wrapped else rows[i]
-		dec.append([sort_key(t, d) * (-1 if reverse else 1), i, rows[i]])
-	dec.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
-	var out := []
-	for d in dec:
-		out.append(d[2])
-	return out
+	return DlgPanel.sorted_by(rows, func(r: Dictionary) -> int: return sort_key(t, r["data"] if wrapped else r), reverse)
 
 
 ## Header click (0x464e1f): the column sorted last sorts reversed (and nothing counts as sorted last); another

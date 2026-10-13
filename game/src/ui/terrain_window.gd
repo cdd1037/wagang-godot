@@ -189,14 +189,7 @@ func _on_hit(key: Variant) -> void:
 ## 0x464e1f with the compare 0x46cb68.
 func _sort(c: int) -> void:
 	var reverse := c == last[tab]
-	var dec := []
-	var list: Array = rows[tab]
-	for i in list.size():
-		var t: int = list[i]
-		var k := t if c == 0 else -_value(c - 1, t)
-		dec.append([k * (-1 if reverse else 1), i, t])
-	dec.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
-	rows[tab] = dec.map(func(d: Array) -> int: return d[2])
+	rows[tab] = DlgPanel.sorted_by(rows[tab], func(t: int) -> int: return t if c == 0 else -_value(c - 1, t), reverse)
 	last[tab] = -1 if reverse else c
 
 

@@ -106,14 +106,7 @@ func _key(col: int, pid: int) -> int:
 
 
 func _sorted(col: int, reverse: bool) -> Array:
-	var dec := []
-	for i in lv.rows.size():
-		dec.append([_key(col, int(lv.rows[i]["data"])) * (-1 if reverse else 1), i, lv.rows[i]])
-	dec.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
-	var out := []
-	for d in dec:
-		out.append(d[2])
-	return out
+	return DlgPanel.sorted_by(lv.rows, func(r: Dictionary) -> int: return _key(col, int(r["data"])), reverse)
 
 
 func _draw_dialog() -> void:

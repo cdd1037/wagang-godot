@@ -58,6 +58,15 @@ class ListView:
 				top = sel - page + 1
 
 
+## The list views' sort (0x464e1f): stable, by key.call(item) ascending, or descending when `reverse`.
+static func sorted_by(items: Array, key: Callable, reverse := false) -> Array:
+	var dec := []
+	for i in items.size():
+		dec.append([key.call(items[i]) * (-1 if reverse else 1), i, items[i]])
+	dec.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	return dec.map(func(d: Array) -> Variant: return d[2])
+
+
 static func run(ui: CanvasLayer, panel: DlgPanel) -> void:
 	ui.add_child(panel)
 	await panel.closed
