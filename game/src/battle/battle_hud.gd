@@ -248,7 +248,7 @@ func reward_screen(gold: int, items: Array, final: bool) -> void:
 				await stage.wait(1.0)
 				var y := 140.0 + 96 * n + (96 if items.size() < 3 else 0)
 				var d := Game.item(int(it))
-				_reward["bars"].append([Assets.tex("gfx/icons/items/large/%03d.png" % int(d.get("icon", 0))), str(d.get("name", "?")), y])
+				_reward["bars"].append([Game.item_picture(int(it)), str(d.get("name", "?")), y])
 				n += 1
 			await stage.wait(1.0)
 			await stage.ui.wait_or_click(3.0)
@@ -285,7 +285,7 @@ func equip_panel(iid: int, lvl: int, p: Person, weapon: bool) -> void:
 	var label := "防御"
 	if weapon:
 		label = "精神" if Person.stat_of_type(int(it.get("type", 0))) == 2 else "攻击"
-	_epanel = {"icon": Assets.tex("gfx/icons/items/large/%03d.png" % int(it.get("icon", 0))), "name": str(it.get("name", "?")),
+	_epanel = {"icon": Game.item_picture(iid), "name": str(it.get("name", "?")),
 		"lvl": lvl, "who": InfoWindow.display_name(p), "label": label,
 		"old": Person.item_value_at(it, lvl - 1), "new": Person.item_value_at(it, lvl)}
 	queue_redraw()

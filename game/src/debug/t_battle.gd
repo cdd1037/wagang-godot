@@ -216,6 +216,8 @@ func run() -> void:
 	await _script_flow(st)
 	await _turn_end(st)
 	await _effect_sound()
+	_check(Game.item_picture(92) == Assets.tex("gfx/icons/items/large/092.png") and int(Game.item(92).get("icon")) == 94
+			and Game.item_picture(54) == Assets.tex("gfx/effects/items32/054.png"), "battle item pictures by item id (Yoyo)")
 	# AIAct resets EV[10] (0x43ad2b)
 	await st.ai.act(_unit(37, 302, 2, Vector2i(9, 9)))
 	_check(Mem.ev(10) == 0, "AIAct start resets EV[10]")

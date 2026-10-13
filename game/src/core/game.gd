@@ -177,6 +177,16 @@ func item(id: int) -> Dictionary:
 	return items_db[id]
 
 
+## The 32×32 picture battles show an item with: Yoyo.wa entry = the item id (the use animation 0x41c762, the reward
+## list 0x44b046, the equipment level-up panel 0x4083ef, the get-item show 0x45991b, 交给 0x4d2b66). It is the large
+## Itemicon picture numbered by the item id, not by its icon field (they differ for 92..95), except for 狮面盾 (54),
+## whose Yoyo picture is its own (gfx/effects/items32).
+func item_picture(iid: int) -> Texture2D:
+	if iid == 54:
+		return Assets.tex("gfx/effects/items32/054.png")
+	return Assets.tex("gfx/icons/items/large/%03d.png" % iid)
+
+
 func cls(id: int) -> Dictionary:
 	if id < 0 or id >= classes_db.size():
 		return {}

@@ -547,8 +547,13 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
       0x403014 → 0x403262 / 0x403147); `gfx/effects/index.json` keeps the byte as `sound`.
     * Casting (0x4214bf → 0x4218d6, every strategy but 青龙): SE 8 after 8 ticks with the casting pose, then SE 39
       and the strategy's name in a timed box.
+    * Items: HP / MP items and 笼屉's 馒头 run the use animation 0x41c762 without an effect, cures and 太保令 with
+      Xben 44; nothing plays SE 19 (only a terrain change does). The battle's item pictures are Yoyo.wa entries by
+      item id: the large Itemicon picture with the item's id (the icon field differs for 92..95), 狮面盾's own.
+      交给 shows it rising over the giver and settling on the receiver (0x4d2b66).
     **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`,
-    `EffectPlayer`, `BattleActions.cast`; `t_battle`, `t_menus`).
+    `EffectPlayer`, `BattleActions.cast`, `use_item`, `Game.item_picture`, `BattleCommands._give_fx`; `t_battle`,
+    `t_menus`, `t_rules`).
 
 ### Deliberate differences (port design, keep unless asked)
 

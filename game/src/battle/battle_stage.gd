@@ -675,7 +675,7 @@ func get_item_show(pid: int, iid: int) -> void:
 		return
 	await unit_ops.op_unit_status({"args": [u.pid, 1, 0, 0]})
 	Audio.se(14)
-	var tex := Assets.tex("gfx/icons/items/large/%03d.png" % int(Game.item(iid).get("icon", 0)))
+	var tex := Game.item_picture(iid)
 	for i in 8:
 		hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 7 - i)}
 		hud.queue_redraw()

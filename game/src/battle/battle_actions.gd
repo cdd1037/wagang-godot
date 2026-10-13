@@ -1625,7 +1625,7 @@ func _item_check(r: Dictionary, p: Person) -> bool:
 func _use_anim(u: BUnit, t: BUnit, iid: int, xben: int) -> void:
 	if Game.instant or u.node == null:
 		return
-	var tex := Assets.tex("gfx/icons/items/large/%03d.png" % int(Game.item(iid).get("icon", 0)))
+	var tex := Game.item_picture(iid)
 	await view().ensure_visible(u.pos)
 	u.node.show_frame(UnitSprite.Sheet.MOV, 6)
 	st.hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 16)}

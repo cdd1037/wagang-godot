@@ -558,11 +558,24 @@ func give(u: BUnit, item: int) -> bool:
 ## "交出…".
 func _give_fx(u: BUnit, r: BUnit, item: int) -> void:
 	if not Game.instant:
+		# 0x4d2b66 twice: the item's Yoyo picture rises over the giver in 3 steps of 8 px a tick and stays 5 ticks;
+		# then SE 14 and it settles on the receiver a pixel a tick (8 ticks) and stays 5 ticks
+		var tex := Game.item_picture(item)
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.DEFEND, u.dir)
-		await st.actions.wait(0.3)
+		for a in [8, 16, 24]:
+			st.hud.icon_over = {"tex": tex, "cell": u.pos, "off": Vector2(8, 7 - a)}
+			st.hud.queue_redraw()
+			await st.actions.wait(0.05)
+		await st.actions.wait(0.25)
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
 		Audio.play_se("se14")
-		await st.actions.wait(0.3)
+		for a in 8:
+			st.hud.icon_over = {"tex": tex, "cell": r.pos, "off": Vector2(8, 7 - a)}
+			st.hud.queue_redraw()
+			await st.actions.wait(0.05)
+		await st.actions.wait(0.25)
+		st.hud.icon_over = {}
+		st.hud.queue_redraw()
 	await st.ui.message("交出%s" % str(Game.item(item).get("name", "?")))
