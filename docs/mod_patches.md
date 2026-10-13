@@ -601,6 +601,12 @@ not ported.
     or 99 stop at 97. Of the 16,843 walks of the R scripts (read in order), 87 take another way than the port's
     straight-axis path and 7 do not happen (R_16, R_17, R_18, R_23 and R_25's 管毅 walk to (28, 22) on grid 66;
     one on grid 39 in R_18 and one on grid 0 in R_49). **Done** (`RpgActor.route`, `load_grid`; `t_rpgwalk`).
+54. **Effect blends** (0x402cb5): mode 0 records weigh the background by p2 and the picture by p3 (0x42fd5a),
+    mode 1 records use alpha map p2 at strength p3 (0x4300c8, the 129 converted alpha maps), both darkening the
+    background less under bright pixels (gfx.md §7.1). The port drew every record at alpha p3 / 16 (at least
+    0.15), so p3 = 0 records showed and additive ones looked faint. **Done** (`effect_blend.gdshader`,
+    `EffectPlayer`; checked in a capture). The original maps the result back to its palette; the port keeps true
+    colour.
 
 ### Deliberate differences (port design, keep unless asked)
 

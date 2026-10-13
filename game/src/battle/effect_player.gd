@@ -1,10 +1,14 @@
 class_name EffectPlayer
 extends Node2D
 ## Plays a KoeiAnim effect (Xben small effects / MCALL full-screen strategy animations).
-## Records are shown one per delay tick; blending approximated with alpha = strength/16.
+## Records are shown one per delay tick, each with its blend (effect_blend.gdshader): mode 0 weighs the background
+## by p2 and the picture by p3, mode 1 takes alpha map p2 at strength p3 (0x402cb5).
+
+const BLEND := preload("res://src/battle/effect_blend.gdshader")
 
 var frames: Array = []
 var images: Array[Texture2D] = []
+var alphas: Array[Texture2D] = []
 var delay := 0.05
 var sound := -1                 # SE 100 + the low byte of the header's id (Xben 0x40205e, MCALL 0x403147)
 var _i := 0
@@ -41,6 +45,11 @@ static func create(kind: String, id: int) -> EffectPlayer:
 	e.sound = 100 + (int(a.get("id", 0)) & 0xff)
 	for k in int(a.get("images", 0)):
 		e.images.append(Assets.tex("gfx/effects/%s/%02d/img_%02d.png" % [kind, id, k]))
+	for k in int(a.get("alphas", 0)):
+		e.alphas.append(Assets.tex("gfx/effects/%s/%02d/alpha_%02d.png" % [kind, id, k]))
+	var m := ShaderMaterial.new()
+	m.shader = BLEND
+	e.material = m
 	return e
 
 
@@ -79,5 +88,14 @@ func _draw() -> void:
 	if k < 0 or k >= images.size() or images[k] == null:
 		return
 	var t := images[k]
-	var a := clampf(float(_cur.get("p3", 16)) / 16.0, 0.15, 1.0)
-	draw_texture(t, -t.get_size() / 2, Color(1, 1, 1, a))
+	var mode := int(_cur.get("mode", 0))
+	var p2 := int(_cur.get("p2", 0))
+	var m := material as ShaderMaterial
+	if mode != 0 and (p2 >= alphas.size() or alphas[p2] == null):
+		return
+	m.set_shader_parameter("mode", 0 if mode == 0 else 1)
+	m.set_shader_parameter("p2", float(p2))
+	m.set_shader_parameter("p3", float(_cur.get("p3", 16)))
+	if mode != 0:
+		m.set_shader_parameter("alpha_tex", alphas[p2])
+	draw_texture(t, -t.get_size() / 2)

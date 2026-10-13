@@ -198,6 +198,10 @@ rpg_sprites/backgrounds/screens), effects (`tools/gfx_effects.py`). Shared helpe
   centres the WxH frame on the target point. mode 1 → alpha-map blend (alpha image p2, strength p3/16;
   0x430369→0x4300c8); mode 0 → weighted blend (background weight p2/16, image weight p3/16; 0x43030e→0x42fd5a;
   p2 = 0 → plain copy; (16,16) ≈ additive). Blending maps RGB back to palette via the RGB444 LUT 0x4b1b28.
+  Exactly, on 4-bit channels with L = (r + g + b) / 3 of the picture's pixel: mode 0 u = p2·(256 − L·p3) >> 4,
+  mode 1 u = (256 − A)·(256 − L·p3) >> 8 (A = alpha byte; A = 255 → the picture, A = 0 with p3 = 0 → the
+  background); u = 0 → the picture, else min((bg·u + pic·(256 − (u·(16 − p3) >> 4))) >> 8, 15). Record byte 1
+  < 40 selects the animation's own palette (obj+0x4c), else the system one. Port: `effect_blend.gdshader`.
 * **MCALL00-08.wa** (= CCZ Mcall*.e5): 240x240 / 320x240 / 300x300 full-screen strategy animations
   (phoenix fire, 八阵 trigrams, ...). Loader 0x4217fe: `sprintf("MCALL%02u.WA", v % 100)`.
 * **Xben.wa** (= CCZ Meff.e5, 2003 original): 58 small effect animations (64x64 .. 100x100, 216x50).
