@@ -162,6 +162,8 @@ def conv_misc(out, quantize):
                'scroll, speech bubbles)'), (0xcc0, 48, 48, 43, '48x48 battle cursors, terrain overlays, fire, '
                'tents (some items in this run are not 48x48)'), (0x18dc0, 48, 48, 1, '48x48 tile'),
                (0x196c0, 16, 16, 4, '16x16 marks'), (0x19ac0, 64, 16, 2, '64x16 bars'),
+               (0x19ac0, 16, 64, 2, 'the same two pieces read 16 wide: the duel speech bubbles\' ends '
+                '(duel_layer.gd)'),
                (0x1a2c0, 16, 16, 9, '16x16 status icons'), (0x1abc0, 48, 48, 1, 'emblem (GHAI 48x48 loaded '
                'here at runtime by 0x40b006)'), (0x1b4c0, 18, 8, 35, '18x8 pieces')]
     files = []

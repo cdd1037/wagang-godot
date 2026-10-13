@@ -107,10 +107,11 @@ The scripts in `tools/` run the game headless in autoplay and log to `extract/`:
 | `tools/flowres.sh SLOT STOP LOG [seconds]` | Resume such a run from its autosave slot |
 | `tools/flowwatch.sh LOG…` | Print skips and errors as they appear, and `STALL` when a log is silent for 5 minutes (use with a log watcher) |
 | `tools/test_all.sh [t_name…]` | Run every headless unit check (below) and print a summary; exit status 1 if one failed. CI runs it on every push (`.github/workflows/tests.yml`) and before every release build |
-| `tools/gtest.sh t_name [seconds]` | Run one check, `game/src/debug/t_name.gd`, under the headless test runner; exit status 0 passed, 1 failed, 2 timed out (default 120 s) |
+| `tools/gtest.sh t_name [seconds]` | Run one check, `game/src/debug/t_name.gd`, under the headless test runner; exit status 0 passed, 1 failed (or godot crashed), 2 timed out (default 120 s) |
 | `tools/uitest.sh [stop] [seconds]` | UI playthrough test: the UI bot from a new game to scenario *stop* (default 5, after R_02) → `extract/uibot/uitest.log`; prints `uitest: PASS` or `uitest: FAIL` |
 
-The autosave slot numbers are save files in the game's user folder: use **11 or higher**, since slots 0–9 are the
+A flow script refuses to start while another run holds the same autosave slot or log (`claim` in
+`tools/flowlib.sh`; flowtest.sh and flowtrace.sh share slot 19 on purpose, one after the other). The autosave slot numbers are save files in the game's user folder: use **11 or higher**, since slots 0–9 are the
 player's own saves (the scripts and the game refuse them). Run several ranges in parallel with bash, for example
 `bash -c 'for r in "0 16 11" "16 32 12"; do set -- $r; tools/flowpar.sh $1 $2 $3 1500 & done; wait'`. The endings
 the runs reach go to `user://test/niuniu.bin`, not the player's record.

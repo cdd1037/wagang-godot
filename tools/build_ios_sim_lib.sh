@@ -10,7 +10,9 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 godot="${GODOT:-godot}"
-ver="$("$godot" --version | cut -d. -f1-3)"
+full="$("$godot" --version)"        # 4.7.2.stable.official.<hash>, or 4.8.stable.official.<hash> for an x.y.0
+tag="${full%.*.*}"                   # 4.7.2.stable / 4.8.stable: the export templates' folder
+ver="${tag%.*}"                      # 4.7.2 / 4.8: the version (Godot's source tag is <ver>-stable)
 src="$root/build/godot-src"
 if [ ! -d "$src" ]; then
   git clone --depth 1 --branch "${ver}-stable" https://github.com/godotengine/godot.git "$src"

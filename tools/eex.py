@@ -18,7 +18,7 @@ Format spec: docs/eex.md.  Grammar recovered from the handler table @0x410a3e in
 """
 import os as _os
 _REPO = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repository root
-import sys, os, struct, json, glob
+import sys, os, struct, json, glob, re
 
 ROOT = _REPO
 SRC = ROOT + '/wg2025'
@@ -362,7 +362,7 @@ def clean(ins, with_off):
 
 
 def to_json(path, parsed, with_off=True):
-    b = os.path.basename(path)
+    b = os.path.splitext(os.path.basename(path))[0].upper() + '.wagan'     # R_01.wagan whatever the copy's case
     out = {
         'file': b,
         'kind': 'story' if b[0].upper() == 'R' else 'battle',
@@ -468,14 +468,16 @@ def main(argv):
             OUT_TXT = os.path.join(OUT_JSON, 'txt')
     files = [a for a in argv if not a.startswith('--')]
     if not files:
-        files = sorted(glob.glob(src + '/R_*.wagan') + glob.glob(src + '/S_*.wagan'))
+        # the original runs on Windows, whose names ignore case: a modified copy may hold r_01.wagan
+        files = sorted(f for f in glob.glob(os.path.join(src, '*'))
+                       if re.fullmatch(r'[RS]_\d+\.wagan', os.path.basename(f), re.IGNORECASE))
     os.makedirs(OUT_JSON, exist_ok=True)
     os.makedirs(OUT_TXT, exist_ok=True)
     freq = {}
     nerr = 0
     total = 0
     for f in files:
-        b = os.path.splitext(os.path.basename(f))[0]
+        b = os.path.splitext(os.path.basename(f))[0].upper()      # R_01 whatever the copy's case
         try:
             parsed = parse_file(f)
         except EexError as e:

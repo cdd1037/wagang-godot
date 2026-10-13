@@ -159,7 +159,7 @@ jobs:
     # the iPhone build: an unsigned .ipa (for sideloading) added to the draft release of the build job
     needs: build
     if: github.ref == 'refs/heads/main'
-    runs-on: macos-latest
+    runs-on: macos-26          # pinned: macos-latest moves to the next macOS (and its default Xcode) unannounced
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -346,7 +346,7 @@ jobs:
 
       - name: Remove old builds
         run: |
-          gh release list --limit 200 --json tagName --jq '.[].tagName' | { grep -E '^build-[0-9]+$' || true; } \
+          gh release list --exclude-drafts --limit 200 --json tagName --jq '.[].tagName' | { grep -E '^build-[0-9]+$' || true; } \
             | sort -t- -k2 -n -r | tail -n +$((KEEP_BUILDS + 1)) | while read -r tag; do
               echo "deleting $tag"
               gh release delete "$tag" --cleanup-tag --yes

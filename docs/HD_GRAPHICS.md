@@ -75,9 +75,14 @@ tools/publish_hd_pack.sh             # uploads it to the hd-pack release and wri
 git commit -m "HD pack: …" tools/hd_pack.sha256 && git push    # this push builds a release with the new pack
 ```
 
-The upload replaces the old file (`--clobber`), so a release build that starts between the upload and the push of
-the pin fails (it finds a pack its commit does not pin); upload when no push is building, and push the pin right
-after. The zip is the same byte for byte when the pictures are, so an unchanged pack is not uploaded again.
+The new pack goes up as `assets_hd.next.zip` and takes the name `assets_hd.zip` only after GitHub reports the
+SHA-256 it was built with, so a failed or damaged upload leaves the published pack and the pin as they were. From
+the swap on, a release build of a commit with the old pin fails (it finds a pack its commit does not pin); upload
+when no push is building, and push the pin right after. `tools/zip_pack.py` builds the zip in name order with fixed
+dates and modes, so the same pictures give the same bytes on any machine and an unchanged pack is not uploaded
+again. (Packs zipped before that held file times: the first publish after it uploads the same pictures once more.)
+`tools/get_hd_pack.sh` asks GitHub which pack the release holds before it downloads, so a checkout that pins
+another one stops at once instead of after the 770 MB.
 
 Options: `--only SUBSTR` limits the run to paths containing *SUBSTR* (e.g. `--only maps/`), `--force` redoes
 existing files, `--list` prints what would be done. `tools/upscale.py MODEL in.png out.png` upscales a single

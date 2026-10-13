@@ -5,6 +5,7 @@ cd "$ROOT/game" || exit 1
 LOG=$ROOT/extract/flow.log
 SLOT=${WG_AUTOSLOT:-19}     # not one of the player's save slots 0-9
 check_slot "$SLOT"
+claim "slot_$SLOT" flow.log
 if [ -f "$USERDIR/save_$SLOT.json" ] && [ "$FRESH" = "" ]; then START="WG_LOADSLOT=$SLOT"; else START="WG_START=0"; fi
 env $START WG_AUTOSLOT=$SLOT WG_AUTOSAVE=1 WG_RANDOM=1 WG_GOD=1 WG_AUTO=1 WG_STOP=${2:-200} WG_NOVIDEO=1 perl -e "alarm ${1:-3000}; exec @ARGV" godot --headless --path . 2>&1 \
   | grep --line-buffered -E "== |chapter|WARNING|ERROR|SCRIPT" >> "$LOG"

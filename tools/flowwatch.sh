@@ -4,13 +4,16 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/extract" || exit 1
 FILES=("$@")
 [ ${#FILES[@]} -eq 0 ] && FILES=(flow_trace.log flow_par_32.log flow_par_62.log flow_par_80.log)
-trap 'kill $(jobs -p) 2>/dev/null' EXIT      # the tails below go with it
+# the watchers below (a subshell each, running tail | awk) go with it, on Ctrl-C and kill too
+trap 'for p in $(jobs -p); do pkill -P "$p"; kill "$p"; done 2>/dev/null' EXIT
+trap 'exit 130' INT TERM
 for f in "${FILES[@]}"; do
   (tail -n0 -F "$f" 2>/dev/null | awk -v n="$f" '/^== flow-test/ {print n": "$0; fflush()} /SCRIPT ERROR|^ERROR|Resumed|Invalid/ && !/Case mismatch/ {print n": "$0; fflush()}') &
 done
 warned=()
 while true; do
-  sleep 60
+  sleep 60 &
+  wait $!            # a wait, not a sleep in the foreground: a signal runs the trap at once
   now=$(date +%s)
   for i in "${!FILES[@]}"; do
     f=${FILES[$i]}

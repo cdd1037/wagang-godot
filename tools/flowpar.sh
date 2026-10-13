@@ -7,10 +7,11 @@
 source "$(dirname "$0")/flowlib.sh"
 if [ $# -lt 3 ]; then echo "usage: $(basename "$0") START STOP SLOT [ALARM] [PARTY]" >&2; exit 2; fi
 check_slot "$3"
+claim "slot_$3" "flow_par_$1.log"
 cd "$ROOT/game" || exit 1
 LOG=$ROOT/extract/flow_par_$1.log
 : > "$LOG"
 FLAGS=${WG_SETFLAGS-}
 if [ -z "${WG_SETFLAGS+x}" ] && [ "$1" -gt 18 ]; then FLAGS=755; fi
 env WG_START=$1 WG_PARTY=${5:-} WG_SETFLAGS=$FLAGS WG_AUTOSLOT=$3 WG_TRACE_SEC=1 WG_TRACE_TEXT=1 WG_AUTOSAVE=1 WG_RANDOM=1 WG_GOD=1 WG_AUTO=1 WG_STOP=$2 WG_NOVIDEO=1 \
-  perl -e "alarm ${4:-3000}; exec @ARGV" godot --headless --path . 2>&1 | grep --line-buffered -v "$NOISE" >> "$LOG"
+  perl -e "alarm ${4:-3000}; exec @ARGV" godot --headless --path . 2>&1 | grep --line-buffered -E -v "$NOISE" >> "$LOG"

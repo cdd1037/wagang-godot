@@ -28,10 +28,12 @@ if [ ! -d "$root/game/assets_hd/gfx" ]; then
 fi
 # every original picture the preset leaves out must have an HD version
 python3 -I "$root/tools/check_hd_exclude.py" > /dev/null || { python3 -I "$root/tools/check_hd_exclude.py" >&2; exit 1; }
-ver="$("$godot" --version | cut -d. -f1-3)"
+full="$("$godot" --version)"        # 4.7.2.stable.official.<hash>, or 4.8.stable.official.<hash> for an x.y.0
+tag="${full%.*.*}"                   # 4.7.2.stable / 4.8.stable: the export templates' folder
+ver="${tag%.*}"                      # 4.7.2 / 4.8: the version (Godot's source tag is <ver>-stable)
 data="$HOME/Library/Application Support/Godot"
 [ "$(uname)" = Darwin ] || data="${XDG_DATA_HOME:-$HOME/.local/share}/godot"
-tpl="$data/export_templates/${ver}.stable/android_release.apk"
+tpl="$data/export_templates/${tag}/android_release.apk"
 if [ ! -f "$tpl" ]; then
   echo "no Android export template at $tpl (see docs/BUILDING.md)" >&2
   exit 1

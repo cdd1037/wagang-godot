@@ -1911,7 +1911,7 @@
  "xben": {
   "source": "Xben.wa (Ls12, 58 entries; = CCZ Meff.e5)",
   "dir": "xben/NN/",
-  "notes": "entries 52..56 = 216x50 banners (0x44a121 uses entry 0x34 + n)",
+  "notes": "entries 52..56 = 216x50 animated weather panels (0x44a121 loads entry 0x34 + weather id; static versions in Xthree.wa)",
   "anims": {
    "00": {
     "size": [
@@ -12251,6 +12251,24 @@
      16
     ],
     "role": "64x16 bars"
+   },
+   {
+    "file": "kao/19ac0_16x64.png",
+    "offset": 105152,
+    "size": [
+     16,
+     64
+    ],
+    "role": "the same two pieces read 16 wide: the duel speech bubbles' ends (duel_layer.gd)"
+   },
+   {
+    "file": "kao/19ec0_16x64.png",
+    "offset": 106176,
+    "size": [
+     16,
+     64
+    ],
+    "role": "the same two pieces read 16 wide: the duel speech bubbles' ends (duel_layer.gd)"
    },
    {
     "file": "kao/1a2c0_16x16.png",

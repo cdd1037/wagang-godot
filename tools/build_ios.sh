@@ -40,8 +40,10 @@ if [ ! -d "$root/game/assets_hd/gfx" ]; then
 fi
 # every original picture the preset leaves out must have an HD version
 python3 -I "$root/tools/check_hd_exclude.py" > /dev/null || { python3 -I "$root/tools/check_hd_exclude.py" >&2; exit 1; }
-ver="$("$godot" --version | cut -d. -f1-3)"
-tpl="$HOME/Library/Application Support/Godot/export_templates/${ver}.stable/ios.zip"
+full="$("$godot" --version)"        # 4.7.2.stable.official.<hash>, or 4.8.stable.official.<hash> for an x.y.0
+tag="${full%.*.*}"                   # 4.7.2.stable / 4.8.stable: the export templates' folder
+ver="${tag%.*}"                      # 4.7.2 / 4.8: the version (Godot's source tag is <ver>-stable)
+tpl="$HOME/Library/Application Support/Godot/export_templates/${tag}/ios.zip"
 if [ ! -f "$tpl" ]; then
   echo "no iOS export template at $tpl (see docs/BUILDING.md)" >&2
   exit 1
