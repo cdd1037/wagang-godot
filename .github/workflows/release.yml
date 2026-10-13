@@ -46,7 +46,7 @@ jobs:
     # a manual run from another branch must not publish a build
     needs: tests
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04      # pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -223,7 +223,7 @@ jobs:
     # the Android build: an .apk signed with the release key, added to the draft release of the build job
     needs: build
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04      # pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -327,7 +327,7 @@ jobs:
     # all four files are in: the draft becomes the public release, then the oldest builds go
     needs: [build, ios, android]
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04      # pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
