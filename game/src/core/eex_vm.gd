@@ -15,6 +15,11 @@ signal file_finished
 
 ## Ops the VM runs itself (end, if, comment, else, goto): they need no handler.
 const VM_OPS := ["end", "if", "comment", "else", "goto"]
+## Ops that only read or write the emulated memory: no random roll, nothing shown, played or waited for. A run that
+## executes only these and leaves memory as it was would do the same again (BattleStage.checkpoint stops there).
+const PURE_OPS := ["int_var_op", "data_transfer", "set_flag", "set_byte_var", "copy_person_byte", "set_4ce004",
+		"test_int_var", "test_flags", "test_attr", "test_side", "test_turn", "test_unit_at", "test_unit_in_area",
+		"test_units_in_area", "test_adjacent", "test_event5", "test_event6"]
 
 var data: Dictionary
 var host: Object
@@ -30,6 +35,7 @@ var abort := false
 var trace := false
 var last_section := -1
 var next_op := -1            # opcode after the one being executed (-1 at the end of a body)
+var impure := 0              # handlers called that are not PURE_OPS (BattleStage.checkpoint resets and reads it)
 static var executed := 0     # instructions run by every VM so far (the UI bot's sign of progress)
 var _warned: Dictionary = {}
 
@@ -53,7 +59,7 @@ func scene_count() -> int:
 
 
 func sections(sc: int) -> Array:
-	var scs: Array = data["scenes"]
+	var scs: Array = data.get("scenes", [])
 	if sc < 0 or sc >= scs.size():
 		return []
 	return scs[sc]["sections"]
@@ -76,6 +82,8 @@ func handler(n: String) -> Callable:
 
 func _call(ins: Dictionary) -> Variant:
 	var n: String = ins["name"]
+	if not n in PURE_OPS and not n in VM_OPS:
+		impure += 1
 	var c := handler(n)
 	if c.is_valid():
 		return await c.call(ins)
@@ -149,8 +157,12 @@ func run_section(k: int) -> void:
 	next_scene_pending = false
 	end_file_pending = false
 	abort = false
-	await _run(secs[k]["body"], scene, k, 0)
+	var exited := await _run(secs[k]["body"], scene, k, 0)
 	running = false
+	if exited:
+		# op 0x0c (0x4143a4 → status 8): run_block 0x4105a8 returns 5 at once; the scene and the file move on only
+		# at an END (status 3), so the next poll picks from the same scene again (a story 单挑's draw replays it)
+		return
 	if end_file_pending:
 		_finish_file()
 	elif next_scene_pending or single:
@@ -175,16 +187,17 @@ func _body_of(sc: int, sec: int) -> Array:
 	return secs[sec]["body"]
 
 
-func _run(body: Array, sc: int, sec: int, start: int) -> void:
+## Runs a body; true when op 0x0c (exit_section) left it.
+func _run(body: Array, sc: int, sec: int, start: int) -> bool:
 	var pc := start
 	var depth := 0
 	var last: Array[int] = [1]        # per-level result of the most recent IF test
 	var steps := 0
 	while true:
 		if abort or host == null:
-			return
+			return false
 		if pc >= body.size():
-			return
+			return false
 		var ins: Dictionary = body[pc]
 		var op := int(ins["op"])
 		steps += 1
@@ -192,15 +205,15 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 		if steps % 4000 == 0:
 			await host.get_tree().process_frame
 			if abort or not is_instance_valid(host):      # the stage went while the VM let a frame pass
-				return
+				return false
 		if trace:
 			print("[%s %d.%d #%d d%d] %s %s" % [name, sc, sec, pc, depth, ins["name"], ins["args"]])
 		match op:
 			0:    # END of the innermost running level
 				if next_scene_pending or end_file_pending:
-					return
+					return false
 				if depth == 0:
-					return
+					return false
 				depth -= 1
 				last.pop_back()
 				pc += 1
@@ -240,10 +253,10 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 					pc = int(ins["end"])
 				continue
 			3:    # ELSE outside IF: abort block
-				return
+				return false
 			0x0c: # exit_section
 				await _call(ins)
-				return
+				return true
 			0x0d: # next_scene: finishes after the current block's END
 				await _call(ins)
 				next_scene_pending = true
@@ -271,6 +284,7 @@ func _run(body: Array, sc: int, sec: int, start: int) -> void:
 		next_op = int(body[pc + 1]["op"]) if pc + 1 < body.size() else -1
 		await _call(ins)
 		pc += 1
+	return false
 
 
 func _goto_target(ins: Dictionary) -> Dictionary:

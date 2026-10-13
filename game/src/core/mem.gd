@@ -252,6 +252,11 @@ const SAVE_RANGES := [[0x48b000, 0x4ccbbc], [0x4ce000, 0x4d0000], [0x55a000, 0x5
 
 
 ## The persistent state as a save stores it (base64 text).
+## Everything the emulated memory holds, to compare with == (the battle checkpoint's fixed-point test).
+func state_copy() -> Array:
+	return [img.duplicate(), heap.duplicate(), pages.duplicate(true)]
+
+
 func snapshot() -> Dictionary:
 	return encode_snapshot(raw_snapshot())
 

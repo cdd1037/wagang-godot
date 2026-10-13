@@ -229,15 +229,37 @@ func _has_ai_units(a: int, b: int) -> bool:
 	return false
 
 
-## Battle checkpoint (0x4180c1): one selection over the event scene — the last section whose
-## conditions hold runs. (Always-true bookkeeping sections in this mod rely on that.)
+## Battle checkpoint (0x44c601): up to as many polls (0x4180c1) of the event scene as it has sections (0x410990),
+## while the scene stays (0x44f7b0 reads the reader's offset, which only a new selection or a scene change resets).
+## Each poll runs the last section whose conditions hold, so every section that qualifies runs within the
+## checkpoint, and one that still qualifies afterwards (S_17's always-true 暗杀) runs again at each remaining poll.
+## A poll that executed only memory ops (EexVM.PURE_OPS: no roll, nothing shown or waited for) and left memory as
+## it was would be repeated exactly by every remaining one, so the loop stops there.
 func checkpoint() -> void:
 	if _in_checkpoint or not vm.active or vm.scene != 1:
 		return
 	_in_checkpoint = true
-	await vm.poll()
+	var sc := vm.scene
+	for i in vm.sections(sc).size():
+		if not vm.active or vm.scene != sc:
+			break
+		var before := Mem.state_copy()
+		vm.impure = 0
+		await vm.poll()
+		var after := Mem.state_copy()
+		if vm.impure == 0 and after == before:
+			break
 	refresh_units()
 	_in_checkpoint = false
+
+
+## 0x413661 → 0x45965d in a battle: a person's line shows only when their first unit (slots 0..114, 0x45f670) is on
+## the map; otherwise nothing is shown.
+func speaks_now(pid: int) -> bool:
+	if not in_battle():
+		return true
+	var s := BUnit.slot_of(pid)
+	return s >= 0 and units[s].state == BUnit.STATE_ON_MAP
 
 
 ## 0x45b5fe(i), after a command or AI action: unit i becomes the current unit (the selectors 0x400..0x402; the

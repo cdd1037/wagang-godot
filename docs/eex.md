@@ -178,7 +178,10 @@ Instructions that start animations/dialogs return 2 (e.g. dialogs 0x14, actor mo
   conditions like `0x2d test_clicked <person>` (+ flags).
 * **Battle files (S)**: the battle module calls `0x4180c1` in loops at fixed checkpoints (0x40bbc7 game loop,
   0x44c638 / 0x44ec60 / 0x44ed52 / 0x44f0c7 inside the battle turn logic: battle start, phase start, after each
-  unit action/move, after deaths) – each call polls all sections of the current scene. Scene 0 of an S file is
+  unit action/move, after deaths) – each call polls all sections of the current scene. The checkpoint 0x44c601
+  calls it up to [R+0x24] (the scene's section count) times while [R+8] ≠ 0, i.e. until the scene changes, so
+  every section that qualifies runs within one checkpoint (and one that keeps qualifying runs at every remaining
+  call). A one-section scene moves on only at an END: op 0x0c (status 8) leaves it to run again. Scene 0 of an S file is
   the deployment (0x4a/0x44/0x45/0x46/0x47/0x4b …), scene 1 the event loop with many sections (turn N events
   via 0x3f, positional triggers via 0x25/0x26/0x41/0x2e, victory 0x42, defeat 0x43, …), later scenes the
   aftermath; leaving the battle is done with 0x0d/0x11.

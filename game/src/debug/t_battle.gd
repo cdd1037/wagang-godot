@@ -26,6 +26,53 @@ func _unit(slot: int, pid: int, colour: int, pos: Vector2i) -> BUnit:
 	return u
 
 
+func _ins(name: String, args: Array, op := 0x40) -> Dictionary:
+	return {"op": op, "name": name, "args": args}
+
+
+func _sec(title: String, conds: Array, body: Array) -> Dictionary:
+	return {"title": title, "conditions": conds + [_ins("end", [], 0)], "body": body + [_ins("end", [], 0)]}
+
+
+## 0x44c601: a checkpoint polls until every qualifying section has run; op 0x0c in a one-section scene keeps the
+## scene (0x4105a8 status 8 → 5); 0x45965d: a battle line needs the speaker's unit on the map.
+func _script_flow(st: BattleStage) -> void:
+	var old_vm: EexVM = st.vm
+	var vm := EexVM.new()
+	vm.host = st
+	vm.data = {"scenes": [{"sections": []}, {"sections": [
+		_sec("A", [_ins("test_flags", [[], [901]])], [_ins("set_flag", [901, 1])]),
+		_sec("B", [_ins("test_flags", [[], [902]])], [_ins("set_flag", [902, 1])]),
+		_sec("C", [_ins("test_flags", [[903], []])], [_ins("set_flag", [904, 1])])]}]}
+	vm.active = true
+	vm.scene = 1
+	st.vm = vm
+	for f in [901, 902, 903, 904]:
+		Mem.set_flag(f, false)
+	await st.checkpoint()
+	_check(Mem.flag(901) and Mem.flag(902) and not Mem.flag(904), "one checkpoint runs both qualifying sections")
+	# exit_section in a one-section scene: the scene stays and the section runs again at the next poll
+	var vm2 := EexVM.new()
+	vm2.host = st
+	vm2.data = {"scenes": [{"sections": [_sec("draw", [], [_ins("int_var_op", [2, 600, 0, 0, 1]),
+			_ins("exit_section", [], 0x0c), _ins("set_flag", [905, 1])])]}, {"sections": [_sec("next", [], [])]}]}
+	vm2.active = true
+	vm2.scene = 0
+	Mem.set_ev(600, 0)
+	Mem.set_flag(905, false)
+	await vm2.poll()
+	_check(vm2.scene == 0 and Mem.ev(600) == 1 and not Mem.flag(905), "exit_section keeps a one-section scene (%d)" % vm2.scene)
+	await vm2.poll()
+	_check(vm2.scene == 0 and Mem.ev(600) == 2, "and the next poll runs it again")
+	st.vm = old_vm
+	# battle lines: only with the speaker's unit on the map
+	var sp := _unit(42, 306, 2, Vector2i(8, 8))
+	_check(st.speaks_now(306), "speaker on the map talks")
+	sp.state = 3
+	_check(not st.speaks_now(306), "a removed speaker is silent")
+	_check(not st.speaks_now(307), "a speaker without a unit is silent")
+
+
 func run() -> void:
 	Game.new_game_state()
 	Game.autoplay = true          # no waiting for clicks or animations
@@ -113,6 +160,7 @@ func run() -> void:
 	Mem.set_ev(500, 7)
 	await st.op_data_transfer({"args": [500, 1, 305, 33]})
 	_check(f3.state == BUnit.STATE_ON_MAP and f3.hp == 7 and Mem.ev(10) == 0, "op 0x78 HP 7 write: stays")
+	await _script_flow(st)
 	# AIAct resets EV[10] (0x43ad2b)
 	await st.ai.act(_unit(37, 302, 2, Vector2i(9, 9)))
 	_check(Mem.ev(10) == 0, "AIAct start resets EV[10]")

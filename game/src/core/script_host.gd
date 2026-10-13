@@ -272,12 +272,21 @@ func parse_dialog(s: String) -> Array:
 	return boxes
 
 
+## Op 0x14 (0x413661): each "&name" box. A name that is no person's (0x41eec0 gives 0xffff) shows no name (0x42d5f1
+## draws none for an id ≥ 0x400); in a battle a person's line needs their unit on the map (speaks_now).
 func show_dialog(s: String, top_hint := -1) -> void:
 	for b in parse_dialog(s):
 		var pid := person_by_name(b["name"]) if b["name"] != "" else -1
+		if pid >= 0 and not speaks_now(pid):
+			continue
 		var top := _dialog_top(pid) if top_hint < 0 else top_hint == 1
 		await on_speaker(pid)
-		await ui.dialog.talk(speaker_face(pid), b["name"], b["text"], top)
+		await ui.dialog.talk(speaker_face(pid), b["name"] if pid >= 0 else "", b["text"], top)
+
+
+## Whether person `pid`'s line is shown: always outside battles; BattleStage asks for a unit on the map (0x45965d).
+func speaks_now(_pid: int) -> bool:
+	return true
 
 
 ## Stages override to choose top/bottom placement from the speaker's screen position.

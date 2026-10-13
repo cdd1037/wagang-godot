@@ -521,6 +521,19 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
       "正处于迷失状态。", a cancel SE 1.
     **Done** (`main.gd`, `SystemMenu`, `BattleInput`; `t_menus`, `t_commands`). The original keeps 100 save slots
     ("No. 0" … "No.99", 0x41a518); the port keeps 10.
+48. **Script flow**:
+    * A battle checkpoint (0x44c601) polls the event scene up to as many times as it has sections (0x410990) while
+      the scene stays (0x44f7b0 reads the reader offset [R+8], reset only by a new selection 0x4100a1 / 0x40fba9 or
+      a scene change): every qualifying section runs in the same checkpoint, and one that still qualifies runs again
+      at each remaining poll (S_17's always-true 暗杀). The port polled once: S_29's 第四区 / 第五区 fire walls froze,
+      S_09 / S_36 events came late. The port stops as soon as a poll ran only memory ops and changed nothing
+      (EexVM.PURE_OPS), which the remaining polls would repeat exactly.
+    * Op 0x0c in a one-section scene (0x4143a4 → status 8 → 0x4105a8 returns 5): the scene stays, so the next poll
+      runs the section again (the story 单挑 draw path replays the duel); the scene and the file move on only at an
+      END.
+    * Battle lines (0x413661 → 0x45965d): a person's line is shown only when their first unit is on the map; a name
+      that is no person's shows without a name (0x42d5f1 with id 0xffff).
+    **Done** (`BattleStage.checkpoint`, `speaks_now`, `EexVM.run_section`, `ScriptHost.show_dialog`, `t_battle`).
 
 ### Deliberate differences (port design, keep unless asked)
 
