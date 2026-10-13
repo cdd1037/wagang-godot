@@ -4,7 +4,7 @@ extends Node
 ## the game in its normal mode (none of autoplay's short-cuts): mouse clicks on dialogue boxes, menu rows, window
 ## buttons, story actors, the town toolbar and battle cells, the wheel on long lists, Esc for the battle's system
 ## menu, and Enter where something waits with nothing to click (captions, banners). It decides like autoplay: story
-## clicks from StoryStage.auto_pick (DuelSim, FlagPuzzle), each player unit's move from the battle AI's decision
+## clicks from StoryAutoplay.pick (DuelSim, FlagPuzzle), each player unit's move from the battle AI's decision
 ## (BattleAI.decide, with the bytes and the random state it touches put back), the first enabled menu row.
 ## It checks what autoplay skips:
 ## * every click reaches its handler: a dialogue box that waits advances, a menu row is chosen, a window's 确定 /
@@ -177,7 +177,7 @@ func _describe() -> String:
 	var s := "%s; dialog %s, menu %s %s, window %s" % [main.scenario_file(Game.scenario), ui.dialog.visible,
 			ui.menu.visible, ui.menu.items, _top_panel()]
 	if st is StoryStage:
-		s += ", story waits %s, town %s, actors %s" % [st._waiting_click, st.town_on(), st.click_candidates()]
+		s += ", story waits %s, town %s, actors %s" % [st._waiting_click, st.town_on(), st.autoplay.candidates()]
 	elif st is BattleStage:
 		s += ", battle turn %d, input idle %s, waits for a cell %s, plan %s" % [st.turn, st.input.idle,
 				st.input.waiting_cell, _plan.get("stage", "")]
@@ -406,14 +406,14 @@ func _story(st: StoryStage) -> bool:
 			await _gallery_shot("toolbar")
 		if st.menu_ready():
 			return await _tour_step(st)
-	var keys := st.click_candidates()
+	var keys := st.autoplay.candidates()
 	if keys.is_empty():
 		return false
 	await _gallery_shot("town" if st.town_on() else "story")
 	# like autoplay, now and then the toolbar's 出征 (WG_SORTIE_P, default 12 %)
 	var sp := OS.get_environment("WG_SORTIE_P")
-	if st.sortie_enabled and st.menu_ready() and st.tool_shown(3) and _rng.randi_range(0, 99) < (int(sp) if sp != "" else 12):
-		await _click(_in_view(st._bar_tools[3], st._bar_tools[3].size / 2))
+	if st.sortie_enabled and st.menu_ready() and st.bar.shown(3) and _rng.randi_range(0, 99) < (int(sp) if sp != "" else 12):
+		await _click(_in_view(st.bar.tools[3], st.bar.tools[3].size / 2))
 		var sid := st.get_instance_id()
 		_expect(func() -> bool:
 			var s := instance_from_id(sid) as StoryStage
@@ -424,8 +424,8 @@ func _story(st: StoryStage) -> bool:
 		_fail("3000 story clicks without leaving %s" % main.scenario_file(Game.scenario))
 		get_tree().quit()
 		return false
-	st._auto_i += 1
-	var pid: int = await st.auto_pick(keys)
+	st.autoplay.clicks += 1
+	var pid: int = await st.autoplay.pick(keys)
 	if not st._waiting_click or not st.actors.has(pid):
 		return true
 	var p: Vector2 = (st.actors[pid] as RpgActor).screen_rect().grow(-4).get_center()
@@ -458,7 +458,7 @@ func _tour_steps(st: StoryStage) -> Array:
 	for w in SYS_MENU:
 		steps.append(["menu", w])
 	for i in 3:
-		if st.tool_shown(i):
+		if st.bar.shown(i):
 			steps.append(["tool", i])
 	steps.append(["info"])
 	steps.append(["save"])
@@ -489,11 +489,11 @@ func _tour_step(st: StoryStage) -> bool:
 					opened[0] = opened[0] or _top_panel() != null
 					return opened[0], "the system menu's %s opens its window" % row, 6.0)
 		"tool":
-			var b: Button = st._bar_tools[s[1]]
+			var b: Button = st.bar.tools[s[1]]
 			await _click(_in_view(b, b.size / 2))
 			_expect(func() -> bool: return _top_panel() != null, "the toolbar's %s opens its window" % b.text, 4.0)
 		"info":
-			for pid in st.click_candidates():
+			for pid in st.autoplay.candidates():
 				if st._info_ok(pid):
 					var r: Rect2 = (st.actors[pid] as RpgActor).screen_rect().grow(-4)
 					if st.actor_at(r.get_center()) == pid:

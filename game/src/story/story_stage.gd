@@ -6,8 +6,6 @@ extends ScriptHost
 signal clicked_actor(pid: int)
 
 const VIEW_Y := 40
-const TOOLBAR := ["卖出", "买进", "装备", "出征"]
-const TOOLBAR_FLAGS := [0xf3, 0xf2, 0xf1]
 
 var root2d: Node2D
 var bg: Sprite2D
@@ -23,8 +21,9 @@ var scene_image := -1
 var _waiting_click := false
 var _pending_click := -1        # an actor clicked while a section ran: the next poll sees it (as a delay's message pump does)
 var sortie_enabled := false
-var _bar_menu: Button
-var _bar_tools: Array[Button] = []    # the town toolbar: 卖出 买进 装备 出征
+var bar: TownBar                      # the town's toolbar and 菜单 (story/town_bar.gd)
+var autoplay := StoryAutoplay.new(self)    # the clicks under Game.autoplay (story/story_autoplay.gd)
+var ran_secs := {}     # the sections of this file that have run ("scene.section"), for the autoplay clicks
 
 
 func _ready() -> void:
@@ -53,16 +52,8 @@ func _ready() -> void:
 	portrait_layer = Node2D.new()
 	portrait_layer.z_index = 2000     # above the actors, whose z_index is their screen y
 	root2d.add_child(portrait_layer)
-	# the original's town toolbar sits outside the scene view; here: buttons in the top black bar,
-	# shown while the scene waits for the player (same as right click / Esc)
-	_bar_menu = _bar_button("菜单", Vector2(572, 8))
-	_bar_menu.pressed.connect(func() -> void:
-		if menu_ready():
-			_system_menu())
-	for i in TOOLBAR.size():
-		var b := _bar_button(TOOLBAR[i], Vector2(504, 8))
-		b.pressed.connect(_tool.bind(i))
-		_bar_tools.append(b)
+	bar = TownBar.new(self)
+	root2d.add_child(bar)
 
 
 ## The town's menu, toolbar and clicks on actors work while the scene waits for the player and GS+2 (op 0x08) is
@@ -80,74 +71,6 @@ func open_menu() -> void:
 		_system_menu()
 
 
-func _bar_button(text: String, pos: Vector2) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.position = pos
-	b.size = Vector2(60, 26)
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_override("font", Assets.font())
-	b.add_theme_font_size_override("font_size", 14)
-	b.add_theme_color_override("font_color", UIStyle.NAME_COLOR)
-	b.add_theme_color_override("font_hover_color", Color(1, 1, 1))
-	var n := UIStyle.panel_box()
-	n.set_content_margin_all(2)
-	var h := n.duplicate() as StyleBoxFlat
-	h.bg_color = UIStyle.BG2
-	b.add_theme_stylebox_override("normal", n)
-	b.add_theme_stylebox_override("hover", h)
-	b.add_theme_stylebox_override("pressed", h)
-	b.visible = false
-	root2d.add_child(b)
-	return b
-
-
-func _process(_d: float) -> void:
-	if _bar_menu == null:
-		return
-	var show := menu_ready() and not Game.autoplay and not Game.demo
-	_bar_menu.visible = show
-	var x := 504.0
-	for i in _bar_tools.size():
-		var b := _bar_tools[i]
-		b.visible = show and tool_shown(i)
-		if b.visible:
-			b.position.x = x
-			x -= 68
-	# the toolbar's buttons reach under the meter (x 290..502): while they show, they sit at the bar's bottom
-	# and the meter goes above them
-	var tools := x < 504.0
-	for b in [_bar_menu] + _bar_tools:
-		b.position.y = 12 if tools else 8
-		b.size.y = 24 if tools else 26
-	if ui and ui.meter:
-		ui.meter.position.y = 2 if tools else 25
-
-
-## The town toolbar (0x419d22) is shown with 出征 (op 0x06); story flags 0xf3 / 0xf2 / 0xf1 move 卖出 / 买进 / 装备
-## off it (0x419f22), and the others close up from the right.
-func tool_shown(i: int) -> bool:
-	return sortie_enabled and (i >= TOOLBAR_FLAGS.size() or not Mem.flag(TOOLBAR_FLAGS[i]))
-
-
-## A toolbar button (0x41973c): 0 卖出 (dialog 329), 1 买进 (327), 2 装备 (328), 3 出征.
-func _tool(i: int) -> void:
-	if not menu_ready() or not tool_shown(i):
-		return
-	if i == 3:
-		_menu_sortie()
-		return
-	_waiting_click = false
-	match i:
-		0:
-			await ShopWindow.sell(ui)
-		1:
-			await ShopWindow.buy(ui)
-		2:
-			await EquipWindow.open(ui)
-	_waiting_click = true
-
-
 var _restore: Dictionary = {}
 
 
@@ -161,15 +84,15 @@ func run_file(file: String) -> void:
 	Mem.w32(Skills.MAP_NO, 0xffff)   # towns load their pictures through 0x426c6a, which marks "no battle map"
 	if not _restore.is_empty():
 		_apply_restore()
-	_ran_secs.clear()
+	ran_secs.clear()
 	ui.meter.visible = true      # resource 2 (op 0x3a kind 2), the status window's third pane
 	var busy := 0
 	while vm.active and is_inside_tree():
 		var sc := vm.scene
-		if _pending_click < 0 and busy >= 3 and Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
-			# flow-test: sections keep running without a pause for the player (R_16's 张千, who must be clicked the
-			# moment he appears): click an actor whose click would run a section now
-			_pending_click = await _live_click()
+		if _pending_click < 0 and busy >= 3:
+			# sections keep running without a pause for the player (R_16's 张千, who must be clicked the moment he
+			# appears): the flow-test harness may click someone now
+			_pending_click = await Game.hooks.story_busy(self)
 		if _pending_click >= 0:
 			var cp := _pending_click
 			_pending_click = -1
@@ -178,7 +101,7 @@ func run_file(file: String) -> void:
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
 			var hit: bool = await vm.poll()
 			if hit:
-				_ran_secs["%d.%d" % [sc, vm.last_section]] = true
+				ran_secs["%d.%d" % [sc, vm.last_section]] = true
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
 			in_click = false
 			click_pid = -1
@@ -187,7 +110,7 @@ func run_file(file: String) -> void:
 				continue
 		var ran: bool = await vm.poll()
 		if ran:
-			_ran_secs["%d.%d" % [sc, vm.last_section]] = true
+			ran_secs["%d.%d" % [sc, vm.last_section]] = true
 			busy += 1
 		else:
 			busy = 0
@@ -203,153 +126,21 @@ func run_file(file: String) -> void:
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
 			sc = vm.scene
 			if await vm.poll():
-				_ran_secs["%d.%d" % [sc, vm.last_section]] = true
+				ran_secs["%d.%d" % [sc, vm.last_section]] = true
 			Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
 			in_click = false
 			click_pid = -1
 	SoundMap.stop_loop()
 
 
-var _auto_i := 0
-var _auto_idle := 0
-var _ran_secs := {}     # the sections of this file that have run ("scene.section"), for the autoplay clicks
-
-
+## The scene waits for the player to click an actor (autoplay picks one): its pid, or −2 to poll again.
 func _wait_for_click() -> int:
 	if Game.autoplay or Game.demo:
-		if Game.demo:
-			await get_tree().create_timer(1.0).timeout
-		await get_tree().process_frame
-		var keys := click_candidates()
-		if keys.is_empty():
-			_auto_idle += 1
-			if Game.hooks.story_leave(self, _auto_idle, _auto_i):     # the flow-test harness's idle exit
-				vm.active = false
-			await get_tree().create_timer(0.2).timeout
-			return -2
-		_auto_idle = 0
-		_auto_i += 1
-		if Game.hooks.story_leave(self, 0, _auto_i):                  # its click cap
-			vm.active = false
-			return -2
-		var sp := OS.get_environment("WG_SORTIE_P")
-		if sortie_enabled and Rules.chance(int(sp) if sp != "" else 12):
-			if await do_sortie():
-				return -2
-		return await auto_pick(keys)
+		return await autoplay.next_click()
 	_waiting_click = true
 	var r: int = await clicked_actor
 	_waiting_click = false
 	return r
-
-
-## Actors a player could click now: visible, not hidden via action 18, and inside the scene view (scripts park
-## actors off-screen, e.g. at (90, 90), instead of removing them).
-func click_candidates() -> Array:
-	var view := Rect2(0, VIEW_Y, 640, 400)
-	return actors.keys().filter(func(k: int) -> bool:
-		var a: RpgActor = actors[k]
-		return a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)))
-
-
-## The actor autoplay clicks among `keys` (click_candidates(), not empty); the UI bot (debug/ui_bot.gd) clicks
-## the same one with the mouse.
-func auto_pick(keys: Array) -> int:
-	# the harness's picks: guided clicks (WG_CLICKS), story 单挑 (DuelSim), click puzzles (FlagPuzzle)
-	var h: int = await Game.hooks.story_pick(self, keys)
-	if h >= 0:
-		return h
-	# mostly click actors whose click runs a section that has not run yet, else actors that some section of
-	# this scene tests for (like a player would)
-	var fresh: Array = await _fresh_click_pids(keys) if Rules.chance(85) else []
-	var hot := _clickable_pids().filter(func(x: int) -> bool: return keys.has(x))
-	if not fresh.is_empty():
-		keys = fresh
-	elif not hot.is_empty() and Rules.chance(85):
-		# a click that runs nothing now is wasted: prefer actors whose click runs a section ("click him while he
-		# is there" mini-games such as R_16's 张千)
-		var live := []
-		for x in hot:
-			if await _section_for(x) >= 0:
-				live.append(x)
-		keys = live if not live.is_empty() else hot
-	var pid: int = keys[Rules.rand(keys.size())] if OS.get_environment("WG_RANDOM") != "" else keys[_auto_i % keys.size()]
-	if OS.get_environment("WG_TRACE_TEXT") != "":
-		print("  [click] ", pid)
-	return pid
-
-
-## Autoplay helper: a visible actor some section tests for whose click would run a section now, or −1.
-func _live_click() -> int:
-	var view := Rect2(0, VIEW_Y, 640, 400)
-	for pid in _clickable_pids():
-		if not actors.has(pid):
-			continue
-		var a: RpgActor = actors[pid]
-		if a.visible and a.action != 18 and view.intersects(a.screen_rect().grow(-4)) and await _section_for(pid) >= 0:
-			if OS.get_environment("WG_TRACE_TEXT") != "":
-				print("  [click] ", pid, " (while sections run)")
-			return pid
-	return -1
-
-
-## The story flags that are set, as "a-b,c,…" ranges (flow-test diagnostics).
-func _flags_set() -> String:
-	var out := []
-	var i := 0
-	while i < 2048:
-		if Mem.flag(i):
-			var j := i
-			while j + 1 < 2048 and Mem.flag(j + 1):
-				j += 1
-			out.append(str(i) if j == i else "%d-%d" % [i, j])
-			i = j
-		i += 1
-	return ",".join(out)
-
-
-## Autoplay helper: the actors among `keys` whose click would run (as vm.poll picks: the last section that
-## qualifies) a section that has not run yet in this file. The moves of the story-scene 单挑 (sections 攻击 防御
-## 绝招 回避, run round after round) never count as new.
-const DUEL_MOVES := ["攻击", "防御", "绝招", "回避"]
-
-
-func _fresh_click_pids(keys: Array) -> Array:
-	var out := []
-	var secs := vm.sections(vm.scene)
-	for pid in keys:
-		var k := await _section_for(pid)
-		if k >= 0 and not _ran_secs.has("%d.%d" % [vm.scene, k]) and not str(secs[k].get("title", "")).strip_edges() in DUEL_MOVES:
-			out.append(pid)
-	return out
-
-
-## Autoplay helper: the section a click on `pid` would run now (−1 none).
-func _section_for(pid: int) -> int:
-	var secs := vm.sections(vm.scene)
-	click_pid = pid
-	in_click = true
-	Mem.w16(Mem.GS, Mem.r16(Mem.GS) | 0x20)
-	var chosen := -1
-	for k in secs.size():
-		if await vm.check_conditions(secs[k]):
-			chosen = k
-	Mem.w16(Mem.GS, Mem.r16(Mem.GS) & ~0x20)
-	in_click = false
-	click_pid = -1
-	return chosen
-
-
-## Autoplay helper: person ids named by test_clicked conditions in the current scene.
-func _clickable_pids() -> Array:
-	var out := []
-	for sec in vm.sections(vm.scene):
-		for c in sec.get("conditions", []):
-			if str(c.get("name", "")) == "test_clicked" and not c["args"].is_empty() and c["args"][0] is float:
-				var v := int(c["args"][0])
-				if not out.has(v):
-					out.append(v)
-	return out
 
 
 ## Touch: a press on an actor, not yet released ([pid, press counter]); the click happens on release, so a long
@@ -438,37 +229,14 @@ func actor_at(p: Vector2) -> int:
 	return best
 
 
-## The menu bar (0x474c59) as one list; outside battles 检索未执行部队, 结束回合, 胜利条件 and 战场缩小图 are greyed
-## (0x4759bc), so they are left out. 装备, 买进 and 卖出 are on the toolbar.
-const MENU := ["武将一览", "持有道具一览", "地形情报一览", "历史情报", "环境设定", "存储进度", "读取进度", "版本情报", "回到标题"]
-
-
+## The menu bar (SystemMenu, the town's commands).
 func _system_menu() -> void:
 	_waiting_click = false
-	var i := await ui.menu.choose(MENU, Vector2(-1, -1), true)
-	match MENU[i] if i >= 0 else "":
-		"武将一览":
-			await UnitListWindow.open(ui, null)
-		"持有道具一览":
-			await ItemListWindow.open(ui)
-		"地形情报一览":
-			await TerrainWindow.open(ui)
-		"历史情报":
-			await HistoryWindow.open(ui)
-		"环境设定":
-			await SettingsWindow.open(ui)
-		"存储进度":
-			await Game.main.save_menu()
-		"读取进度":
-			await Game.main.load_menu()
-		"版本情报":
-			await MsgBox.version(ui)
-		"回到标题":
-			Game.main.to_title()
+	await SystemMenu.open(ui)
 	_waiting_click = true
 
 
-func _menu_sortie() -> void:
+func menu_sortie() -> void:
 	_waiting_click = false
 	if await do_sortie():
 		clicked_actor.emit(-2)

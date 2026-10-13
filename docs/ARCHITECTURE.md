@@ -126,8 +126,9 @@ through EV variables.
   (`RpgActor`, 48×64 frames). The foot point of half-cell (x, y, z) is `(8(x−y)+312, 4(x+y)−8z−152)`.
 * After a poll finds nothing to run, the stage waits for a click on an actor. The click sets a flag in `GS` and polls
   again, so sections testing `test_clicked(pid)` fire.
-* The **菜单** / **出征** buttons and the right-click menu replace the original toolbar. A right click (or long
-  press) on an actor who is a party member opens 武将情报 instead (0x429b81). **出征** builds the sortie
+* The **菜单** / **出征** buttons and the right-click menu replace the original toolbar (`TownBar`). A right click
+  (or long press) on an actor who is a party member opens 武将情报 instead (0x429b81). Under autoplay
+  `StoryAutoplay` picks the actor to click. **出征** builds the sortie
   list (`build_sortie`, port of 0x41856a) and sets the pending flag that the scene's own `test_pending` section
   consumes.
 
@@ -169,8 +170,8 @@ UI ops and save / restore. The rest lives in components it creates (`deployment`
 
 `GameUI` sits above the stages and owns the dialogue box (typewriter text, portraits), choice menus, popups,
 banners, captions, chapter titles, fades and the video layer. Panels use the original's blue dragon-pattern window
-texture (`UIStyle`). The menu is one list of the original's menu-bar commands; the windows below follow the
-original dialogs. `Settings` (`core/settings.gd`) holds 环境设定 in GS / Niuniu.wa as the original does and
+texture (`UIStyle`). The menu is one list of the original's menu-bar commands (`SystemMenu`, a table of command
+ids and labels shared by towns and battles); the windows below follow the original dialogs. `Settings` (`core/settings.gd`) holds 环境设定 in GS / Niuniu.wa as the original does and
 re-applies it whenever Mem is reset or restored.
 
 * `InfoWindow` is 武将情报 (dialog 166 of wagan.wa) with its pages 能力 / 装备 / 策略 / 兵种, and `DetailPanel` the
@@ -225,7 +226,7 @@ variables the harness does nothing.
 |---|---|
 | `main.gd` | boot, title, scenario loop, game over/ending, save/load menus, window |
 | `core/` | `assets`, `audio`, `mem`, `addr`, `game`, `person`, `eex_vm`, `script_host`, `rules`, `skills`, `settings`, `data_transfer`, `special_funcs`, `person_attrs`, `sound_map` |
-| `story/` | `story_stage`, `rpg_actor` |
+| `story/` | `story_stage` (with `town_bar`, `story_autoplay`), `rpg_actor` |
 | `battle/` | `battle_stage` (with `battle_deploy`, `battle_phase`, `battle_unit_ops`, `battle_field_ops`), `battle_view`, `battle_input`, `battle_actions`, `battle_commands`, `battle_ai`, `battle_hud`, `battle_attrs`, `bunit`, `unit_sprite`, `grid`, `shapes`, `effect_player`, `duel_layer`, `sortie_screen`, `sortie_map`, `minimap` |
-| `ui/` | `game_ui`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
+| `ui/` | `game_ui`, `system_menu`, `dialog_box`, `choice_menu`, `dlg_panel`, `info_window`, `detail_panel`, `shop_window`, `equip_window`, `person_panel`, `item_cols`, `merchant_box`, `item_list_window`, `unit_list_window`, `terrain_window`, `history_window`, `settings_window`, `msg_box`, `ui_style`, `video_layer` |
 | `debug/` | `harness` (the test hooks, below), `test_runner`, `input_bot`, the flow-test helpers `flow_goals` (battle objectives), `duel_sim` (story 单挑) and `flag_puzzle` (click puzzles), small test scripts such as `t_hd` (HD texture mechanism) and `t_resize` (window snapping); see [DEVELOPMENT.md](DEVELOPMENT.md) |

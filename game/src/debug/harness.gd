@@ -379,7 +379,7 @@ static var _guided: Array = Array(OS.get_environment("WG_CLICKS").split(",", fal
 
 func story_pick(st: StoryStage, keys: Array) -> int:
 	var trace := OS.get_environment("WG_TRACE_TEXT") != ""
-	if not _guided.is_empty() and keys.has(_guided[0]) and await st._section_for(_guided[0]) >= 0:
+	if not _guided.is_empty() and keys.has(_guided[0]) and await st.autoplay.section_for(_guided[0]) >= 0:
 		var g: int = _guided.pop_front()
 		if trace:
 			print("  [click] ", g, " (guided)")
@@ -397,11 +397,18 @@ func story_pick(st: StoryStage, keys: Array) -> int:
 				return dp
 	# a click puzzle whose answer is a set of story flags (R_14's verses) is solved by dry runs
 	if FlagPuzzle.enabled:
-		var pz := FlagPuzzle.best_click(st.vm, keys, st._ran_secs)
+		var pz := FlagPuzzle.best_click(st.vm, keys, st.ran_secs)
 		if pz >= 0:
 			if trace:
 				print("  [click] ", pz, " (puzzle)")
 			return pz
+	return -1
+
+
+## Flow test: R_16's 张千 has to be clicked the moment he appears, while sections keep running.
+func story_busy(st: StoryStage) -> int:
+	if Game.autoplay and OS.get_environment("WG_AUTOSAVE") != "":
+		return await st.autoplay.live_click()
 	return -1
 
 
@@ -416,6 +423,6 @@ func story_leave(st: StoryStage, idle: int, clicks: int) -> bool:
 	var cap := OS.get_environment("WG_CLICKCAP")
 	if idle == 0 and clicks > (int(cap) if cap != "" else 2500):
 		# random clicking is not solving this scene (puzzles, hubs) — end the file
-		print("== flow-test: click cap, leaving %s; story flags set: %s" % [st.vm.name, st._flags_set()])
+		print("== flow-test: click cap, leaving %s; story flags set: %s" % [st.vm.name, StoryAutoplay.flags_set()])
 		return true
 	return false

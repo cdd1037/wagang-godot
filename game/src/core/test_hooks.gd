@@ -110,6 +110,13 @@ func story_leave(_st: StoryStage, _idle: int, _clicks: int) -> bool:
 	return false
 
 
+## Sections have run three times in a row without a pause for the player: the actor to click now (−1: none).
+func story_busy(_st: StoryStage) -> int:
+	if false:
+		await _coroutine()
+	return -1
+
+
 ## Makes a hook a coroutine, as its harness version is (see above).
 func _coroutine() -> void:
 	await Engine.get_main_loop().process_frame

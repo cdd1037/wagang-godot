@@ -46,11 +46,11 @@ func run() -> void:
 			"the opening's captions are gone (%d left)" % ui._caption_lines.size())
 	print("  town_on %s" % st.town_on())
 	Game.set_meta("bot_owns_input", true)      # no more ui_accept presses
-	var ran := st._ran_secs.size()
+	var ran := st.ran_secs.size()
 	await _click(st, 616)
-	_check(st._waiting_click and st._ran_secs.size() == ran, "攻击 runs nothing yet")
+	_check(st._waiting_click and st.ran_secs.size() == ran, "攻击 runs nothing yet")
 	await _click(st, 617)
-	_check(not st._waiting_click or st._ran_secs.has("1.6"), "防御 runs its section")
+	_check(not st._waiting_click or st.ran_secs.has("1.6"), "防御 runs its section")
 	print("t_storyclick: PASS" if _ok else "t_storyclick: FAILED")
 
 

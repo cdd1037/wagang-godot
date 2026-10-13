@@ -432,44 +432,23 @@ func _do_item(u: BUnit, items: Array) -> bool:
 	return false
 
 
-## The menu bar (0x474c59) as one list. 结束回合 asks first (0x449cae → "结束所有部队的命令吗？").
-const MENU := ["结束回合", "检索未执行部队", "武将一览", "持有道具一览", "地形情报一览", "历史情报", "胜利条件", "战场缩小图",
-	"环境设定", "存储进度", "读取进度", "版本情报", "回到标题"]
-
-
+## The menu bar (SystemMenu); its battle-only commands are here. 结束回合 asks first (0x449cae →
+## "结束所有部队的命令吗？").
 func system_menu() -> void:
-	var i := await st.ui.menu.choose(MENU, Vector2(-1, -1), true)
-	if i < 0:
-		return
-	var main: Node = Game.main
-	match MENU[i]:
-		"结束回合":
+	await SystemMenu.open(st.ui, st, _battle_command)
+
+
+func _battle_command(id: String) -> void:
+	match id:
+		"end_turn":
 			if await _confirm_end():
 				end_turn = true
-		"检索未执行部队":
+		"find_unit":
 			await find_unit()
-		"武将一览":
-			await UnitListWindow.open(st.ui, st)
-		"持有道具一览":
-			await ItemListWindow.open(st.ui)
-		"地形情报一览":
-			await TerrainWindow.open(st.ui)
-		"历史情报":
-			await HistoryWindow.open(st.ui)
-		"胜利条件":
+		"victory":
 			await st.show_victory()
-		"战场缩小图":
+		"minimap":
 			st.minimap.open()
-		"环境设定":
-			await SettingsWindow.open(st.ui)
-		"存储进度":
-			await main.save_menu()
-		"读取进度":
-			await main.load_menu()
-		"版本情报":
-			await MsgBox.version(st.ui)
-		"回到标题":
-			main.to_title()
 
 
 func _confirm_end() -> bool:

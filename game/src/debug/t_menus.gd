@@ -244,6 +244,11 @@ func _windows(ui: GameUI) -> void:
 	_check(st.menu_ready(), "GS+2 = 1: menu")
 	await _panes(ui, st)
 	st.queue_free()
+	# the menu bar (0x474c59): a town greys the four battle commands (0x4759bc), so they are left out there
+	_check(SystemMenu.labels(true) == ["结束回合", "检索未执行部队", "武将一览", "持有道具一览", "地形情报一览", "历史情报",
+			"胜利条件", "战场缩小图", "环境设定", "存储进度", "读取进度", "版本情报", "回到标题"], "the battle's menu bar")
+	_check(SystemMenu.labels(false) == ["武将一览", "持有道具一览", "地形情报一览", "历史情报", "环境设定", "存储进度",
+			"读取进度", "版本情报", "回到标题"], "the town's menu bar")
 
 
 ## The status panes: ops 0x18 / 0x17 keep their texts in memory (0x40bb48 / 0x40bb78), which saves carry (0x41b240)
