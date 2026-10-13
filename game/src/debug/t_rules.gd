@@ -91,6 +91,7 @@ func run() -> void:
 	await _taibao()
 	await _level_up()
 	_guided()
+	_range_order()
 	_imitation()
 	_kuanglan()
 	await _regen_exp()
@@ -449,6 +450,32 @@ func _guided() -> void:
 	e1.hp = 0
 	e2.hp = 0
 	_check(st.actions.guided_target(a) == null, "fallen units are not taken")
+
+
+## 0x436586's visiting order: code 0 up, right, down, left; code 1 then the diagonals (0x48df48); the rings 7..9 of
+## 0x4d7bce pass the axes twice; an own-side search visits the origin first. 引导攻击 takes the last of that order.
+## 0x438308: no flood from a cell the unit cannot stand on.
+func _range_order() -> void:
+	var o := Vector2i(5, 5)
+	var r0 := Shapes.range_cells(0, o, 20, 20)
+	_check(r0 == [o + Vector2i(0, -1), o + Vector2i(1, 0), o + Vector2i(0, 1), o + Vector2i(-1, 0)], "code 0 order %s" % [r0])
+	var r1 := Shapes.range_cells(1, o, 20, 20, true)
+	_check(r1[0] == o and r1[5] == o + Vector2i(1, -1) and r1[8] == o + Vector2i(-1, -1), "code 1 with origin %s" % [r1])
+	_check(Shapes.range_seq(9, o, 20, 20).size() == 16 and Shapes.range_cells(9, o, 20, 20).size() == 12, "ring 3 repeats the axes")
+	_clear()
+	var a := _unit(0, 2, o)
+	var left := _unit(35, 300, o + Vector2i(-1, 0))
+	var right := _unit(36, 301, o + Vector2i(1, 0))
+	Mem.w8(BattleActions.PREFERRED, 0xff)
+	_check(st.actions.attack_range_code(a) in [0, 1] and st.actions.guided_target(a) == left,
+			"引导攻击 takes the left one (last of up, right, down, left)")
+	# impassable start cell (terrain 5 for the 英雄 family): only the own cell
+	_clear()
+	var b := _unit(0, 2, Vector2i(8, 8), 20, 100, 0)
+	st.view.set_terrain(b.pos, 5)
+	_check(st.actions.reachable(b).size() == 1, "no move from an impassable cell: %d cells" % st.actions.reachable(b).size())
+	st.view.set_terrain(b.pos, 0)
+	_check(st.actions.reachable(b).size() > 1, "moves from plain ground")
 
 
 # ------------------------------------------------------------------ 策略模仿 (B6 F5)

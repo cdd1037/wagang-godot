@@ -651,7 +651,8 @@ func _physical_attack() -> void:
 	var t := choice_target
 	if t == null or not t.active() or not st.actions.can_attack(u, t) or not Game.hooks.may_hit(u, t):
 		t = null
-		for c in st.actions.attack_cells(u, u.pos):
+		# the last of the range's units in 0x436586's visiting order (repeats included)
+		for c in Shapes.range_seq(st.actions.attack_range_code(u), u.pos, st.view.map_w, st.view.map_h):
 			var x := st.unit_at(c)
 			if x and x.active() and x.is_enemy_of(u) and Game.hooks.may_hit(u, x):
 				t = x

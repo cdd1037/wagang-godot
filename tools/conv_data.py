@@ -72,8 +72,8 @@ TERRAIN_COUNT = 30
 
 
 # ---------------------------------------------------------------- shapes
-# Range / area shapes recovered by emulating 0x436586 (range codes) and 0x435d6c (area codes) with
-# tools/rd_emu.py (see docs/rules.md §6). Offsets are (dx, dy) relative to the origin.
+# Range / area shapes (docs/rules.md §6): the area codes were recovered by emulating 0x435d6c with tools/rd_emu.py;
+# the range codes are written out below from 0x436586. Offsets are (dx, dy) relative to the origin.
 def _man(lo, hi, r=6):
     return [[x, y] for y in range(-r, r + 1) for x in range(-r, r + 1) if lo <= abs(x) + abs(y) <= hi]
 
@@ -82,23 +82,57 @@ def _cheb(n, r=6):
     return [[x, y] for y in range(-r, r + 1) for x in range(-r, r + 1) if max(abs(x), abs(y)) == n]
 
 
+# The cells of a range code in the order 0x436586 visits them, read from its switch: 0x437bfa takes the 4 neighbours
+# by table 0x48df68 (up, right, down, left), 0x437c7a the diagonals by 0x48df48 (up-right, down-right, down-left,
+# up-left), mod 0x4d7bce(n) the rings 3 .. n + 2 as four sign variants of (c, j) each, so cells on an axis come twice.
+# The collector 0x437a04 keeps duplicates; for own-side searches the origin is visited first.
+_ADJ = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+_DIAG = [[1, -1], [1, 1], [-1, 1], [-1, -1]]
+_AXES2 = [[-2, 0], [2, 0], [0, -2], [0, 2]]
+_AXES3 = [[-3, 0], [3, 0], [0, -3], [0, 3]]
+_AXES4 = [[-4, 0], [4, 0], [0, -4], [0, 4]]
+_CORNERS2 = [[-2, -2], [2, 2], [2, -2], [-2, 2]]
+
+
+def _rows(dy):        # for b in 0..2: (−1 + b, −dy), (−1 + b, +dy)
+    return [c for b in range(3) for c in ([-1 + b, -dy], [-1 + b, dy])]
+
+
+def _cols(dx):        # for b in 0..2: (+dx, −1 + b), (−dx, −1 + b)
+    return [c for b in range(3) for c in ([dx, -1 + b], [-dx, -1 + b])]
+
+
+def _rings(n):        # 0x4d7bce
+    out = []
+    for j in range(n + 3):
+        c = n + 2 - j
+        for k in range(n):
+            out += [[-c, -j], [c, j], [-c, j], [c, -j]]
+            c -= 1
+            if c == -1:
+                break
+    return out
+
+
 RANGE_SHAPES = {   # attack range (class byte 1) and strategy cast range (strategy byte 0x0d) share these codes
-    0: {'desc': 'adjacent 4 (manhattan 1)', 'cells': _man(1, 1)},
-    1: {'desc': '8 surrounding (chebyshev 1)', 'cells': _cheb(1)},
-    2: {'desc': 'manhattan 2 ring', 'cells': _man(2, 2)},
-    3: {'desc': 'manhattan 2..3', 'cells': _man(2, 3)},
-    4: {'desc': 'manhattan 2..4', 'cells': _man(2, 4)},
-    5: {'desc': 'straight lines length 1..2 (8 cells)', 'cells': [[x, y] for y in range(-2, 3) for x in range(-2, 3) if (x == 0) != (y == 0)]},
-    6: {'desc': 'manhattan 1..2', 'cells': _man(1, 2)},
-    7: {'desc': 'manhattan 3..4', 'cells': _man(3, 4)},
-    8: {'desc': 'manhattan 3..5', 'cells': _man(3, 5)},
-    9: {'desc': 'manhattan 3 ring', 'cells': _man(3, 3)},
-    10: {'desc': 'whole map', 'cells': 'all'},
+    0: {'desc': 'adjacent 4 (manhattan 1)', 'cells': _ADJ},
+    1: {'desc': '8 surrounding (chebyshev 1)', 'cells': _ADJ + _DIAG},
+    2: {'desc': 'manhattan 2 ring', 'cells': _DIAG + _AXES2},
+    3: {'desc': 'manhattan 2..3', 'cells': _DIAG + _rows(2) + _cols(2) + _AXES3},
+    4: {'desc': 'manhattan 2..4', 'cells': _DIAG + _rows(2) + _cols(2) + _rows(3) + _cols(3) + _CORNERS2 + _AXES4},
+    5: {'desc': 'straight lines length 1..2 (8 cells)', 'cells': _ADJ + _AXES2},
+    6: {'desc': 'manhattan 1..2', 'cells': _ADJ + _DIAG + _AXES2},
+    7: {'desc': 'manhattan 3..4', 'cells': _rings(2)},
+    8: {'desc': 'manhattan 3..5', 'cells': _rings(3)},
+    9: {'desc': 'manhattan 3 ring', 'cells': _rings(1)},
+    10: {'desc': 'whole map, row by row (0x437ce9)', 'cells': 'all'},
     11: {'desc': 'none (cannot attack) / self only for strategies', 'cells': []},
-    12: {'desc': 'manhattan 1..3', 'cells': _man(1, 3)},
-    13: {'desc': 'manhattan 1..4', 'cells': _man(1, 4)},
-    14: {'desc': '3 cells wide bars at distance 3 (12 cells)', 'cells': [[s * 3, t] for s in (-1, 1) for t in (-1, 0, 1)] + [[t, s * 3] for s in (-1, 1) for t in (-1, 0, 1)]},
-    15: {'desc': 'chebyshev-3 ring without corners (20 cells)', 'cells': [c for c in _cheb(3) if abs(c[0]) != abs(c[1])]},
+    12: {'desc': 'manhattan 1..3', 'cells': _ADJ + _DIAG + _rows(2) + _cols(2) + _AXES3},
+    13: {'desc': 'manhattan 1..4', 'cells': _ADJ + _DIAG + _rows(2) + _cols(2) + _rows(3) + _cols(3) + _CORNERS2 + _AXES4},
+    14: {'desc': '3 cells wide bars at distance 3 (12 cells)',
+         'cells': [c for b in range(3) for c in ([-3, -1 + b], [3, -1 + b], [-1 + b, -3], [-1 + b, 3])]},
+    15: {'desc': 'chebyshev-3 ring without corners (20 cells)',
+         'cells': [c for b in range(5) for c in ([-2 + b, -3], [-2 + b, 3], [-3, -2 + b], [3, -2 + b])]},
 }
 AREA_SHAPES = {    # strategy effect area (strategy byte 0x0e); origin = target cell (always included)
     0: {'desc': 'target only', 'cells': []},

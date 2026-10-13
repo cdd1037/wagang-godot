@@ -503,6 +503,9 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
 45. **Experience for every target of a strike**: a miss gives the attacker the no-kill experience; the weapon's is
     judged per target; the armour of each red target gains at every strike, 3 only when the attacker is the lower
     (rules.md §8.1, §8.4). **Done** (`BattleActions.strikes`, `_weapon_gain`, `_armor_gain`, `t_rules`).
+46. **Range visiting order**: the AI's ties, its fallback target and 引导攻击's next target follow 0x436586's order
+    (up, right, down, left first), with the origin first for own-side searches; a unit on terrain it cannot stand on
+    does not move (0x438308). **Done** (`shapes.json` from `conv_data.py`, `Shapes.range_seq`, `t_rules`).
 
 ### Deliberate differences (port design, keep unless asked)
 

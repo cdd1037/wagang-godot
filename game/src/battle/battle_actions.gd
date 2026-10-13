@@ -94,6 +94,10 @@ func reachable(u: BUnit, parents: Dictionary = {}) -> Dictionary:
 		return {u.pos: 0}
 	var cost := func(c: Vector2i) -> int:
 		return Rules.move_cost(u, view().terrain_at(c))
+	# 0x438308 floods only when the unit could stand on its own cell (0x43f7cf ≠ 0xff): one a script put on
+	# impassable terrain stays where it is
+	if cost.call(u.pos) >= 999:
+		return {u.pos: u.move_points()}
 	var blocked := func(c: Vector2i) -> bool:
 		var o := st.unit_at(c, u)
 		return o != null and o.is_enemy_of(u) and not (u.flags & BUnit.F_PASS)
@@ -609,7 +613,7 @@ const PREFERRED := 0x4b2c28
 ## if it is there, else the last; null if none.
 func guided_target(u: BUnit) -> BUnit:
 	var found: BUnit = null
-	for c in attack_cells(u, u.pos):
+	for c in Shapes.range_seq(attack_range_code(u), u.pos, view().map_w, view().map_h):
 		var x := st.unit_on(c)
 		if x == null or (x.slot < 35) == (u.slot < 35) or x.hp == 0:
 			continue

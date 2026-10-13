@@ -548,6 +548,15 @@ ally-targeting strategies, 0x45540d). Exported as `shapes.json["range"]`.
 | 13 | manhattan 1..4 (40) |
 | 14 | (±3, -1..1) and (-1..1, ±3) (12) |
 | 15 | chebyshev-3 ring minus the 4 corners (20) |
+Visiting order (read from the switch; `shapes.json` lists the cells in it, repeats included): 0x437bfa takes the 4
+neighbours by table 0x48df68 (up, right, down, left), 0x437c7a the diagonals by 0x48df48 (up-right, down-right,
+down-left, up-left). Code 0 = 4 neighbours; 1 = neighbours, diagonals; 2 = diagonals, then (−2,0) (2,0) (0,−2) (0,2);
+3, 4, 12, 13 add rows (−1..1, ∓d) and columns (±d, −1..1) per distance, then the axis ends (4 and 13 the (±2,±2)
+corners first); 7/8/9 = mod 0x4d7bce(2/3/1), rings from distance n + 2 down to 3, each (c, j) as (−c,−j) (c,j) (−c,j)
+(c,−j), so the cells on the axes come twice; 10 row by row (0x437ce9). An own-side search (flags bit 0) visits the
+origin first. The collector 0x437a04 appends every unit it meets, duplicates and all; BestPhysical keeps the first
+strictly best, and 0x436586 itself returns [0x4b2c28] when listed, else the last unit (引导攻击, the AI's fallback).
+A unit that cannot stand on its own cell (0x43f7cf = 0xff) gets no move flood (0x438308): it stays.
 Unit attack-range overrides (0x43f8be): status bit 0x20 → 11 (cannot attack); while a 绝招 runs ([0x4cf314]): persons
 5,14,19,26 → 0, person 8 → 6; otherwise person 0xcc → 12 and person 25 with class 41 → 4; effect 42 远距攻击 → code = effect value
 (金纂提炉枪 → 6, 铉铁枪头 → 1); effect 21 强化间谍 with class 15/16/17 → 7/8/8; else class.attack_range.

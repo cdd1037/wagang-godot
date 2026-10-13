@@ -11,13 +11,23 @@ static func _data() -> Dictionary:
 	return _d
 
 
-## Cells (absolute) reachable by range `code` from `c`. 10 = whole map, 11 = none.
+## Cells (absolute) reachable by range `code` from `c`, each once, in the order 0x436586 first visits them (the origin
+## first when it is included, as for own-side searches). 10 = whole map, 11 = none.
 static func range_cells(code: int, c: Vector2i, w: int, h: int, include_origin := false) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	if code == 11:
-		if include_origin:
-			out.append(c)
-		return out
+	for p in range_seq(code, c, w, h, include_origin):
+		if not out.has(p):
+			out.append(p)
+	return out
+
+
+## The cells 0x436586 visits for range `code` from `c`, in its order and with its repeats (rings 7..9 pass the cells
+## on the axes twice; whole map with the origin has it twice): a unit list built from it, as the collector 0x437a04
+## builds one, has a unit as often as its cell comes.
+static func range_seq(code: int, c: Vector2i, w: int, h: int, include_origin := false) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if include_origin:
+		out.append(c)
 	if code == 10:
 		for y in h:
 			for x in w:
@@ -28,8 +38,6 @@ static func range_cells(code: int, c: Vector2i, w: int, h: int, include_origin :
 		var p := c + Vector2i(int(o[0]), int(o[1]))
 		if p.x >= 0 and p.y >= 0 and p.x < w and p.y < h:
 			out.append(p)
-	if include_origin and not out.has(c):
-		out.append(c)
 	return out
 
 
