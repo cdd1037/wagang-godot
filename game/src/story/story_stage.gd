@@ -374,7 +374,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if pid >= 0:
 				get_viewport().set_input_as_handled()
 				var g: int = _press[1]
-				get_tree().create_timer(BattleView.LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
+				get_tree().create_timer(GameUI.LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
 		elif _press[0] >= 0:
 			var was: int = _press[0]
 			_press[0] = -1
@@ -411,12 +411,15 @@ func _show_info(pid: int) -> void:
 	_waiting_click = true
 
 
+## Touch: a finger held on an actor: 武将情报 as a right click shows it; its release is no tap either way (a long
+## press on someone who has none does not talk to them).
 func _long_press(g: int) -> void:
-	if g != _press[1] or _press[0] < 0 or not _waiting_click or not _info_ok(_press[0]):
+	if g != _press[1] or _press[0] < 0 or not _waiting_click:
 		return
 	var pid: int = _press[0]
-	_press[0] = -1             # its release is no tap
-	await _show_info(pid)
+	_press[0] = -1
+	if _info_ok(pid):
+		await _show_info(pid)
 
 
 func actor_at(p: Vector2) -> int:
@@ -483,8 +486,9 @@ func _dialog_top(pid: int) -> bool:
 # ------------------------------------------------------------------ scene
 ## op 0x27 (0x413d13): mode 0 = CG (Giji 0..39), 1 = scene 114+, 2 = room 40+, 3 = battle map. The story actors stay
 ## (only op 0x2f, op 0x11, battle init and loading clear them, 0x426bd5). Every mode repaints the scene view
-## (0x42c223 → 0x40bc37), which wipes the captions; the portraits and the caption position and band are reset only
-## on entering mode 1 (0x433310 → 0x43327a).
+## (0x42c223 → 0x40bc37), which wipes the captions, and outside the battle blanks the place pane (0x476882 draws "";
+## Addr.PLACE_TEXT keeps the text); the portraits and the caption position and band are reset only on entering
+## mode 1 (0x433310 → 0x43327a).
 func op_change_scene(ins: Dictionary) -> void:
 	var mode := arg(ins, 0)
 	var val := 0
@@ -506,6 +510,7 @@ func op_change_scene(ins: Dictionary) -> void:
 	if mode == 3:
 		bg.texture = null
 		return
+	ui.set_strip(1, "")
 	bg.texture = Assets.tex("gfx/backgrounds/%03d.png" % entry)
 	if mode == 1:
 		_clear_portraits()
@@ -736,6 +741,10 @@ func _apply_restore() -> void:
 		scene_image = int(d.get("scene_image", 0))
 		var entry := scene_image + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
 		bg.texture = Assets.tex("gfx/backgrounds/%03d.png" % entry)
+		# the status panes from the save's texts (load 0x41adc6 draws the title; a town, mode 2, draws both again,
+		# 0x42a054; any other mode starts with the place pane blank, 0x476882)
+		ui.set_strip(0, Mem.str_at(Addr.TITLE_TEXT))
+		ui.set_strip(1, Mem.str_at(Addr.PLACE_TEXT) if mode == 2 else "")
 	for e in d.get("actors", []):
 		var a := RpgActor.new()
 		actor_layer.add_child(a)

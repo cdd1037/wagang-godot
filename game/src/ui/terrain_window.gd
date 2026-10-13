@@ -205,6 +205,14 @@ func _on_wheel(d: int, _p: Vector2) -> void:
 	queue_redraw()
 
 
+## Touch: the table follows the finger, sideways by the pixel and up and down by the row (clamped when drawn).
+func _on_drag(d: Vector2, _at: Vector2) -> Vector2:
+	var n := int(d.y / RH)
+	top -= n
+	left -= d.x
+	return Vector2(d.x, n * RH)
+
+
 func _on_key(ev: InputEvent) -> bool:
 	if ev.is_action_pressed("ui_left"):
 		left -= COL_W

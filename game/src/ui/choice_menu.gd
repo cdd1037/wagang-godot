@@ -226,7 +226,7 @@ func _touch_input(ev: InputEventMouse) -> void:
 		if i >= 0 and info.is_valid():
 			_press_gen += 1
 			var g := _press_gen
-			get_tree().create_timer(BattleView.LONG_PRESS).timeout.connect(func() -> void: _long_press(g, i))
+			get_tree().create_timer(GameUI.LONG_PRESS).timeout.connect(func() -> void: _long_press(g, i))
 	elif _touch_down:
 		_touch_down = false
 		if _touch_outside:

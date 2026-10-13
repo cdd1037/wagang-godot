@@ -255,7 +255,7 @@ func info_test() -> void:
 		if Game.touch:
 			await st.view.center_on(u.pos, false)
 			await get_tree().process_frame
-			await _hold(st.view.cell_center(u.pos) - st.view.camera.position, BattleView.LONG_PRESS + 0.3)
+			await _hold(st.view.cell_center(u.pos) - st.view.camera.position, GameUI.LONG_PRESS + 0.3)
 		else:
 			await _click_cell(u.pos, MOUSE_BUTTON_RIGHT)
 		await _wait(0.5)

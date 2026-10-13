@@ -133,6 +133,7 @@ func new_game_state() -> void:
 		Mem.w32(0x4b0a04 + 4 * k, 0xffff)
 	ivars.clear()
 	play_time = 0.0
+	chapter_title = ""          # a new game's first saves are not labelled with the last game's chapter
 	_name_index.clear()
 	for p in persons:
 		if p.name != "" and not _name_index.has(p.name):

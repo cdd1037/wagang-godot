@@ -2,6 +2,9 @@ class_name GameUI
 extends CanvasLayer
 ## Top-level UI: dialog, menus, popups, banners, captions, fades, cutscene video.
 
+## Touch: holding a finger this long (s) acts as a right click.
+const LONG_PRESS := 0.5
+
 var dialog: DialogBox
 var menu: ChoiceMenu
 var video: VideoLayer

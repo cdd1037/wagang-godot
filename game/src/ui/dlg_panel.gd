@@ -41,6 +41,7 @@ class ListView:
 	var sel := -1
 	var page := 1                 # rows that fit (set when drawn)
 	var rect := Rect2()
+	var row_h := 0.0              # a row's height (set when drawn)
 	var sortable := false         # header cells are hits [key, -100 - column]
 	var header := true            # false: no header row
 
@@ -235,13 +236,25 @@ func _gui_input(ev: InputEvent) -> void:
 			_on_hover(k)
 			queue_redraw()
 		if _press_at != null and (ev.position - _press_at).length() > 10:
-			_press_at = null           # a drag, not a tap or a long press
+			_drag_at = _press_at       # a drag, not a tap or a long press: it scrolls
+			_drag_last = _press_at
+			_press_at = null
+		if _drag_at != null:
+			_drag_d += ev.position - _drag_last
+			_drag_last = ev.position
+			_drag_d -= _on_drag(_drag_d, _drag_at)
+			queue_redraw()
 	elif ev is InputEventMouseButton and Game.touch and ev.button_index == MOUSE_BUTTON_LEFT:
-		# touch: a tap acts on release; holding 0.5 s acts as a right click
+		# touch: a tap acts on release; holding 0.5 s acts as a right click; a drag scrolls
+		_drag_at = null
+		_drag_d = Vector2.ZERO
 		if ev.pressed:
 			_press_at = ev.position
 			_press_gen += 1
-			_long_press(_press_gen, ev.position)
+			var g := _press_gen
+			var at: Vector2 = ev.position
+			# a timer that calls back only while this panel exists (a tap that closes it frees it)
+			get_tree().create_timer(GameUI.LONG_PRESS).timeout.connect(func() -> void: _long_press(g, at))
 		elif _press_at != null:
 			_press_at = null
 			var k: Variant = _hit_at(ev.position)
@@ -250,9 +263,7 @@ func _gui_input(ev: InputEvent) -> void:
 			queue_redraw()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_RIGHT:
-			if not _on_right(_hit_at(ev.position)):
-				close()
-			queue_redraw()
+			_right_click(_hit_at(ev.position))
 		elif ev.button_index == MOUSE_BUTTON_LEFT:
 			var k: Variant = _hit_at(ev.position)
 			if k != null:
@@ -266,14 +277,23 @@ func _gui_input(ev: InputEvent) -> void:
 
 var _press_at: Variant = null         # touch: where the finger went down (null once it moved or acted)
 var _press_gen := 0
+var _drag_at: Variant = null          # touch: where a dragging finger went down (null: no drag)
+var _drag_last := Vector2.ZERO
+var _drag_d := Vector2.ZERO           # its travel not yet turned into scrolling
 
 
 func _long_press(gen: int, at: Vector2) -> void:
-	await get_tree().create_timer(0.5).timeout
 	if gen != _press_gen or _press_at == null or _done:
 		return
 	_press_at = null
-	_on_right(_hit_at(at))
+	await _on_right(_hit_at(at))
+	queue_redraw()
+
+
+## A right click on `key`: the window closes unless _on_right handles it (which may first open another window).
+func _right_click(key: Variant) -> void:
+	if not await _on_right(key):
+		close()
 	queue_redraw()
 
 
@@ -287,6 +307,17 @@ func _on_tap(key: Variant) -> void:
 	_on_hit(key)
 
 
+## Touch: a finger that went down at `at` has moved `d` (px) not yet used; return the part used. A list under it
+## scrolls a row per row height (finger down = earlier rows); windows that scroll otherwise override this.
+func _on_drag(d: Vector2, at: Vector2) -> Vector2:
+	for lv: ListView in _lists:
+		if lv.rect.has_point(at) and lv.row_h > 0:
+			var n := int(d.y / lv.row_h)
+			lv.scroll(-n)
+			return Vector2(d.x, n * lv.row_h)
+	return d
+
+
 func _on_wheel(d: int, p: Vector2) -> void:
 	for lv in _lists:
 		if (lv as ListView).rect.has_point(p):
@@ -294,8 +325,11 @@ func _on_wheel(d: int, p: Vector2) -> void:
 			queue_redraw()
 
 
-## A right click on `key` (null: none); return true when handled, else the window closes.
+## A right click on `key` (null: none); return true when handled, else the window closes. A coroutine, as the
+## overrides that open a detail window are, so that callers await one kind of function (see TestHooks).
 func _on_right(_key: Variant) -> bool:
+	if false:
+		await get_tree().process_frame
 	return false
 
 
@@ -324,6 +358,7 @@ func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) ->
 	if rh <= 0:
 		rh = 11 * dlu_scale.y
 	lv.rect = rect
+	lv.row_h = rh
 	_lists.append(lv)
 	draw_rect(rect, Color(0, 0, 0.05, 0.35))
 	draw_rect(rect, Color(0, 0, 0, 0.55), false, 1.0)

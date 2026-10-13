@@ -364,8 +364,6 @@ func _world_of(ev: InputEventMouse) -> Vector2:
 
 ## Finger travel (viewport px) before a touch counts as a drag instead of a tap.
 const TAP_SLOP := 10.0
-## Seconds a finger rests on a cell before it counts as a long press.
-const LONG_PRESS := 0.5
 
 
 ## Touch: a tap clicks a cell on release (and shows its unit / terrain, as hovering does with a mouse); dragging
@@ -394,7 +392,7 @@ func _touch_input(ev: InputEventMouse) -> void:
 			_drag_from = mb.position
 			_press_gen += 1
 			var g := _press_gen
-			get_tree().create_timer(LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
+			get_tree().create_timer(GameUI.LONG_PRESS).timeout.connect(func() -> void: _long_press(g))
 		elif _touch_down:
 			_touch_down = false
 			if not _touch_panned:

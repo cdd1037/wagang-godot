@@ -22,9 +22,12 @@ var _vp: SubViewport
 var _game_rect := Rect2()
 var _buttons: Array = []          # {text, sub, rect: Rect2, toggle: bool}
 var _held := -1                   # button under the pressing finger / mouse
+var _held_by := -1                # that finger's touch index (-1: the mouse); another finger's release is not its
 var _menu_ready := false          # the game waits at its top level (菜单 on, 返回 dimmed)
 var _shot_t := 0.0
 var _shot_n := 0
+var _shot_dir := OS.get_environment("WG_SHELLSHOT")
+var _shot_every := float(OS.get_environment("WG_SHOT_EVERY")) if OS.get_environment("WG_SHOT_EVERY") != "" else 3.0
 
 
 func _ready() -> void:
@@ -143,9 +146,11 @@ func _button_at(p: Vector2) -> int:
 func _input(ev: InputEvent) -> void:
 	var p: Vector2
 	var pressed: bool
+	var finger := -1
 	if ev is InputEventScreenTouch:
 		p = ev.position
 		pressed = ev.pressed
+		finger = ev.index
 	elif ev is InputEventMouseButton and ev.device != InputEvent.DEVICE_ID_EMULATION and ev.button_index == MOUSE_BUTTON_LEFT:
 		p = ev.position
 		pressed = ev.pressed
@@ -157,9 +162,10 @@ func _input(ev: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			if _enabled(i):
 				_held = i
+				_held_by = finger
 				queue_redraw()
 		return
-	if _held < 0:
+	if _held < 0 or finger != _held_by:
 		return
 	var was := _held
 	_held = -1
@@ -206,11 +212,11 @@ func _process(_d: float) -> void:
 		_menu_ready = ready
 		queue_redraw()
 	# debug: WG_SHELLSHOT=dir saves the whole screen (side bars included) every WG_SHOT_EVERY seconds (default 3)
-	var dir := OS.get_environment("WG_SHELLSHOT")
+	var dir := _shot_dir
 	if dir == "":
 		return
 	var now := Time.get_ticks_msec() / 1000.0
-	if now - _shot_t < float(OS.get_environment("WG_SHOT_EVERY") if OS.get_environment("WG_SHOT_EVERY") != "" else "3"):
+	if now - _shot_t < _shot_every:
 		return
 	_shot_t = now
 	_shot_n += 1

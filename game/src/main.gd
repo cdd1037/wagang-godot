@@ -466,6 +466,7 @@ func _load_slot(i: int) -> bool:
 		extra = {}
 	if _title_bg:
 		_title_bg.visible = false
+	ui.clear_strips()           # the loaded stage puts up the save's texts (StoryStage._apply_restore)
 	_pending_load = extra
 	# start after the caller's chain (possibly inside the old stage) has unwound
 	_run_flow.call_deferred()

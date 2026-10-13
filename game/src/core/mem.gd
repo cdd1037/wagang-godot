@@ -188,6 +188,15 @@ func str_at(addr: int, maxlen := 64) -> String:
 	return gbk(b)
 
 
+## Writes `s` at addr as a NUL-terminated GBK string (strcpy: no length limit, as the original's copies).
+func w_str(addr: int, s: String) -> void:
+	var b := s.to_multibyte_char_buffer("GBK")
+	if b.is_empty() or b[b.size() - 1] != 0:
+		b.append(0)
+	for k in b.size():
+		w8(addr + k, b[k])
+
+
 ## GBK bytes to a String. Godot 4.7's iconv conversion (os_unix multibyte_to_string) never returns for a
 ## single two-byte character such as 无 or 船, so a space goes along and comes off again.
 static func gbk(b: PackedByteArray) -> String:

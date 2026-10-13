@@ -114,3 +114,9 @@ func _on_hit(key: Variant) -> void:
 
 func _on_wheel(d: int, _p: Vector2) -> void:
 	_scroll(d * 3)
+
+
+func _on_drag(d: Vector2, _at: Vector2) -> Vector2:
+	var n := int(d.y / LH)
+	_scroll(-n)
+	return Vector2(d.x, n * LH)

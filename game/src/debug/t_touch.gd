@@ -1,6 +1,6 @@
 extends Node
-## Touch controls (Game.touch): BattleView taps / drag-pans and ChoiceMenu taps / drag-scrolls, fed through the
-## viewport like real (emulated-from-touch) mouse events. Prints "t_touch: PASS".
+## Touch controls (Game.touch): BattleView taps / drag-pans, ChoiceMenu and DlgPanel taps / drag-scrolls, fed
+## through the viewport like real (emulated-from-touch) mouse events. Prints "t_touch: PASS".
 
 var _ok := true
 
@@ -45,6 +45,7 @@ func _cancel() -> void:
 func run() -> void:
 	Game.new_game_state()
 	await _menu_tests()
+	await _panel_tests()
 	await _map_tests()
 	Game.touch = false
 	print("t_touch: PASS" if _ok else "t_touch: FAILED")
@@ -140,6 +141,63 @@ func _menu_tests() -> void:
 	Game.touch = true
 	m.queue_free()
 	await get_tree().process_frame
+
+
+## A window with a long list; a tap on a row picks it and, with `close_on_pick`, closes the window.
+class ListPanel extends DlgPanel:
+	var lv := DlgPanel.ListView.new()
+	var picked := []
+	var close_on_pick := false
+
+	func _init() -> void:
+		super()
+		dlu = Vector2(200, 160)
+		lv.columns = [["名称", 1]]
+		for i in 40:
+			lv.rows.append({"cells": ["行%d" % i]})
+
+	func _draw_dialog() -> void:
+		list_view(r(4, 4, 190, 150), lv, "list")
+
+	func _on_hit(k: Variant) -> void:
+		picked.append(k)
+		if close_on_pick:
+			close()
+			queue_free()
+
+
+## DlgPanel on touch: a drag scrolls the list under the finger and picks nothing; a tap picks on release; a tap that
+## closes the window leaves no long-press timer behind.
+func _panel_tests() -> void:
+	Game.touch = true
+	var p := ListPanel.new()
+	add_child(p)
+	for k in 2:
+		await get_tree().process_frame
+	var at := p.lv.rect.get_center()
+	var rh := p.lv.row_h
+	_check(rh > 0 and p.lv.page < 40, "panel list drawn with a row height and a page (%s, %d)" % [rh, p.lv.page])
+	await _button(at, true)
+	await _motion(at, at - Vector2(0, 20))
+	await _motion(at - Vector2(0, 20), at - Vector2(0, 5 * rh + 2))
+	await _button(at - Vector2(0, 5 * rh + 2), false)
+	_check(p.lv.top == 5, "panel: dragging up 5 rows scrolls 5 rows (top %d)" % p.lv.top)
+	_check(p.picked.is_empty(), "panel: a drag picks nothing (%s)" % [p.picked])
+	await _button(at, true)
+	await _motion(at, at + Vector2(0, 3 * rh + 15))
+	await _button(at + Vector2(0, 3 * rh + 15), false)
+	_check(p.lv.top == 2, "panel: dragging down 3 rows scrolls back 3 (top %d)" % p.lv.top)
+	await get_tree().process_frame
+	var row := p.lv.top + 1
+	var rp := Vector2(at.x, p.lv.rect.position.y + rh * 1.5 + rh)      # header, then the second visible row
+	await _button(rp, true)
+	await _button(rp, false)
+	_check(p.picked.size() == 1 and p.picked[0] == ["list", row], "panel: a tap picks row %d (%s)" % [row, p.picked])
+	p.close_on_pick = true
+	await _button(rp, true)
+	await _button(rp, false)
+	_check(not is_instance_valid(p) or p.is_queued_for_deletion(), "panel: the tap closed it")
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.2).timeout     # its long-press timer fires on nothing
 
 
 func _map_tests() -> void:

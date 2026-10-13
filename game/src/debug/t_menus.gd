@@ -242,4 +242,30 @@ func _windows(ui: GameUI) -> void:
 	_check(not st.menu_ready(), "GS+2 = 0: no menu")
 	Mem.w16(Mem.GS + 2, 1)
 	_check(st.menu_ready(), "GS+2 = 1: menu")
+	await _panes(ui, st)
 	st.queue_free()
+
+
+## The status panes: ops 0x18 / 0x17 keep their texts in memory (0x40bb48 / 0x40bb78), which saves carry (0x41b240)
+## and a load puts up again (0x41adc6, 0x42a054); a scene change outside the battle blanks the place pane (0x476882).
+func _panes(ui: GameUI, st: StoryStage) -> void:
+	var auto := Game.autoplay
+	Game.autoplay = true                        # no timed boxes
+	st.vm = EexVM.new()
+	await st.op_title_text({"args": ["第一章  瓦岗聚义"]})
+	await st.op_place_name({"args": ["浮云洲往登州途中  船上\n&x"]})
+	_check(ui._strips[0].text == "第一章  瓦岗聚义" and ui._strips[1].text == "浮云洲往登州途中  船上", "panes: the texts show")
+	var snap := Mem.snapshot()
+	st.op_change_scene({"args": [2, 0, 0, 5, 0]})
+	_check(ui._strips[0].text == "第一章  瓦岗聚义" and ui._strips[1].text == "", "panes: a scene change blanks the place")
+	Mem.reset()
+	ui.clear_strips()
+	Mem.restore(snap)
+	st.restore_state({"kind": "story", "scene_kind": 2, "scene_image": 5})
+	st._apply_restore()
+	_check(ui._strips[0].text == "第一章  瓦岗聚义" and ui._strips[1].text == "浮云洲往登州途中  船上",
+			"panes: a town save puts both up again")
+	st.restore_state({"kind": "story", "scene_kind": 1, "scene_image": 5})
+	st._apply_restore()
+	_check(ui._strips[0].text == "第一章  瓦岗聚义" and ui._strips[1].text == "", "panes: a scene save only the title")
+	Game.autoplay = auto

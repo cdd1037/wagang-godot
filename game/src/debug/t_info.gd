@@ -308,7 +308,7 @@ func _long_press_tests() -> void:
 	v.long_press_ok = func(c: Vector2i) -> bool: return c == Vector2i(2, 2)
 	# a long press on a unit's cell is a pointer right click there; its release clicks nothing
 	await _button(Vector2(100, 100), true)
-	await get_tree().create_timer(BattleView.LONG_PRESS + 0.15).timeout
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.15).timeout
 	_check(clicks == [[Vector2i(2, 2), MOUSE_BUTTON_RIGHT, true]], "long press → right click on (2,2): %s" % [clicks])
 	await _button(Vector2(100, 100), false)
 	_check(clicks.size() == 1, "its release is no tap: %s" % [clicks])
@@ -316,12 +316,12 @@ func _long_press_tests() -> void:
 	clicks.clear()
 	await _button(Vector2(100, 100), true)
 	await _button(Vector2(100, 100), false)
-	await get_tree().create_timer(BattleView.LONG_PRESS + 0.15).timeout
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.15).timeout
 	_check(clicks == [[Vector2i(2, 2), MOUSE_BUTTON_LEFT, clicks[0][2] if clicks.size() > 0 else false]], "tap → left click: %s" % [clicks])
 	# a long press elsewhere (no unit) does nothing
 	clicks.clear()
 	await _button(Vector2(300, 300), true)
-	await get_tree().create_timer(BattleView.LONG_PRESS + 0.15).timeout
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.15).timeout
 	_check(clicks.is_empty(), "long press on an empty cell does nothing: %s" % [clicks])
 	await _button(Vector2(300, 300), false)
 	# Esc is a right click, but not from the pointer
@@ -407,7 +407,7 @@ func _story_tests() -> void:
 	ev.button_index = MOUSE_BUTTON_LEFT
 	ev.pressed = true
 	st._unhandled_input(ev)
-	await get_tree().create_timer(BattleView.LONG_PRESS + 0.15).timeout
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.15).timeout
 	w = find_info.call()
 	_check(w != null and clicked.is_empty(), "story: long press opens 武将情报")
 	var up := ev.duplicate()
@@ -446,7 +446,7 @@ func _menu_info_tests() -> void:
 	_check(infos == [1] and res[0] == -2, "right click on row 1 shows info, keeps the menu: %s %d" % [infos, res[0]])
 	Game.touch = true
 	await _button(m._row_rect(2).get_center(), true)
-	await get_tree().create_timer(BattleView.LONG_PRESS + 0.15).timeout
+	await get_tree().create_timer(GameUI.LONG_PRESS + 0.15).timeout
 	await _button(m._row_rect(2).get_center(), false)
 	_check(infos == [1, 2] and res[0] == -2, "long press on row 2 shows info, picks nothing: %s %d" % [infos, res[0]])
 	await _button(m._row_rect(0).get_center(), true)

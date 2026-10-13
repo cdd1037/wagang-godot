@@ -337,22 +337,24 @@ func op_chapter_title(ins: Dictionary) -> void:
 	await ui.chapter_title(arg(ins, 0), sarg(ins, 1))
 
 
-## op 0x18 标题显示 (0x413b09 → 0x40bb48): outside battles the text goes into the title pane; then it shows in a
-## timed box.
+## op 0x18 标题显示 (0x413b09 → 0x40bb48): the text is kept at Addr.TITLE_TEXT; outside battles it goes into the
+## title pane; then it shows in a timed box.
 func op_title_text(ins: Dictionary) -> void:
 	var t := sarg(ins, 0)
+	Mem.w_str(Addr.TITLE_TEXT, t)
 	if not in_battle():
 		ui.set_strip(0, t)
 	await ui.message(t)
 
 
-## op 0x17 地名显示 (mod 0x4d0fbf → 0x40bb78): the text up to a "\n&"; outside battles it goes into the place pane;
-## then it shows in a timed box.
+## op 0x17 地名显示 (mod 0x4d0fbf → 0x40bb78): the text up to a "\n&", kept at Addr.PLACE_TEXT; outside battles it
+## goes into the place pane; then it shows in a timed box.
 func op_place_name(ins: Dictionary) -> void:
 	var t := sarg(ins, 0)
 	var cut := t.find("\n&")
 	if cut >= 0:
 		t = t.substr(0, cut)
+	Mem.w_str(Addr.PLACE_TEXT, t)
 	if not in_battle():
 		ui.set_strip(1, t)
 	await ui.message(t)

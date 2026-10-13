@@ -23,6 +23,7 @@ var _u: BUnit
 var _skill := ["", ""]
 var _strats: Array[int] = []
 var _strat_top := 0
+var _strat_rh := 0.0          # a strategy row's height (set when drawn)
 
 
 ## Show the window for list[index] (0x479728). Outside battle it opens only for party members (0x407060).
@@ -363,6 +364,7 @@ func _page_strategy() -> void:
 	var box := pr(4, 1, 88, 152)
 	_sunken(box)
 	var rh := box.size.y / (STRAT_ROWS + 1)
+	_strat_rh = rh
 	var sb := 16.0 if _strats.size() > STRAT_ROWS else 0.0      # scroll buttons' column
 	var head := Rect2(box.position, Vector2(box.size.x, rh))
 	draw_rect(head, Color(0.16, 0.24, 0.46, 0.9))
@@ -501,6 +503,14 @@ func _on_wheel(d: int, _p2: Vector2) -> void:
 	if tab == 2:
 		_strat_top += d
 		queue_redraw()
+
+
+func _on_drag(d: Vector2, _at: Vector2) -> Vector2:
+	if tab != 2 or _strat_rh <= 0:
+		return d
+	var n := int(d.y / _strat_rh)
+	_strat_top -= n                 # clamped when drawn
+	return Vector2(d.x, n * _strat_rh)
 
 
 func _on_key(ev: InputEvent) -> bool:

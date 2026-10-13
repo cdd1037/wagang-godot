@@ -15,6 +15,10 @@ const SAVE_ALLOWED := 0x4ce004
 ## bytes each), which 出战位置 shows.
 const TOWN_DEPLOY_ON := 0x55e9d4
 const TOWN_DEPLOY := 0x55e9d8
+## The town's status panes keep their texts here (op 0x18 → 0x40bb48, op 0x17 → 0x40bb78); saves carry them in the
+## header (0x41b240) and a load puts them back (0x41adc6), so a town shows them again (0x42a054).
+const TITLE_TEXT := 0x4a1128
+const PLACE_TEXT := 0x4b0758
 ## Pointer tables of the exe's GBK names: weapon kinds, strategy effect names, terrain names.
 const WEAPON_KIND_NAMES := 0x48bc20
 const EFFECT_NAMES := 0x48bd40
