@@ -21,6 +21,8 @@ static func autoslot() -> int:
 
 
 func boot(main: Node) -> bool:
+	if OS.get_environment("WG_SEED") != "":
+		Rules.rng.seed = int(OS.get_environment("WG_SEED"))     # the same rolls on every run (comparing two builds)
 	var autosave := OS.get_environment("WG_AUTOSAVE") != ""
 	if autosave and autoslot() < main.SAVE_SLOTS:
 		printerr("WG_AUTOSLOT=%d is one of the player's save slots 0-%d: use 11 or higher" % [autoslot(), main.SAVE_SLOTS - 1])

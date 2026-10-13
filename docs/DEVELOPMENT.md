@@ -29,6 +29,7 @@ All options are environment variables read at start-up, for example
 | `WG_PARTY=0,8,13` | With `WG_START`: add these person ids to the party |
 | `WG_SETFLAGS=755,…` | With `WG_START`: preset story flags that an earlier branch would have set |
 | `WG_LOADSLOT=n` | Skip the title and load save slot *n* |
+| `WG_SEED=n` | Seed the game's random rolls, so two runs (or two builds) play alike as far as timing allows |
 | `WG_STOP=n` | Quit when scenario *n* is reached |
 | `WG_NOVIDEO=1` | Skip cutscene videos |
 | `WG_HD=0` | Show the original art instead of the HD graphics pack (for comparisons) |
