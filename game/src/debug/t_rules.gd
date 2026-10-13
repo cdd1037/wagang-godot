@@ -99,9 +99,36 @@ func run() -> void:
 	_add_stat()
 	_buff_rates()
 	await _strike_exp()
+	await _item_sounds()
 
 	Game.main = old_main
 	print("t_rules: PASS" if _ok else "t_rules: FAILED")
+
+
+## 0x41ccdf: an HP item runs the use animation (SE 41) and plays no SE 19 (SE 19 is only a terrain change's).
+func _item_sounds() -> void:
+	_clear()
+	var a := _unit(0, 2, Vector2i(5, 5))
+	var b := _unit(1, 3, Vector2i(5, 6))
+	st.refresh_units()
+	b.hp = b.max_hp() - 50
+	var was := Game.instant
+	Game.instant = false
+	var ses: Array[String] = []
+	var on_se := func(n: String) -> void: ses.append(n)
+	Audio.se_played.connect(on_se)
+	var hp_item := -1
+	for i in 104:
+		if Game.item_rule(i).get("kind") == "heal_hp":
+			hp_item = i
+			break
+	Game.add_item(hp_item)
+	var entry := {"id": hp_item, "count": 1}
+	await st.actions.use_item(a, entry, b)
+	Audio.se_played.disconnect(on_se)
+	Game.instant = was
+	_check(a.node != null and "se41" in ses and not "se19" in ses, "HP item: SE 41 of the use animation, no SE 19: %s" % [ses])
+	_check(b.hp > b.max_hp() - 50, "and it heals")
 
 
 ## 0x405e03: experience for every target, hit or miss; armour experience per strike (attacker below the wearer → 3,

@@ -11,7 +11,6 @@ var _strikes_done := 0
 ## Sound ids from the engine (wave player 0x47467a call sites): hit 0x23 / critical 0x24 (0x40437b),
 ## no-damage 0x1e / 0x1f (0x4043fa), level-up 0x0b (0x4074ff), equipment level-up 0x0d (0x4084db),
 ## retreat 0x10 (0x441814), vanish 0x11 (0x441be8), appear 0x2a / 0x0f (0x4570ee).
-const SE_HEAL := "se19"
 const SE_LEVELUP := "se11"
 const SE_EQUIP_UP := "se13"
 
@@ -1332,7 +1331,6 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		"hp":
 			var h2 := Rules.heal_amount(u, t, s, false)
 			t.hp = mini(t.hp + h2, t.max_hp())
-			Audio.play_se(SE_HEAL)
 			if not Game.instant: st.hud.popup_number("+%d" % h2, t.pos, Color(0.4, 1, 0.4))
 		"mp":
 			var m := Rules.heal_amount(u, t, s, false)
@@ -1405,7 +1403,6 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 			await _strategy_bun(t, dmg)
 	elif amount < 0:
 		t.hp -= amount
-		Audio.play_se(SE_HEAL)
 		if not Game.instant:
 			st.hud.popup_number("+%d" % -amount, t.pos, Color(0.4, 1, 0.4))
 	st.refresh_units()
@@ -1493,8 +1490,8 @@ func eat_bun(t: BUnit) -> void:
 	if not free and Game.stack_count(BUN) <= 0:
 		return
 	var h := heal_value(BUN, t)
+	await _use_anim(t, t, BUN, 0xff)        # through the HP item handler 0x41ccdf
 	t.hp += h
-	Audio.play_se(SE_HEAL)
 	if not Game.instant:
 		st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 	if not free:
@@ -1550,20 +1547,23 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 	if item_checked_after(iid):
 		if not await _item_check(r, p):
 			return false
-	else:
-		Audio.play_se(SE_HEAL)
 	match r.get("kind"):
 		"heal_hp":
+			# 0x41ccdf / 0x41ce3d: the use animation without an effect, then the heal
+			await _use_anim(u, t, iid, 0xff)
 			var h := heal_value(iid, t)
 			t.hp += h
 			st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 		"heal_mp":
+			await _use_anim(u, t, iid, 0xff)
 			var m := heal_value(iid, t)
 			t.mp += m
 			st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
 		"cure":
+			await _use_anim(u, t, iid, 44)          # 0x41cf61 (types 65..69): Xben 44 over the target
 			t.status &= ~int(r["mask"])
 		"all_up":
+			await _use_anim(u, t, iid, 44)
 			# 太保令 (mod 0x4d2d5a): the five stat words +2 (at most 9999) and the abilities +2 (at most 100), no buff;
 			# the unit's poses 11 and 7 (0x45778f)
 			for i in 5:
