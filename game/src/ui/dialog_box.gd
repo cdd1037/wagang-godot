@@ -92,13 +92,13 @@ func talk(face_tex: Texture2D, name: String, text: String, top := false) -> void
 	visible = true
 	_layout(top)
 	queue_redraw()
-	if Game.demo:
+	if Game.auto_input and not Game.instant:
 		await get_tree().create_timer(1.6).timeout
 		_label.visible_characters = -1
 		await get_tree().create_timer(0.8).timeout
 		visible = false
 		return
-	if Game.autoplay:
+	if Game.auto_input:
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [%s] %s" % [name, text.replace("\n", " ")])
 		await get_tree().process_frame

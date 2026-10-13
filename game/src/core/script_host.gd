@@ -200,7 +200,7 @@ func op_data_transfer(ins: Dictionary) -> void:
 
 # ------------------------------------------------------------------ timing / screen
 func wait(sec: float) -> void:
-	if fast or sec <= 0 or Game.autoplay:
+	if fast or sec <= 0 or Game.instant:
 		return
 	await get_tree().create_timer(sec).timeout
 
@@ -603,7 +603,7 @@ func op_screen_mode(ins: Dictionary) -> void:
 	Game.ending_reached = true
 	Audio.stop_bgm()
 	SoundMap.stop_loop()
-	if not Game.autoplay:
+	if not Game.instant:
 		ui.set_black(true)
 		var s := Sprite2D.new()
 		s.centered = false

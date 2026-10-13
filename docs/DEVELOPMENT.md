@@ -41,6 +41,11 @@ All options are environment variables read at start-up, for example
 |---|---|
 | `WG_AUTO=1` | Autoplay: the AI plays your phase, dialogue and waits are instant, menus pick automatically, story scenes click characters |
 | `WG_DEMO=1` | Like autoplay but at normal speed (watchable) |
+
+In the code the two halves are separate flags: `Game.auto_input` (both variables: the game makes every click, choice
+and command itself) and `Game.instant` (`WG_AUTO` only: waits, animations, pans, fades, banners and popups are
+skipped). A check about who decides asks `auto_input`, one about what is shown asks `instant`. `Game.autoplay` sets or
+reads both at once; only the harness and the unit checks use it (`t_parse` fails on it in game code).
 | `WG_RANDOM=1` | Autoplay picks random choices and clicks (otherwise deterministic) |
 | `WG_CLICKS=608,600,…` | Autoplay clicks these actors first, in order, each as soon as its click would run a section (a guided run through a puzzle; R_14's poem: `608,600,609,602,616,604,617,606,614,648,615,653,618,655,619,657`) |
 | `WG_CLICKCAP=n` | With `WG_AUTOSAVE`: end a story file after *n* autoplay clicks instead of 2,500 |

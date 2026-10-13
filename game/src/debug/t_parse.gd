@@ -60,7 +60,8 @@ func run() -> void:
 	print("t_parse: %s (%d scripts, %d opcodes in use, %d bad)" % ["PASS" if bad == 0 else "FAILED", files.size(), n, bad])
 
 
-## Scripts outside src/debug whose code (comments aside) names a class_name declared in src/debug.
+## Scripts outside src/debug whose code (comments aside) names a class_name declared in src/debug, or Game.autoplay
+## (the harness's shorthand: game code asks Game.auto_input or Game.instant, core/game.gd).
 func _debug_names(files: Array) -> int:
 	var names: Array[String] = []
 	for f: String in files:
@@ -68,6 +69,7 @@ func _debug_names(files: Array) -> int:
 			var m := RegEx.create_from_string("(?m)^class_name\\s+(\\w+)").search(FileAccess.get_file_as_string(f))
 			if m:
 				names.append(m.get_string(1))
+	names.append("Game\\.autoplay")
 	var word := RegEx.create_from_string("\\b(" + "|".join(names) + ")\\b")
 	var bad := 0
 	for f: String in files:
@@ -82,7 +84,8 @@ func _debug_names(files: Array) -> int:
 				code = code.substr(0, h)
 			var m := word.search(code)
 			if m:
-				print("t_parse: %s:%d names the debug class %s" % [f, k, m.get_string(1)])
+				print("t_parse: %s:%d names %s" % [f, k, m.get_string(1) if m.get_string(1) == "Game.autoplay"
+						else "the debug class " + m.get_string(1)])
 				bad += 1
 	return bad
 

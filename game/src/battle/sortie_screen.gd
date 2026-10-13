@@ -38,7 +38,7 @@ static func choose(ui: CanvasLayer, stage: Node, maxn: int, lst: Array[int], f: 
 	w._stage = stage
 	w.dlu_scale = Vector2.ONE
 	w.dlu = Vector2(626, 466)
-	if Game.autoplay:
+	if Game.auto_input:
 		var out: Array[int] = []
 		for i in mini(w.most, lst.size()):
 			out.append(lst[i])

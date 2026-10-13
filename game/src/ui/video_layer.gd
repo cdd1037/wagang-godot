@@ -27,7 +27,7 @@ func _init() -> void:
 ## name: e.g. "pre", "end", "001"
 func play(name: String) -> void:
 	var v := Assets.video("video/%s.ogv" % name.to_lower())
-	if v == null or Game.autoplay:
+	if v == null or Game.instant:
 		return
 	var prev_track := Audio.current_track
 	Audio.bgm_player.stream_paused = true

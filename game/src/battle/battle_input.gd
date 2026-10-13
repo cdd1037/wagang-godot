@@ -46,7 +46,7 @@ func player_phase() -> void:
 		st.view.cursor_cell = pu[0].pos
 	if await Game.hooks.player_phase(self):     # the input bot (WG_INPUTBOT, WG_FXTEST) when the build has it
 		return
-	if Game.autoplay or Game.demo:
+	if Game.auto_input:
 		await _auto_player_phase()
 		return
 	if pu.is_empty():

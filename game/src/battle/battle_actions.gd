@@ -27,7 +27,7 @@ func view() -> BattleView:
 
 ## t seconds of animation (none under autoplay, or once the stage has left the tree: 回到标题 / a load mid-way).
 func wait(t: float) -> void:
-	if Game.autoplay or t <= 0 or not is_instance_valid(st) or not st.is_inside_tree():
+	if Game.instant or t <= 0 or not is_instance_valid(st) or not st.is_inside_tree():
 		return
 	await st.get_tree().create_timer(t).timeout
 
@@ -126,7 +126,7 @@ func move_unit(u: BUnit, path: Array[Vector2i]) -> void:
 		u.dir = d
 		n.dir = d
 		n.queue_redraw()
-		if Game.autoplay:
+		if Game.instant:
 			n.position = view().cell_pos(c)
 		else:
 			var tw := n.create_tween()
@@ -364,7 +364,7 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 		Mem.w8(STRIKE, 1)
 		if not def.active() or not att.active():
 			break
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number("连击！", att.pos, Color(1, 0.9, 0.3))
 	if att.has_effect(81) and total_damage > 0:
 		att.hp = mini(att.hp + total_damage / 2, att.max_hp())
@@ -721,7 +721,7 @@ static func swing_kind(att: BUnit) -> int:
 
 
 func _anim_strike(att: BUnit, targets: Array[BUnit], hits: Array[bool], dmgs: Array[int], crit: bool) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var table := anim_table(att)
 	var archer := swing_kind(att) == 0
@@ -912,7 +912,7 @@ func unit_fell(u: BUnit) -> void:
 	u.hp = 0
 	u.extra["dying"] = true
 	Mem.set_ev(10, 1)
-	if u.node and not Game.autoplay:
+	if u.node and not Game.instant:
 		Audio.play_se(SE_DIE)
 		var n := u.node
 		for k in 6:
@@ -933,7 +933,7 @@ func gain_exp(u: BUnit, e: int) -> void:
 	var p := u.person
 	if p.level >= 70 or e <= 0:
 		return
-	if not Game.autoplay:
+	if not Game.instant:
 		st.hud.popup_number("经验 +%d" % e, u.pos, Color(0.6, 1, 0.6))
 	await set_exp(p, p.exp + e)
 
@@ -964,7 +964,7 @@ func _show_level_up(p: Person, g: Array) -> void:
 	var texts := p.level_up_texts(g)
 	for i in texts.size():
 		if i == 0 and detail:
-			await st.ui.popup(texts[i], 0.0 if not Game.demo else 1.2)
+			await st.ui.popup(texts[i], 1.2 if Game.auto_input else 0.0)
 		else:
 			await st.ui.message(texts[i])
 
@@ -1211,7 +1211,7 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	if Rules.handler(s) == "again" and not targets.is_empty():
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
-	if not Game.autoplay:
+	if not Game.instant:
 		st.hud.popup_number(str(sd.get("name", "")), u.pos, Color(0.8, 0.9, 1))
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.CHEER, u.dir)
@@ -1224,14 +1224,14 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 		# 0x2d at the caster), any other is set after SE 134 and 1.5 s (0x449f91). 20 EXP either way (0x420efb).
 		var w := st.weather_strategy_level(s)
 		if w == st.weather_level:
-			if not Game.autoplay:
+			if not Game.instant:
 				var e := EffectPlayer.create("xben", 0x2d)
 				if e:
 					e.position = view().cell_center(u.pos)
 					view().fx_layer.add_child(e)
 					await e.done
 		else:
-			if not Game.autoplay:
+			if not Game.instant:
 				Audio.se_m(34)
 				await wait(1.5)
 			await st.set_weather(w)
@@ -1274,7 +1274,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 	# heals (0x42378d) have no hit roll: the amount is capped by what is missing
 	var hit := h == "heal" or Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
 	if not hit:
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number("失败", t.pos, Color(0.7, 0.7, 0.7))
 		return _strat_exp(u, t, false, false)
 	if r.get("assassinate", false):
@@ -1284,7 +1284,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		Mem.w8(BattleStage.ASSASSIN_MARK + t.slot, 2)
 		Mem.w8(BattleStage.ASSASSIN_LINK + t.slot, u.slot)
 		Mem.w8(BattleStage.ASSASSIN_HIT, Mem.r8(BattleStage.ASSASSIN_HIT) ^ 1)
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number("暗杀", t.pos, Color(0.8, 0.5, 1))
 		return _strat_exp(u, t, false, false)
 	if damage_set:
@@ -1292,11 +1292,11 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		if Rules.strat_mp_damage(s):
 			t.mp = maxi(t.mp - dmg, 0)
 			t.extra["mp_taken"] = dmg
-			if not Game.autoplay:
+			if not Game.instant:
 				st.hud.popup_number("策略 -%d" % dmg, t.pos, Color(0.5, 0.6, 1))
 			return _strat_exp(u, t, false, true)
 		var killed := dmg >= t.hp
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number(str(dmg), t.pos)
 			if t.node:
 				t.node.set_pose(UnitSprite.Pose.HURT, t.dir)
@@ -1321,11 +1321,11 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 			var h2 := Rules.heal_amount(u, t, s, false)
 			t.hp = mini(t.hp + h2, t.max_hp())
 			Audio.play_se(SE_HEAL)
-			if not Game.autoplay: st.hud.popup_number("+%d" % h2, t.pos, Color(0.4, 1, 0.4))
+			if not Game.instant: st.hud.popup_number("+%d" % h2, t.pos, Color(0.4, 1, 0.4))
 		"mp":
 			var m := Rules.heal_amount(u, t, s, false)
 			t.mp = mini(t.mp + m, t.max_mp())
-			if not Game.autoplay: st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
+			if not Game.instant: st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
 	match h:
 		"again":                            # 战备 (0x423960)
 			t.moved = false
@@ -1384,7 +1384,7 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 				_stat_code(t, c)
 	if amount > 0:
 		var dmg := mini(amount, t.hp)
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number(str(dmg), t.pos)
 		_apply_damage(t, dmg)
 		if t.hp == 0:
@@ -1394,7 +1394,7 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 	elif amount < 0:
 		t.hp -= amount
 		Audio.play_se(SE_HEAL)
-		if not Game.autoplay:
+		if not Game.instant:
 			st.hud.popup_number("+%d" % -amount, t.pos, Color(0.4, 1, 0.4))
 	st.refresh_units()
 	return e
@@ -1424,7 +1424,7 @@ func _stat_code(t: BUnit, code: int) -> void:
 
 func _buff(t: BUnit, i: int, up: bool) -> void:
 	t.set_buff(i, Rules.buff_step(t.buff(i), up))
-	if not Game.autoplay:
+	if not Game.instant:
 		var names := ["攻击", "防御", "精神", "爆发", "士气", "移动"]
 		st.hud.popup_number(names[i] + ("↑" if up else "↓"), t.pos, Color(1, 0.9, 0.4) if up else Color(0.7, 0.6, 1))
 
@@ -1483,7 +1483,7 @@ func eat_bun(t: BUnit) -> void:
 	var h := heal_value(BUN, t)
 	t.hp += h
 	Audio.play_se(SE_HEAL)
-	if not Game.autoplay:
+	if not Game.instant:
 		st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 	if not free:
 		Game.remove_item_id(BUN)
@@ -1611,7 +1611,7 @@ func _item_check(r: Dictionary, p: Person) -> bool:
 ## SE 41, raises it while cheering (10 ticks); then the icon fades in over the target (16 ticks) and the Xben
 ## effect `xben` plays there (0xff none).
 func _use_anim(u: BUnit, t: BUnit, iid: int, xben: int) -> void:
-	if Game.autoplay or u.node == null:
+	if Game.instant or u.node == null:
 		return
 	var tex := Assets.tex("gfx/icons/items/large/%03d.png" % int(Game.item(iid).get("icon", 0)))
 	await view().ensure_visible(u.pos)
@@ -1652,7 +1652,7 @@ func _promote(u: BUnit, t: BUnit, iid: int) -> void:
 	t.mp = t.max_mp()
 	await st.unit_ops.op_unit_status({"args": [p.id, 11, 0, 0]})
 	p.cls = old + 1
-	if t.node and not Game.autoplay:
+	if t.node and not Game.instant:
 		Audio.se(0x21)
 		for i in 16:
 			t.node.flash = ((i >> 1) + 1) / 15.0

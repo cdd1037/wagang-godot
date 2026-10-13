@@ -22,12 +22,23 @@ var portraits: Dictionary = {}
 
 # runtime state
 var persons: Array[Person] = []       # the party is person byte +0x2a (is_member), the bag is in GS (BAG)
-var autoplay := OS.get_environment("WG_AUTO") != ""
-var demo := OS.get_environment("WG_DEMO") != ""
+## Runs that play by themselves (docs/DEVELOPMENT.md): WG_AUTO at full speed, WG_DEMO at normal speed.
+## auto_input: the game makes every click, choice and command itself (story clicks, the player's battle turns, menus,
+## message boxes, shops, the sortie list), and what waits for a click waits a moment (WG_DEMO) or not at all.
+var auto_input := OS.get_environment("WG_AUTO") != "" or OS.get_environment("WG_DEMO") != ""
+## instant (WG_AUTO): nothing is shown that only takes time (waits, animations, camera pans, fades, banners, popups,
+## videos); what changes the game's state runs as always.
+var instant := OS.get_environment("WG_AUTO") != ""
+## Both at once (WG_AUTO), for the harness and the unit checks; game code asks auto_input or instant (t_parse).
+var autoplay: bool:
+	get: return auto_input and instant
+	set(v):
+		auto_input = v
+		instant = v
 var god := OS.get_environment("WG_GOD") != ""   # debug: player side invulnerable & strong
 ## A test or bot run (autoplay, a jump start, the flow-test harness, the bots, the unit checks): it leaves the
 ## player's autosave and endings record (niuniu.bin) alone.
-var test_run := autoplay or demo or ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "WG_UIBOT", "TEST"].any(
+var test_run := auto_input or ["WG_START", "WG_AUTOSAVE", "WG_INPUTBOT", "WG_UIBOT", "TEST"].any(
 		func(e: String) -> bool: return OS.get_environment(e) != "")
 var history: Array = []
 var ending_reached := false

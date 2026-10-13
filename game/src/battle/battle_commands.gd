@@ -46,7 +46,7 @@ func _change_fx(u: BUnit, what: int, value: int) -> void:
 		for b in [[2, 0x32], [4, 0x33], [8, 0x30], [0x10, 0x31]]:
 			if value & b[0]:
 				fx = b[1]
-	if fx < 0 or Game.autoplay:
+	if fx < 0 or Game.instant:
 		return
 	await st.view.ensure_visible(u.pos)
 	if text != "":
@@ -227,7 +227,7 @@ func _heng_sao(u: BUnit, t: BUnit) -> void:
 	var a := Vector2i(1, 0) if u.pos.x == t.pos.x else Vector2i(0, 1)
 	cells.append_array([t.pos - a, t.pos - 2 * a, t.pos + a, t.pos + 2 * a])
 	st.actions.face(u, t.pos)
-	if u.node and not Game.autoplay:
+	if u.node and not Game.instant:
 		await u.node.play_attack(u.dir)
 	await st.unit_say(u.pid, "滚开,滚开!")
 	await _banner("横扫千军")
@@ -557,7 +557,7 @@ func give(u: BUnit, item: int) -> bool:
 ## 0x4d9bfd: the giver hands it over, the item's icon rises from him and settles on the receiver (SE 14), then
 ## "交出…".
 func _give_fx(u: BUnit, r: BUnit, item: int) -> void:
-	if not Game.autoplay:
+	if not Game.instant:
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.DEFEND, u.dir)
 		await st.actions.wait(0.3)

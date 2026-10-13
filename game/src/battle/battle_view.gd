@@ -214,7 +214,7 @@ func set_dim(on: bool) -> void:
 		return
 	dim_rect.position = Vector2.ZERO
 	dim_rect.size = Vector2(map_w * CELL, map_h * CELL)
-	if Game.autoplay:
+	if Game.instant:
 		dim_rect.visible = on
 		return
 	dim_rect.visible = true
@@ -300,7 +300,7 @@ func ensure_visible(c: Vector2i, animate := true) -> void:
 
 func _scroll_to(target: Vector2, animate: bool) -> void:
 	stop_scroll()
-	if not animate or Game.autoplay or camera.position.distance_to(target) < 1:
+	if not animate or Game.instant or camera.position.distance_to(target) < 1:
 		camera.position = target
 		return
 	var t := create_tween()

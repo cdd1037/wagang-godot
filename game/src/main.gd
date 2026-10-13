@@ -290,7 +290,7 @@ func game_over() -> void:
 	s.z_index = 50
 	ui.add_child(s)
 	await ui.fade_from_black()
-	if Game.autoplay:
+	if Game.instant:
 		s.queue_free()
 		to_title()
 		return

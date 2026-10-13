@@ -61,7 +61,7 @@ func _assassination_countdown(a: int, b: int) -> void:
 			u.hp = 1
 			Mem.set_ev(10, 1)
 			st.refresh_units()
-			if not Game.autoplay:
+			if not Game.instant:
 				await st.view.ensure_visible(u.pos)
 			await st.ui.message("%s被暗杀了！！" % u.person.name)
 			Mem.w8(BattleStage.ASSASSIN_LINK + i, 0xff)
@@ -125,7 +125,7 @@ func _aura(owner: BUnit, opposite: bool, e1: int, e2: int, fx: Callable) -> void
 	for t in ts:
 		texts.append(fx.call(t))
 	st.refresh_units()
-	if ts.is_empty() or Game.autoplay:
+	if ts.is_empty() or Game.instant:
 		return
 	await st.view.ensure_visible(ts[0].pos)
 	for e in [e1, e2]:

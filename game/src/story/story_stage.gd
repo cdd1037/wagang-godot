@@ -22,7 +22,7 @@ var _waiting_click := false
 var _pending_click := -1        # an actor clicked while a section ran: the next poll sees it (as a delay's message pump does)
 var sortie_enabled := false
 var bar: TownBar                      # the town's toolbar and 菜单 (story/town_bar.gd)
-var autoplay := StoryAutoplay.new(self)    # the clicks under Game.autoplay (story/story_autoplay.gd)
+var autoplay := StoryAutoplay.new(self)    # the clicks under Game.auto_input (story/story_autoplay.gd)
 var ran_secs := {}     # the sections of this file that have run ("scene.section"), for the autoplay clicks
 
 
@@ -135,7 +135,7 @@ func run_file(file: String) -> void:
 
 ## The scene waits for the player to click an actor (autoplay picks one): its pid, or −2 to poll again.
 func _wait_for_click() -> int:
-	if Game.autoplay or Game.demo:
+	if Game.auto_input:
 		return await autoplay.next_click()
 	_waiting_click = true
 	var r: int = await clicked_actor
@@ -328,9 +328,9 @@ func op_actor_move(ins: Dictionary) -> void:
 	if actors.has(pid):
 		var a: RpgActor = actors[pid]
 		if vm and vm.next_op == 0x32:
-			a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.autoplay)
+			a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.instant)
 			return
-		await a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.autoplay)
+		await a.walk_to(arg(ins, 3), arg(ins, 4), arg(ins, 5), fast or Game.instant)
 	elif vm and vm.next_op == 0x32:
 		return
 	await _actors_idle()
@@ -439,7 +439,7 @@ func op_op_29(ins: Dictionary) -> void:
 	s.position = Vector2(arg(ins, 1), arg(ins, 2) + VIEW_Y)
 	portrait_layer.add_child(s)
 	portraits[pid] = s
-	if ui.fade_rect.color.a >= 1.0 or Game.autoplay:
+	if ui.fade_rect.color.a >= 1.0 or Game.instant:
 		return
 	s.modulate.a = 0
 	var tw := create_tween()
@@ -455,7 +455,7 @@ func op_op_2a(ins: Dictionary) -> void:
 	var s: Sprite2D = portraits[pid]
 	var to := Vector2(arg(ins, 1), arg(ins, 2) + VIEW_Y)
 	var d := maxf(absf(to.x - s.position.x), absf(to.y - s.position.y))
-	if Game.autoplay or d < 1:
+	if Game.instant or d < 1:
 		s.position = to
 		return
 	var tw := create_tween()
@@ -470,7 +470,7 @@ func op_op_2b(ins: Dictionary) -> void:
 		return
 	var s: Sprite2D = portraits[pid]
 	portraits.erase(pid)
-	if not Game.autoplay:
+	if not Game.instant:
 		var tw := create_tween()
 		tw.tween_property(s, "modulate:a", 0.0, 0.8)
 		await tw.finished

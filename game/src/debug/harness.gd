@@ -255,7 +255,7 @@ func player_phase(input: BattleInput) -> bool:
 		_bot.run_phase()                # drives the player phase below through input events
 		return false
 	var fx := OS.get_environment("WG_FXTEST")
-	if (Game.autoplay or Game.demo) and fx != "":
+	if Game.auto_input and fx != "":
 		# cast these strategies with autoplay (dialogue skipped) and print each target's outcome
 		if _bot == null:
 			_bot = InputBot.new(st, "")

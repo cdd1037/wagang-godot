@@ -11,13 +11,13 @@ var icon_tex: Texture2D
 
 
 static func ok(ui: CanvasLayer, text: String, caption := "") -> void:
-	if Game.autoplay:
+	if Game.auto_input:
 		return
 	await _run(ui, text, caption, [["确定", 1]])
 
 
 static func yes_no(ui: CanvasLayer, text: String, caption := "瓦岗山异闻录") -> bool:
-	if Game.autoplay:
+	if Game.auto_input:
 		return true
 	return await _run(ui, text, caption, [["是", 1], ["否", 0]]) == 1
 

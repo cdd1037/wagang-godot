@@ -102,7 +102,7 @@ func op_unit_op_4d(ins: Dictionary) -> void:
 			u.hp = nh
 			if nh <= 0:
 				u.extra["dying"] = true
-			if not Game.autoplay:
+			if not Game.instant:
 				st.hud.popup_number(str(hpd & 0xffff), u.pos)
 			if nh <= 0:
 				await st.actions.unit_defeated(u)
@@ -296,7 +296,7 @@ func remove_unit(u: BUnit, silent: bool, variant := 0) -> void:
 		if line != "":
 			await st.view.ensure_visible(u.pos)
 			await st.ui.dialog.talk(Game.person_face(u.pid), u.person.name, line, st._dialog_top(u.pid))
-	if u.node and not Game.autoplay:
+	if u.node and not Game.instant:
 		await _removal_animation(u, silent, variant)
 	u.state = 3
 	u.status = 0
@@ -458,7 +458,7 @@ func op_op_6b(ins: Dictionary) -> void:
 	elif _mcall_loaded >= 0:
 		e = EffectPlayer.create("mcall", _mcall_loaded)
 		_mcall_loaded = -1
-	if e == null or Game.autoplay:
+	if e == null or Game.instant:
 		return
 	e.position = st.view.cell_center(c)
 	st.view.fx_layer.add_child(e)
@@ -557,7 +557,7 @@ func op_op_5c(ins: Dictionary) -> bool:
 	if u == null or not u.active():
 		return false
 	await st.view.center_on(u.pos)
-	if u.node and not Game.autoplay:
+	if u.node and not Game.instant:
 		for k in 3:
 			u.node.flash = 0.8
 			await st.wait(0.5)

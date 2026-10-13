@@ -1,6 +1,6 @@
 class_name StoryAutoplay
 extends RefCounted
-## Autoplay in story scenes (Game.autoplay / Game.demo): which actor to click when the scene waits for the player.
+## Autoplay in story scenes (Game.auto_input): which actor to click when the scene waits for the player.
 ## Mostly actors whose click runs a section that has not run yet in this file, else ones some section tests for,
 ## as a player would; the harness (Game.hooks.story_pick) may choose first. The UI bot clicks the same actors with
 ## the mouse.
@@ -20,7 +20,7 @@ func _init(stage: StoryStage) -> void:
 ## The scene waits for a click: the actor to click, or −2 to poll again (nothing to click yet, a sortie, or the
 ## harness ended the file).
 func next_click() -> int:
-	if Game.demo:
+	if not Game.instant:
 		await st.get_tree().create_timer(1.0).timeout
 	await st.get_tree().process_frame
 	var keys := candidates()

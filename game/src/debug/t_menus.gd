@@ -1,7 +1,8 @@
 extends Node
 ## The menu windows of mod_patches.md group 5: 环境设定 (SettingsWindow, applying to GS / [0x4dbe25] without
 ## writing Niuniu.wa), 历史情报 line order (HistoryWindow), 选择武将 rules and sorting (SortieScreen) and the
-## candidate builder, 部队情报一览 / 持有道具一览 / 地形情报一览 / 出战位置 / MsgBox drawing, and the town gate GS+2.
+## candidate builder, 部队情报一览 / 持有道具一览 / 地形情报一览 / 出战位置 / MsgBox drawing, the town gate GS+2, and
+## the boxes under WG_DEMO.
 ## With OUT=dir it saves pictures of the windows. Prints "t_menus: PASS".
 
 var _ok := true
@@ -45,7 +46,40 @@ func run() -> void:
 	await _sortie(ui)
 	await _windows(ui)
 	_icons(ui)
+	await _demo(ui)
 	print("t_menus: PASS" if _ok else "t_menus: FAILED")
+
+
+## WG_DEMO (Game.auto_input without Game.instant): the boxes that wait for the player answer themselves, as under
+## WG_AUTO, instead of waiting for a click nobody makes.
+func _demo(ui: GameUI) -> void:
+	var was := [Game.auto_input, Game.instant]
+	Game.auto_input = true
+	Game.instant = false
+	var got := {}
+	var boxes := {
+		"MsgBox.ok": func() -> Variant: return await MsgBox.ok(ui, "t_menus"),
+		"MsgBox.yes_no": func() -> Variant: return await MsgBox.yes_no(ui, "t_menus"),
+		"MerchantBox.say": func() -> Variant: return await MerchantBox.say(ui, 0, "t_menus"),
+		"MerchantBox.ask": func() -> Variant: return await MerchantBox.ask(ui, 0, "t_menus", false),
+		"MerchantBox.count": func() -> Variant: return await MerchantBox.count(ui, 0, 1, 5, false),
+		"ShopWindow.warehouse_full": func() -> Variant: return await ShopWindow.warehouse_full(ui, 1, 0, 0),
+		"SortieScreen.choose": func() -> Variant:
+			return await SortieScreen.choose(ui, self, 2, [0, 8, 3] as Array[int], 1),
+	}
+	for k: String in boxes:
+		var run := func() -> void:
+			got[k] = await boxes[k].call()
+		run.call()
+	for i in 3:
+		await get_tree().process_frame
+	for k: String in boxes:
+		_check(got.has(k), "demo: %s answers without a click" % k)
+	_check(got.get("MsgBox.yes_no") == true and got.get("MerchantBox.ask") == true and got.get("MerchantBox.count") == 1,
+			"demo: 是 and one piece")
+	_check(got.get("SortieScreen.choose") == [0, 8], "demo: the sortie list takes the first two")
+	Game.auto_input = was[0]
+	Game.instant = was[1]
 
 
 ## The command menu's icons (0x45bd05, mod 0x4d034d) and the tabs' (0x472281), from CmdIcon.dll.

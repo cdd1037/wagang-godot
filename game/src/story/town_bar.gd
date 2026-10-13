@@ -47,7 +47,7 @@ func _button(text: String, pos: Vector2) -> Button:
 
 
 func _process(_d: float) -> void:
-	var show := st.menu_ready() and not Game.autoplay and not Game.demo
+	var show := st.menu_ready() and not Game.auto_input
 	menu.visible = show
 	var x := 504.0
 	for i in tools.size():

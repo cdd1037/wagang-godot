@@ -36,7 +36,7 @@ func _draw() -> void:
 
 ## The add / subtract animation from `old` to `new`.
 func animate(old: int, new: int) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var step := (new - old) / 5
 	for k in 5:

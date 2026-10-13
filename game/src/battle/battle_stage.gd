@@ -159,7 +159,7 @@ func battle_loop() -> void:
 	hud.visible = true
 	# 0x44f053: 战斗时，自动显示战场缩小图
 	minimap.setup(self)
-	if Settings.on(Settings.MINIMAP) and not Game.autoplay:
+	if Settings.on(Settings.MINIMAP) and not Game.instant:
 		minimap.open()
 	while not _battle_finished():
 		# ---- player phase
@@ -453,7 +453,7 @@ func set_weather(w: int) -> void:
 			c += 1
 		weather_level = 5 if c == 0 else (0 if c == 7 else c - 1)
 	hud.queue_redraw()
-	if weather() != shown and not Game.autoplay:
+	if weather() != shown and not Game.instant:
 		var e := EffectPlayer.create("xben", 0x34 + weather())
 		if e:
 			e.position = ui.vsize() / 2
@@ -613,7 +613,7 @@ func op_set_attr(ins: Dictionary) -> void:
 ## cheers (SE 8), SE 14, and the item's icon rises over it for 8 ticks; 5 more ticks.
 func get_item_show(pid: int, iid: int) -> void:
 	var u: BUnit = current_unit if pid >= 0x400 and pid <= 0x403 else (unit_by_pid(pid) if pid < 0x200 else null)
-	if u == null or u.state != BUnit.STATE_ON_MAP or u.hp <= 0 or Game.autoplay:
+	if u == null or u.state != BUnit.STATE_ON_MAP or u.hp <= 0 or Game.instant:
 		return
 	await unit_ops.op_unit_status({"args": [u.pid, 1, 0, 0]})
 	Audio.se(14)
@@ -630,7 +630,7 @@ func get_item_show(pid: int, iid: int) -> void:
 ## op 0x12 in a battle (0x411db9): the minimap is shown for the choice and hidden again if it was not open.
 func op_choice(ins: Dictionary) -> void:
 	var was := minimap.visible
-	if field_ready and not Game.autoplay:
+	if field_ready and not Game.instant:
 		minimap.open()
 	await super.op_choice(ins)
 	if not was:
@@ -793,7 +793,7 @@ func op_op_52(ins: Dictionary) -> void:
 
 
 func wait(sec: float) -> void:
-	if fast or sec <= 0 or Game.autoplay:
+	if fast or sec <= 0 or Game.instant:
 		return
 	await get_tree().create_timer(sec).timeout
 

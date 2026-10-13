@@ -46,7 +46,7 @@ func popup_number(text: String, cell: Vector2i, color := Color(1, 1, 1)) -> void
 
 func phase_banner(text: String) -> void:
 	_banner_text = text
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var tw := create_tween()
 	tw.tween_property(self, "_banner_a", 1.0, 0.25)
@@ -79,7 +79,7 @@ func _seq_dim() -> void:
 ## op 0x5a (0x416c97 → 0x44bac2): "开始作战" over the darkened map, bold, 48 px (64 in a view 720 wide or more) with
 ## shadows at +2 (0x18) and +1 (0x15), held 20 ticks; then the map comes back.
 func start_banner() -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var vs := get_viewport_rect().size
 	var was := visible
@@ -99,7 +99,7 @@ func start_banner() -> void:
 ## spaces in front) 16 + h px further down, white over 0x18 / 0x15, 20 ticks each; then "限制回合数%3u" (the turn
 ## limit) 64 + h px below, 20 ticks; then 2 s that a click ends, and the map comes back. Also before the field.
 func goal_sequence(text: String, limit: int) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var vs := get_viewport_rect().size
 	var h := 32 if vs.x < 720 else (48 if vs.x < 960 else 64)
@@ -207,7 +207,7 @@ func _draw() -> void:
 ## "恭贺您实现统一大业" instead. Each line comes after 20 ticks (10 for the second final line); the last waits
 ## 3 s more, which a click ends.
 func reward_screen(gold: int, items: Array, final: bool) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var vs := get_viewport_rect().size
 	var cy := vs.y / 2
@@ -274,7 +274,7 @@ func _draw_reward(vs: Vector2) -> void:
 ## The equipment level panel of 0x4083ef: 240×96 in the middle of the view with the item's icon, "<item> Lv N",
 ## "<name> 装备中" and "攻击|精神|防御 +before -> +after"; 10 ticks, then 4 s that a click ends.
 func equip_panel(iid: int, lvl: int, p: Person, weapon: bool) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var it := Game.item(iid)
 	var label := "防御"
@@ -343,7 +343,7 @@ func terrain_popup(c: Vector2i) -> void:
 		t = 0
 	_tpop = {"rect": Rect2(v.cell_pos(tl + Vector2i(bx, by)) - cam, Vector2(144, 96)), "cell": c, "t": t}
 	queue_redraw()
-	if not Game.autoplay:
+	if not Game.auto_input:
 		await v.cell_clicked
 	_tpop = {}
 	queue_redraw()

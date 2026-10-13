@@ -81,9 +81,9 @@ func choose(options: Array, at := Vector2(-1, -1), can_cancel := true, header :=
 	_active = true
 	_touch_down = false
 	queue_redraw()
-	if Game.autoplay or Game.demo:
+	if Game.auto_input:
 		face = null
-		if Game.demo:
+		if not Game.instant:
 			await get_tree().create_timer(1.0).timeout
 		await get_tree().process_frame
 		visible = false

@@ -43,7 +43,7 @@ static func _make(ui: CanvasLayer, who: int, text: String) -> MerchantBox:
 
 ## Mode 0 (0x46d4d7): the message, then any mouse button closes it.
 static func say(ui: CanvasLayer, who: int, text: String) -> void:
-	if Game.autoplay:
+	if Game.auto_input:
 		return
 	if _plain():
 		await MsgBox.ok(ui, text)
@@ -56,7 +56,7 @@ static func say(ui: CanvasLayer, who: int, text: String) -> void:
 
 ## Modes 1 / 2: the message and the 确认 box; 是 (0x46dd05) waits 100 ms and plays SE 9 (buying) or 10 (selling).
 static func ask(ui: CanvasLayer, who: int, text: String, selling: bool) -> bool:
-	if Game.autoplay:
+	if Game.auto_input:
 		return true
 	if _plain():
 		var ok := await MsgBox.yes_no(ui, text, "卖出" if selling else "买进")
@@ -82,7 +82,7 @@ static func count(ui: CanvasLayer, who: int, id: int, most: int, buying: bool) -
 	if buying and Game.stack_count(id) >= 99:
 		await say(ui, who, "仓库里还有很多%s。\n没有必要再买。" % name)
 		return 0
-	if Game.autoplay:
+	if Game.auto_input:
 		return mini(1, most)
 	var m := _make(ui, who, "")
 	m.mode = 2

@@ -66,7 +66,7 @@ static func buy(ui: CanvasLayer) -> void:
 ## 0x46f034 → template 329 with the incoming item as row index 200 (drawn blue): selling one of the old pieces puts
 ## it into the freed slot, selling it gets its price instead; either ends the window. Closing it loses the item.
 static func warehouse_full(ui: CanvasLayer, id: int, lvl: int, xp: int) -> void:
-	if Game.autoplay:
+	if Game.auto_input:
 		return
 	var w := ShopWindow.new()
 	w.dlu = Vector2(317, 227)

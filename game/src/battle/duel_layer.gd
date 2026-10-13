@@ -138,7 +138,7 @@ func _init() -> void:
 
 # ------------------------------------------------------------------ timing helpers
 func _t(n: int) -> void:
-	if Game.autoplay or n <= 0 or not is_inside_tree():
+	if Game.instant or n <= 0 or not is_inside_tree():
 		return
 	await get_tree().create_timer(n * TICK).timeout
 
@@ -150,7 +150,7 @@ func _clicked(n: int) -> bool:
 
 ## 0x42c646: n × 100 ms, ended early by a click
 func _skippable(n: int) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var end := Time.get_ticks_msec() + int(n * 100 / maxf(Engine.time_scale, 0.01))
 	var c := Game.clicks
@@ -161,7 +161,7 @@ func _skippable(n: int) -> void:
 
 
 func _se(n: int) -> void:
-	if not Game.autoplay:
+	if not Game.instant:
 		Audio.se(n)
 
 
@@ -215,7 +215,7 @@ func setup(a: int, b: int, backdrop: int) -> void:
 	_redraw()
 	# intro (0x4486f4 + mod chain)
 	prev_track = Audio.current_track
-	if not Game.autoplay:
+	if not Game.instant:
 		Audio.play_bgm(10)
 	await _t(10)
 	show_portrait[0] = true
@@ -260,7 +260,7 @@ func close() -> void:
 	for f in fighters:
 		f.queue_free()
 	fighters.clear()
-	if prev_track >= 0 and not Game.autoplay:
+	if prev_track >= 0 and not Game.instant:
 		Audio.play_bgm(prev_track)
 	var u1 := stage.unit_by_pid(pids[1])
 	if exp_award > 0 and u1 != null and u1.colour == 0:
@@ -319,7 +319,7 @@ func say2(side: int, text: String, mode_: int) -> void:
 			for ci in line.length():
 				bubbles[s][li] = line.substr(0, ci + 1)
 				_overlay.queue_redraw()
-				if skip or Game.autoplay:
+				if skip or Game.instant:
 					continue
 				var w := 1 + (1 if line[ci] == "、" else 0)
 				var end := Time.get_ticks_msec() + int(w * TICK * 1000 / maxf(Engine.time_scale, 0.01))
@@ -437,7 +437,7 @@ func action(side: int, act: int) -> void:
 
 ## act 14 (unused by the scripts): spin / cheer / march showcase.
 func _war_dance(a: DuelFighter) -> void:
-	if not Game.autoplay:
+	if not Game.instant:
 		Audio.play_bgm(21)
 	var spin := [["spc", 0, false], ["spc", 2, false], ["spc", 1, false], ["spc", 2, true]]
 	for i in 17:
@@ -468,7 +468,7 @@ func _war_dance(a: DuelFighter) -> void:
 
 ## act 15 (unused): looks around.
 func _look_around(a: DuelFighter) -> void:
-	if not Game.autoplay:
+	if not Game.instant:
 		Audio.play_bgm(20)
 	await _t(20)
 	var delays := [4, 8, 8, 4, 4, 4]

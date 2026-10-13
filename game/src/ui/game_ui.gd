@@ -82,7 +82,7 @@ func vsize() -> Vector2:
 
 # ------------------------------------------------------------------ fades
 func fade_to_black(t := 0.35) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		fade_rect.color.a = 1.0
 		return
 	var tw := create_tween()
@@ -91,7 +91,7 @@ func fade_to_black(t := 0.35) -> void:
 
 
 func fade_from_black(t := 0.35) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		fade_rect.color.a = 0.0
 		return
 	var tw := create_tween()
@@ -105,7 +105,7 @@ func set_black(on: bool) -> void:
 
 # ------------------------------------------------------------------ popup (click to close)
 func popup(text: String, auto_close := 0.0) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [popup] ", text)
 		return
@@ -123,15 +123,15 @@ func popup(text: String, auto_close := 0.0) -> void:
 
 ## A timed message box (0x42f699 style 2, mod cave 0x407d33): it closes after (讯息显示速度 + 1) s, or on a click.
 func message(text: String) -> void:
-	await popup(text, 1.2 if Game.demo else Settings.message_hold())
+	await popup(text, 1.2 if Game.auto_input else Settings.message_hold())
 
 
 func _wait_click() -> void:
-	if Game.demo:
-		await get_tree().create_timer(1.2).timeout
-		return
-	if Game.autoplay:
-		await get_tree().process_frame
+	if Game.auto_input:
+		if Game.instant:
+			await get_tree().process_frame
+		else:
+			await get_tree().create_timer(1.2).timeout
 		return
 	# a new press (counted by Game._input), so the click that closed the previous box is not reused
 	# and a tap shorter than a frame is not missed; holding Ctrl skips
@@ -145,7 +145,7 @@ func _wait_click() -> void:
 # ------------------------------------------------------------------ banners / captions
 ## kind 0 = title (top-centre), 1 = place name (top-left)
 func banner(text: String, kind: int) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	_banner.text = text
 	_banner.add_theme_font_size_override("font_size", 24 if kind == 0 else 18)
@@ -192,7 +192,7 @@ var _band: ColorRect
 
 
 func caption(text: String, a1: int, a2: int, a3: int) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [caption] ", text)
 		return
@@ -227,7 +227,7 @@ func _caption_part(s: String) -> void:
 	_caption_lines.append(l)
 	var n := l.get_total_character_count()
 	var clicks := Game.clicks
-	if not Game.demo:
+	if not Game.auto_input:
 		for k in n:
 			if Game.clicks != clicks or Game.skip_held():
 				break
@@ -287,7 +287,7 @@ func wipe_captions(band := true) -> void:
 
 ## Special technique name (绝招) banner.
 func skill_banner(text: String) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		return
 	var bg := ColorRect.new()
 	bg.color = Color(1, 1, 1, 0.0)
@@ -324,7 +324,7 @@ const PART_NAMES := ["隐龙篇", "游龙篇", "升龙篇", "荡龙篇", "惊龙
 ## (0x48b204) faded in, 1 s plus 2 s that a click ends, faded out; then the title the same with 4 s. Later
 ## chapters show nothing.
 func chapter_title(num: int, text: String) -> void:
-	if Game.autoplay:
+	if Game.instant:
 		print("  [chapter] ", num, " ", text)
 		return
 	if num < 0 or num >= PART_NAMES.size():
