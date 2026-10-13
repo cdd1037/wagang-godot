@@ -197,7 +197,13 @@ In battles the AI plays our units, and the AI knows nothing of the script's posi
 * **Guard:** a defeat section (its body sets story flag 1) that waits for an enemy on a cell sends the nearest unit
   there to hold it. An enemy closing in on such a cell (a shorter walk there than at an earlier turn) and within
   four of its moves is the first target of every unit that can hit it this turn, unless it is a duel foe: in S_08,
-  内郭军方针变更 sends two light cavalry for 鹿砦 through the gate's guards, who block our way there.
+  内郭军方针变更 sends two light cavalry for 鹿砦 through the gate's guards, who block our way there. A defeat area
+  of more than four cells is held at its ways in when it has at most four: its cells an enemy can stand on next to
+  one outside every such area. S_16's 山寨 is walled with two gates; in the 守关 branch (R_16: 坚持自己的方案)
+  唐璧's army marches on it from turn 4 and the battle was lost every time before. Only a unit within four of its
+  moves holds a way in: the battles that want one held start our units beside it, and a far one is the enemy's
+  goal, not ours (marching everyone to S_45's 敌军逃离战场 in the far corner emptied 妖风1's area, below). The rule
+  can fire in S_06, S_14, S_19, S_22, S_26, S_27, S_37, S_40, S_42, S_45 and S_54.
 * **Keep out:** a defeat section that waits for our units in an area keeps them from ending a move there (S_04's
   友军提前攻城: coming near the town before the ambush is drawn out loses the battle). So does a section titled as
   a trap (机关, 陷阱, 中计: S_43's 机关第五区; S_36's 挖宝04中计 is not a treasure to dig), unless the title is about

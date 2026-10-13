@@ -10,6 +10,12 @@ extends RefCounted
 ##   there and holds it, so no enemy can stand on it (S_02's 山寨被占领). An enemy closing in on such a cell (a
 ##   shorter walk there than at an earlier turn), within four of its moves, is the first target of every unit that
 ##   can hit it this turn (S_08's cavalry, sent for 鹿砦); not a duel foe or a spared side.
+##   A defeat area larger than MAX_GUARD_CELLS is held at its ways in when it has at most that many: its cells an
+##   enemy can stand on next to one outside every such area (S_16's 山寨被占: the walled 山寨, two gates; in the
+##   守关 branch 唐璧's army marches on it from turn 4). Only by a unit within THREAT_MOVES of its moves of the way
+##   in: the battles that want it held start our units beside it (S_16), and a far one is the enemy's goal, not
+##   ours (S_45's 敌军逃离战场 in the far corner: marching there took everyone out of 妖风1's area, whose loop then
+##   never ends, see docs/DEVELOPMENT.md).
 ## * A defeat section that waits for player units in an area: those units never end a move there (S_04's
 ##   友军提前攻城: the battle is lost if anyone comes near the town before the ambush is drawn out). The same for a
 ##   section titled as a trap (机关, 陷阱, 中计: S_43's 机关第五区 hurts 管毅; S_36's 挖宝04中计 is no treasure),
@@ -53,6 +59,9 @@ static var threats: Array = []  # enemies closing in on a guarded cell, the near
 static var _approach := {}      # "battle/slot/cell" → [turn, its walk cost then, the cost at an earlier turn]
 static var _holder := {}        # "battle/cell" → slot of the unit last sent to that single cell
 const THREAT_MOVES := 4         # …that could get there within this many of their moves
+const TERRAINS := 30            # terrain types (data/terrain.json); move_cost is 999 past them
+static var _searches := {}      # walk searches on the field as it is now (_keep_searches): key → {cell: cost}
+static var _field := ""         # the battle, turn and terrain they were made on
 
 
 ## slot → {"cells": Array[Vector2i] (the nearest one counts), "hold": bool, "why": String}
@@ -68,10 +77,12 @@ static func compute(st: BattleStage) -> Dictionary:
 			ours.append(u)
 	if ours.is_empty():
 		return out
+	_keep_searches(st)
 	if OS.get_environment("WG_TRACE_SEC") != "" and _traced != vm.name:
 		_traced = vm.name
 		print("  [goal] our units: %s" % ", ".join(ours.map(func(x: BUnit) -> String: return x.person.name)))
 	var guards: Array = []       # [cells, why]
+	var walled: Array = []       # [cells, why]: defeat areas too large to hold, held at their ways in (see above)
 	var reach: Array = []        # [units, cells, why]
 	var minor: Array = []        # the same, sections without dialogue
 	var duels: Array = []        # the same, "VS" sections (optional: after the objectives)
@@ -160,12 +171,22 @@ static func compute(st: BattleStage) -> Dictionary:
 			if lost:
 				if who.is_empty() and cells.size() <= MAX_GUARD_CELLS:
 					guards.append([cells, why])
+				elif who.is_empty():
+					walled.append([cells, why])
 				for u in who:
 					avoid[u.slot] = avoid.get(u.slot, []) + cells
 			elif goal and not who.is_empty():
 				(duels if op == 0x2e else (reach if talk else minor)).append([who, cells, why])
 			elif not goal and not who.is_empty() and cells.size() > 1:
 				traps.append(cells)
+	var inside := {}
+	for w in walled:
+		for c in w[0]:
+			inside[c] = true
+	for w in walled:
+		var ways := _ways_in(st, w[0], inside)
+		if not ways.is_empty() and ways.size() <= MAX_GUARD_CELLS:
+			guards.append([ways, str(w[1]) + " (ways in)", true])
 	sparing = spare
 	no_hit = duel_pids
 	no_go = {}
@@ -220,6 +241,8 @@ static func compute(st: BattleStage) -> Dictionary:
 			if pool.is_empty():
 				pool = ours
 			var best := _nearest(st, pool, c, out)
+			if best and g.size() > 2 and _walk_cost(st, best, c) > THREAT_MOVES * maxi(best.move_points(), 1):
+				continue     # a way in that none of ours is near is not ours to hold (S_45's far exit, see above)
 			if best:
 				out[best.slot] = {"cells": [c], "hold": true, "why": "guard " + str(g[1])}
 				held.append(c)
@@ -386,8 +409,16 @@ static func _nearest(st: BattleStage, pool: Array, c: Vector2i, out: Dictionary)
 
 
 ## The cost of `u`'s cheapest walk from its cell to `c` over its move costs (cost buckets, as BattleAI._flow_walk);
-## 1 << 30 when `c` cannot be reached.
+## 1 << 30 when `c` cannot be reached. One search from the cell serves every `c` (see _searches).
 static func _walk_cost(st: BattleStage, u: BUnit, c: Vector2i) -> int:
+	var key := "from %s %s" % [_cost_sig(u), u.pos]
+	if not _searches.has(key):
+		_searches[key] = _walks_from(st, u)
+	return int(_searches[key].get(c, 1 << 30))
+
+
+## Every cell's walk cost from `u`'s cell, by `u`'s move costs.
+static func _walks_from(st: BattleStage, u: BUnit) -> Dictionary:
 	var far := {u.pos: 0}
 	var buckets := {0: [u.pos]}
 	var level := 0
@@ -396,8 +427,6 @@ static func _walk_cost(st: BattleStage, u: BUnit, c: Vector2i) -> int:
 		for p in buckets.get(level, []):
 			if int(far[p]) != level:
 				continue
-			if p == c:
-				return level
 			for d in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
 				var n: Vector2i = p + d
 				if not st.view.in_bounds(n):
@@ -414,7 +443,31 @@ static func _walk_cost(st: BattleStage, u: BUnit, c: Vector2i) -> int:
 					top = maxi(top, k)
 		buckets.erase(level)
 		level += 1
-	return 1 << 30
+	return far
+
+
+## What a walk search depends on besides the field: `u`'s cost on each terrain (family, skills, equipment).
+static func _cost_sig(u: BUnit) -> String:
+	var b := PackedByteArray()
+	b.resize(TERRAINS)
+	for t in b.size():
+		b[t] = mini(Rules.move_cost(u, t), 255)
+	return b.hex_encode()
+
+
+## Searches stay valid while the battle, its turn and its terrain do (a script can change the terrain: S_36's
+## 究极陷阱 walls a way); compute() forgets them otherwise. Four guarded cells cost a search per unit and cell.
+static func _keep_searches(st: BattleStage) -> void:
+	var v := st.view
+	var t := PackedByteArray()
+	t.resize(v.map_w * v.map_h)
+	for y in v.map_h:
+		for x in v.map_w:
+			t[y * v.map_w + x] = v.terrain_at(Vector2i(x, y)) & 0xff
+	var key := "%s %d %d" % [st.vm.name, st.turn, hash(t)]
+	if key != _field:
+		_field = key
+		_searches.clear()
 
 
 ## The flags that objective sections (titles with GOAL_WORDS) need set.
@@ -451,6 +504,13 @@ static func _sets_any(secs: Array, k: int, flags: Dictionary, depth := 0) -> boo
 ## The cost of the cheapest walk to `c` from every cell, by the move costs of `u`'s family (as `_walk_cost`, searched
 ## from `c` backwards: a step costs what entering its cell costs).
 static func _costs_to(st: BattleStage, u: BUnit, c: Vector2i) -> Dictionary:
+	var key := "to %s %s" % [_cost_sig(u), c]
+	if not _searches.has(key):
+		_searches[key] = _search_to(st, u, c)
+	return _searches[key]
+
+
+static func _search_to(st: BattleStage, u: BUnit, c: Vector2i) -> Dictionary:
 	var far := {c: 0}
 	var buckets := {0: [c]}
 	var level := 0
@@ -476,6 +536,28 @@ static func _costs_to(st: BattleStage, u: BUnit, c: Vector2i) -> Dictionary:
 		buckets.erase(level)
 		level += 1
 	return far
+
+
+## The cells of `cells` that some unit on the field can stand on, next to a cell outside `inside` it can stand on
+## too: the ways into a defeat area (S_16's 山寨: its two gates; walls and cliffs are nobody's).
+static func _ways_in(st: BattleStage, cells: Array, inside: Dictionary) -> Array[Vector2i]:
+	var walkers := {}            # family → a unit of it
+	for x in st.units:
+		if x.exists() and not walkers.has(x.family()):
+			walkers[x.family()] = x
+	var stand := func(c: Vector2i) -> bool:
+		return st.view.in_bounds(c) and walkers.values().any(
+				func(x: BUnit) -> bool: return Rules.move_cost(x, st.view.terrain_at(c)) < 255)
+	var out: Array[Vector2i] = []
+	for c in cells:
+		if not stand.call(c):
+			continue
+		for d in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]:
+			var n: Vector2i = c + d
+			if not inside.has(n) and stand.call(n):
+				out.append(c)
+				break
+	return out
 
 
 static func _talks(sec: Dictionary) -> bool:
