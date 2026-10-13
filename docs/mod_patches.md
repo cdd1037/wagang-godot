@@ -534,6 +534,16 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     * Battle lines (0x413661 → 0x45965d): a person's line is shown only when their first unit is on the map; a name
       that is no person's shows without a name (0x42d5f1 with id 0xffff).
     **Done** (`BattleStage.checkpoint`, `speaks_now`, `EexVM.run_section`, `ScriptHost.show_dialog`, `t_battle`).
+49. **Battle flow screens and sounds**:
+    * A unit that falls plays nothing; SE 16 and the blinks are RemoveUnit's (0x441814), when it leaves.
+    * Phase banners (0x44ac28): "我军阶段" with "第%2u回合", or "最终回合" from the turn limit on (0x44ed93);
+      "敌军阶段" (0x44e851); none for the friendly phase. The port keeps its own drawing of them.
+    * Time over (0x44eec5): when the rounds reach the turn limit, "因为战斗时间过长，撤退。", 管毅's unit (person 0)
+      leaves (else slot 0's), result 3, which ends the game (0x42c223 sets 0x20).
+    * After a battle ended by op 0x49 (result 2, 0x44ebfd → 0x44ed5b), once the next file is loaded: "保存进度吗？"
+      (style 1 = 是/否 box), 是 opens the save list (0x41a466, no 目前不可存盘 check).
+    **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`;
+    `t_battle`, `t_menus`).
 
 ### Deliberate differences (port design, keep unless asked)
 

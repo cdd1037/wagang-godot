@@ -266,10 +266,16 @@ func _run_flow() -> void:
 			return
 		if _abort_flow or stage == null:
 			break
+		var asks_save: bool = st is BattleStage and st.ended_by_49
 		stage.queue_free()
 		stage = null
 		Game.scenario = (Game.scenario + 1) & 0xff
 		Game.hooks.scenario_end()
+		# 0x44ebfd → 0x44ed5b: after a battle that op 0x49 ended, once the next file is there, "保存进度吗？" (a 是/否 box
+		# captioned 瓦岗山异闻录); 是 opens the save list (0x41a466, without the menu's 目前不可存盘 check). Autoplay never
+		# saves into the slots.
+		if asks_save:
+			await _after_battle_save()
 	if gen == _flow_gen:
 		_flow_running = false
 
@@ -337,6 +343,16 @@ func save_menu() -> void:
 	if Mem.r32(Addr.SAVE_ALLOWED) == 0:
 		await ui.message("目前不可存盘。")
 		return
+	await _save_dialog()
+
+
+func _after_battle_save() -> void:
+	if not Game.auto_input and await MsgBox.yes_no(ui, "保存进度吗？"):
+		await _save_dialog()
+
+
+## The save list (0x41a466): a slot, its question, the save.
+func _save_dialog() -> void:
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")
 	if i < 0:
 		return

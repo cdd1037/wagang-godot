@@ -196,10 +196,15 @@ func _draw() -> void:
 	# phase banner
 	if _banner_a > 0.01 and stage.field_ready and stage.turn > 0:
 		var f := Assets.font()
-		var sz := f.get_string_size(_banner_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 28)
-		var r := Rect2((vs.x - sz.x) / 2 - 30, vs.y * 0.42 - 30, sz.x + 60, 46)
+		var lines := _banner_text.split("\n")
+		var w := 0.0
+		for l in lines:
+			w = maxf(w, f.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x)
+		var r := Rect2((vs.x - w) / 2 - 30, vs.y * 0.42 - 30, w + 60, 46 + 36 * (lines.size() - 1))
 		draw_rect(r, Color(0, 0, 0, 0.6 * _banner_a))
-		UIStyle.draw_text(self, Vector2((vs.x - sz.x) / 2, vs.y * 0.42 + 2), _banner_text, Color(1, 0.9, 0.6, _banner_a), 28)
+		for i in lines.size():
+			var lw := f.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x
+			UIStyle.draw_text(self, Vector2((vs.x - lw) / 2, vs.y * 0.42 + 2 + 36 * i), lines[i], Color(1, 0.9, 0.6, _banner_a), 28)
 
 
 ## The reward screen of op 0x59 (0x44b5a8 / 0x44b046): the map wiped from both sides to the middle, BGM track 9,

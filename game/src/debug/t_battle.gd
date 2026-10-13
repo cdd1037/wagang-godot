@@ -73,6 +73,42 @@ func _script_flow(st: BattleStage) -> void:
 	_check(not st.speaks_now(307), "a speaker without a unit is silent")
 
 
+## 0x44ac28's banner texts; 0x44eec5: past the turn limit, the message, 管毅 (person 0) leaves, game over.
+func _turn_end(st: BattleStage) -> void:
+	st.turn_limit = 20
+	st.turn = 3
+	_check(st.phase_banner_text(BattleStage.PH_PLAYER) == "我军阶段\n第 3回合", "player banner %s" % st.phase_banner_text(0))
+	st.turn = 20
+	_check(st.phase_banner_text(BattleStage.PH_PLAYER) == "我军阶段\n最终回合", "last round banner")
+	_check(st.phase_banner_text(BattleStage.PH_ENEMY) == "敌军阶段", "enemy banner")
+	var gs := GDScript.new()
+	gs.source_code = "extends Node\nvar ui\nvar stage\nvar overs = 0\nfunc game_over():\n\tovers += 1\n"
+	gs.reload()
+	var m := Node.new()
+	m.set_script(gs)
+	m.set("ui", st.ui)
+	var old_main = Game.main
+	Game.main = m
+	add_child(m)
+	var msgs: Array[String] = []
+	var on_msg := func(t: String) -> void: msgs.append(t)
+	st.ui.popup_shown.connect(on_msg)
+	var other := _unit(0, 5, 0, Vector2i(2, 9))
+	var guan := _unit(3, 0, 0, Vector2i(3, 9))
+	var old_vm: EexVM = st.vm
+	st.vm = EexVM.new()
+	st.vm.host = st
+	await st._time_over()
+	_check(msgs == ["因为战斗时间过长，撤退。"], "time-over message %s" % [msgs])
+	_check(guan.state == 3 and other.state == BUnit.STATE_ON_MAP, "管毅 leaves, the others stay")
+	_check(st.battle_over and m.get("overs") == 1, "the game is over")
+	st.ui.popup_shown.disconnect(on_msg)
+	st.vm = old_vm
+	st.battle_over = false
+	Game.main = old_main
+	m.queue_free()
+
+
 func run() -> void:
 	Game.new_game_state()
 	Game.autoplay = true          # no waiting for clicks or animations
@@ -166,6 +202,7 @@ func run() -> void:
 	await st.op_data_transfer({"args": [500, 1, 305, 33]})
 	_check(f3.state == BUnit.STATE_ON_MAP and f3.hp == 7 and Mem.ev(10) == 0, "op 0x78 HP 7 write: stays")
 	await _script_flow(st)
+	await _turn_end(st)
 	# AIAct resets EV[10] (0x43ad2b)
 	await st.ai.act(_unit(37, 302, 2, Vector2i(9, 9)))
 	_check(Mem.ev(10) == 0, "AIAct start resets EV[10]")

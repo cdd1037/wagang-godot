@@ -36,6 +36,7 @@ var deploy: Array = []            # 115 deployment entries (R+0x2044)
 var sortie: Array[int] = []       # persons chosen to sortie (0x48b350 list)
 var turn := 0
 var turn_limit := 0
+var ended_by_49 := false        # op 0x49 ended the battle (result 2)
 var level_offset := 0
 var boss_pid: int:
 	get:
@@ -162,10 +163,14 @@ func battle_loop() -> void:
 	if Settings.on(Settings.MINIMAP) and not Game.instant:
 		minimap.open()
 	while not _battle_finished():
+		# 0x44eec5: once the rounds reach the turn limit the battle is lost before another one starts
+		if turn > turn_limit and not _resumed:
+			await _time_over()
+			break
 		# ---- player phase
 		phase = PH_PLAYER
 		Mem.w8(BattleInput.FIND_INDEX, 0)        # 检索未执行部队 starts over each turn (0x44efac)
-		await hud.phase_banner("第%d回合　我军" % turn)
+		await hud.phase_banner(phase_banner_text(PH_PLAYER))
 		if _resumed:
 			_resumed = false
 		else:
@@ -179,8 +184,6 @@ func battle_loop() -> void:
 		# ---- friend phase (AI-controlled units among 0..34); its events run even without such units (0x44e851)
 		phase = PH_FRIEND
 		var friends := _has_ai_units(0, 35)
-		if friends:
-			await hud.phase_banner("友军")
 		await checkpoint()
 		if _battle_finished(): break
 		if friends:
@@ -188,7 +191,7 @@ func battle_loop() -> void:
 			if _battle_finished(): break
 		# ---- enemy phase
 		phase = PH_ENEMY
-		await hud.phase_banner("敌军")
+		await hud.phase_banner(phase_banner_text(PH_ENEMY))
 		await checkpoint()
 		if _battle_finished(): break
 		await remove_dead()
@@ -227,6 +230,33 @@ func _has_ai_units(a: int, b: int) -> bool:
 		if u.active() and u.mode != 7:
 			return true
 	return false
+
+
+## Time over (0x44eec5): "因为战斗时间过长，撤退。" (a timed box), 管毅's unit (person 0) among slots 0..34 leaves the
+## map, or slot 0's when there is none; the result is 3, which the scene loop 0x42c223 ends the game with (0x20).
+func _time_over() -> void:
+	await ui.message("因为战斗时间过长，撤退。")
+	var gone := false
+	for s in 35:
+		if units[s].exists() and units[s].pid == 0:
+			await unit_ops.remove_unit(units[s], false)
+			gone = true
+	if not gone and units[0].state == BUnit.STATE_ON_MAP:
+		await unit_ops.remove_unit(units[0], false)
+	battle_over = true
+	await Game.main.game_over()
+	vm.abort = true
+	vm.active = false
+
+
+## The phase banner (0x44ac28): "我军阶段" with "第%2u回合", or "最终回合" from the turn limit on, at the player
+## phase (0x44ed93); "敌军阶段" at the enemy phase (0x44e851); the friendly phase has none.
+func phase_banner_text(ph: int) -> String:
+	if ph == PH_ENEMY:
+		return "敌军阶段"
+	if turn_limit > 0 and turn >= turn_limit:
+		return "我军阶段\n最终回合"
+	return "我军阶段\n第%2d回合" % turn
 
 
 ## Battle checkpoint (0x44c601): up to as many polls (0x4180c1) of the event scene as it has sections (0x410990),
@@ -685,9 +715,11 @@ func op_battle_goal_text(ins: Dictionary) -> void:
 	await hud.goal_sequence(goal_text, turn_limit)
 
 
-## op 0x49: the battle is over (both outcomes) — leave the turn loop.
+## op 0x49: the battle is over (both outcomes) — leave the turn loop. Result 2: after the file main asks
+## "保存进度吗？" (0x44ebfd).
 func op_ui_49(_ins: Dictionary) -> void:
 	battle_over = true
+	ended_by_49 = true
 
 
 ## op 0x0e: battle lost → game over.

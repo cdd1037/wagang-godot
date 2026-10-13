@@ -117,6 +117,25 @@ func _save_questions(ui: GameUI) -> void:
 	for k in 10:
 		await get_tree().process_frame
 	_check(res["r"] == false, "否 loads nothing")
+	# after a battle ended by op 0x49: "保存进度吗？", 是 opens the save list even while the scripts forbid saving
+	Mem.w32(Addr.SAVE_ALLOWED, 0)
+	state["done"] = false
+	var run_after := func() -> void:
+		await main._after_battle_save()
+		state["done"] = true
+	run_after.call()
+	q = await _msg_box(ui)
+	_check(q != null and Array(q.lines) == ["保存进度吗？"] and q.title == "瓦岗山异闻录", "after-battle question %s" % [q.lines if q else []])
+	if q:
+		q._on_hit(["btn", 1])
+	for k in 5:
+		await get_tree().process_frame
+	_check(ui.menu.visible and ui.menu.title == "存储进度", "是 opens the save list (%s)" % ui.menu.title)
+	ui.menu._finish(-1)
+	for k in 5:
+		await get_tree().process_frame
+	_check(state["done"], "a cancel ends it")
+	Mem.w32(Addr.SAVE_ALLOWED, 1)
 	# 回到标题 asks first
 	var titles := {"n": 0}
 	var gs := GDScript.new()
