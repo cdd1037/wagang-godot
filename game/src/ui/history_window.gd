@@ -90,6 +90,11 @@ func _draw_dialog() -> void:
 	hit(cb, "order")
 
 
+## Dialog 341's one tab stop: 按顺序显示 (1031), which Space toggles.
+func focus_stops() -> Array:
+	return [{"key": "order", "kind": "check", "group": 0}]
+
+
 func _scroll(d: int) -> void:
 	top = clampi(top + d, 0, maxi(lines.size() - VISIBLE, 0))
 	queue_redraw()

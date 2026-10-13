@@ -99,6 +99,7 @@ func _draw() -> void:
 	_lists.clear()
 	UIStyle.draw_dialog(self, Rect2(origin, dlu * dlu_scale).grow(6), skin if skin >= 0 else Settings.skin())
 	_draw_dialog()
+	_draw_focus()
 
 
 func _draw_dialog() -> void:
@@ -380,8 +381,122 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if ev.is_action_pressed("ui_cancel"):
 		if not _holds():
 			close()
-	elif _on_key(ev):
+	elif _dialog_key(ev) or _on_key(ev):
 		queue_redraw()
+
+
+# ------------------------------------------------------------------ the dialog keyboard
+## The windows the original runs under DialogBoxParamA keep the Win32 dialog keyboard: Tab / Shift+Tab go through
+## the template's tab stops; the arrow keys go through the focused control's group (an auto radio button is chosen
+## as the arrows bring the focus to it) or, on a control alone in its group, are the window's own; Space presses
+## the focused button, check box or radio button; Enter presses the focused push button (else the window's own
+## Enter, its default button). A focused list view takes Up / Down / Page Up / Page Down / Home / End for its
+## selection, a focused drop-down list Up / Down for its choice. The focus rectangle shows once a key was used.
+## `focus_stops()`: the tab stops in the template's order, {"key", "kind" (button, check, radio, combo, list),
+## "group", "lv" (a list's ListView)}; the first one has the focus.
+var focus := 0
+var focus_shown := false
+
+
+func focus_stops() -> Array:
+	return []
+
+
+## A focused list view's selection moved (the window recolours its rows).
+func _on_list_key(_stop: Dictionary) -> void:
+	pass
+
+
+## A focused drop-down list's choice moved by d.
+func _on_combo_key(_stop: Dictionary, _d: int) -> void:
+	pass
+
+
+func _dialog_key(ev: InputEvent) -> bool:
+	var stops := focus_stops()
+	if stops.is_empty() or not (ev is InputEventKey) or _holds():
+		return false
+	var k := ev as InputEventKey
+	focus = clampi(focus, 0, stops.size() - 1)
+	var s: Dictionary = stops[focus]
+	var kind := str(s.get("kind", ""))
+	match k.keycode:
+		KEY_TAB:
+			focus = posmod(focus + (-1 if k.shift_pressed else 1), stops.size())
+			focus_shown = true
+			return true
+		KEY_SPACE:
+			focus_shown = true
+			if kind in ["button", "check", "radio"]:
+				_on_hit(s["key"])
+			return true
+		KEY_ENTER, KEY_KP_ENTER:
+			if kind == "button":
+				_on_hit(s["key"])
+				return true
+			return false
+	var d := 0
+	if kind == "list":
+		var lv: ListView = s["lv"]
+		var to := lv.sel
+		match k.keycode:
+			KEY_UP: to = maxi(lv.sel - 1, 0)
+			KEY_DOWN: to = lv.sel + 1
+			KEY_PAGEUP: to = maxi(lv.sel - lv.page, 0)
+			KEY_PAGEDOWN: to = (lv.sel if lv.sel >= 0 else 0) + lv.page
+			KEY_HOME: to = 0
+			KEY_END: to = lv.rows.size() - 1
+			_: return false
+		focus_shown = true
+		if not lv.rows.is_empty():
+			lv.select(clampi(to, 0, lv.rows.size() - 1))
+			_on_list_key(s)
+		return true
+	match k.keycode:
+		KEY_UP, KEY_LEFT: d = -1
+		KEY_DOWN, KEY_RIGHT: d = 1
+		_: return false
+	if kind == "combo":
+		if k.keycode in [KEY_UP, KEY_DOWN]:
+			focus_shown = true
+			_on_combo_key(s, d)
+			return true
+		return false
+	var members: Array[int] = []
+	for i in stops.size():
+		if stops[i].get("group") == s.get("group"):
+			members.append(i)
+	if members.size() < 2:
+		return false
+	focus = members[posmod(members.find(focus) + d, members.size())]
+	focus_shown = true
+	if str(stops[focus].get("kind", "")) == "radio":
+		_on_hit(stops[focus]["key"])
+	return true
+
+
+func _draw_focus() -> void:
+	if not focus_shown:
+		return
+	var stops := focus_stops()
+	if stops.is_empty():
+		return
+	var s: Dictionary = stops[clampi(focus, 0, stops.size() - 1)]
+	var rect := Rect2()
+	if s.get("lv") != null:
+		rect = (s["lv"] as ListView).rect
+	else:
+		for h in _hits:
+			if typeof(h[1]) == typeof(s["key"]) and h[1] == s["key"]:
+				rect = h[0]
+				break
+	if rect.size == Vector2.ZERO:
+		return
+	var q := rect.grow(-2) if s.get("lv") != null else rect.grow(1)
+	var c := Color(1, 1, 1, 0.8)
+	for e in [[q.position, Vector2(q.end.x, q.position.y)], [Vector2(q.end.x, q.position.y), q.end],
+			[q.end, Vector2(q.position.x, q.end.y)], [Vector2(q.position.x, q.end.y), q.position]]:
+		draw_dashed_line(e[0], e[1], c, 1.0, 2.0)
 
 
 # ------------------------------------------------------------------ list view and tab control

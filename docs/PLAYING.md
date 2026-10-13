@@ -45,6 +45,7 @@ The game uses the 4× AI-upscaled HD art ([HD_GRAPHICS.md](HD_GRAPHICS.md)).
 | Right click / Esc | cancel or go back; opens the menu where there is one |
 | Right click on a unit or party member | **武将情报** (character information; see [Battles](#battles)) |
 | Arrow keys / mouse wheel / Page Up, Page Down | move through menus (long lists scroll) |
+| Tab / Shift+Tab, Space, arrow keys in 环境设定, 历史情报, 持有道具一览 and 部队情报一览 | as in the original's Windows dialogs: Tab moves between the controls (a dotted frame shows which), Space ticks the box or presses the button, the arrow keys pick the next radio button or move the list's selection (also Page Up / Down, Home, End), Enter presses the framed button |
 | Hold **Space** or **Ctrl** | fast-forward animations and text (×4 game speed) |
 | Click / Enter / Esc during a video | skip the cutscene |
 

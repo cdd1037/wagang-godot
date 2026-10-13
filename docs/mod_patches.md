@@ -607,6 +607,11 @@ not ported.
     0.15), so p3 = 0 records showed and additive ones looked faint. **Done** (`effect_blend.gdshader`,
     `EffectPlayer`; checked in a capture). The original maps the result back to its palette; the port keeps true
     colour.
+55. **The dialog keyboard**: 环境设定 (KANKYOU), 历史情报 (341), 道具一览 (325) and 部队情报一览 (186) run under
+    DialogBoxParamA, so Tab / Shift+Tab go through their templates' tab stops, Space presses the focused button,
+    check box or radio button, the arrows move through a group (choosing auto radios) or a list view's selection,
+    and Enter presses the focused push button. **Done** (`DlgPanel._dialog_key`, each window's `focus_stops`;
+    `t_menus`). The item list keeps the port's Left / Right tab switch wherever the focus is.
 
 ### Deliberate differences (port design, keep unless asked)
 

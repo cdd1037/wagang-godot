@@ -119,6 +119,17 @@ func _detail(i: int) -> void:
 	await DetailPanel.show_item(get_parent(), int(d["id"]), int(d["lvl"]), int(d["exp"]))
 
 
+## Dialog 325's tab stops: 确定 2, the shown list (1457 / 1003) and the tab control 1029. Here each is its own
+## group, so Left / Right switch the tab wherever the focus is (on the tab control as in the original).
+func focus_stops() -> Array:
+	return [{"key": ["ok", 0], "kind": "button", "group": 0}, {"key": "list", "kind": "list", "group": 1, "lv": lists[tab]},
+		{"key": ["tab", tab], "kind": "tabctl", "group": 2}]
+
+
+func _on_list_key(_stop: Dictionary) -> void:
+	_cells()
+
+
 func _on_key(ev: InputEvent) -> bool:
 	if ev.is_action_pressed("ui_left") or ev.is_action_pressed("ui_right"):
 		_on_hit(["tab", 1 - tab])

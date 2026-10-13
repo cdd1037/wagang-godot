@@ -50,6 +50,7 @@ func run() -> void:
 	await _save_questions(ui)
 	await _paging(ui)
 	await _busy_hold(ui)
+	await _dialog_keys(ui)
 	var f := Assets.font()
 	var w := f.get_string_size("属性", HORIZONTAL_ALIGNMENT_LEFT, -1, DlgPanel.TEXT_SIZE).x
 	var cut := DlgPanel.clipped("近战系", w, DlgPanel.TEXT_SIZE)
@@ -282,6 +283,103 @@ func _icons(ui: GameUI) -> void:
 	menu.choose(["a", "b"])
 	_check(menu.icons.is_empty() and menu._text_dx() == 0, "a plain menu has none")
 	Game.autoplay = auto
+
+
+func _key(w: DlgPanel, code: Key, shift := false) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.shift_pressed = shift
+	ev.pressed = true
+	w._unhandled_input(ev)
+
+
+## The Win32 dialog keyboard of the DialogBoxParamA windows: Tab through the template's tab stops, Space on the
+## focused check box, arrows choosing auto radios in their group, Up / Down on the 花色 list, Enter on the focused
+## 取消; list views take Up / Down / Page / Home / End; 按顺序显示 toggles with Space.
+func _dialog_keys(ui: GameUI) -> void:
+	var gs := Mem.r16(Mem.GS)
+	var w := SettingsWindow.new()
+	w.dlu = Vector2(163, 232)
+	w.dlu_scale = Vector2(2.2, 1.85)
+	ui.add_child(w)
+	await get_tree().process_frame
+	_check(w.focus == 0 and not w.focus_shown, "确定 has the focus, no rectangle yet")
+	_key(w, KEY_TAB)
+	_key(w, KEY_TAB)
+	_check(w.focus == 2 and w.focus_shown, "Tab, Tab: 听背景音乐")
+	var bits := w._bits
+	_key(w, KEY_SPACE)
+	_check(w._bits == bits ^ Settings.BGM and not w._done, "Space toggles it and does not close the window")
+	_key(w, KEY_DOWN)
+	_check(w.focus == 3 and w._bits == bits ^ Settings.BGM, "Down: 听音效, nothing toggled")
+	_key(w, KEY_TAB)
+	var move := w._move
+	_key(w, KEY_RIGHT)
+	_check(w._move == 1 and w.focus == 5, "Right in 武将移动速度 chooses 普通 (%d → %d)" % [move, w._move])
+	_key(w, KEY_RIGHT)
+	_key(w, KEY_RIGHT)
+	_check(w._move == 0 and w.focus == 4, "and wraps round to 快")
+	_key(w, KEY_TAB, true)
+	_check(w.focus == 3, "Shift+Tab goes back")
+	w.focus = 13
+	var sk := w._skin
+	_key(w, KEY_DOWN)
+	_check(w._skin == mini(sk + 1, Settings.SKINS.size() - 1) and w.skin == w._skin, "Down on the 花色 list previews the next")
+	w.focus = 1
+	_key(w, KEY_ENTER)
+	await get_tree().process_frame
+	_check(w._done and Mem.r16(Mem.GS) == gs, "Enter on 取消 cancels")
+	w.queue_free()
+	Settings.apply()
+	var u := UnitListWindow.new()
+	u.dlu = Vector2(387, 177)
+	u.dlu_scale = Vector2(1.6, 2.4)
+	ui.add_child(u)
+	await get_tree().process_frame
+	_key(u, KEY_TAB)
+	_key(u, KEY_DOWN)
+	_key(u, KEY_DOWN)
+	_check(u.focus == 1 and u.lv.sel == 1, "部队情报一览: Tab to the list, Down Down → row 1 (%d)" % u.lv.sel)
+	_key(u, KEY_END)
+	_check(u.lv.sel == u.lv.rows.size() - 1 and u.lv.top + u.lv.page >= u.lv.rows.size(), "End: the last row in view")
+	_key(u, KEY_HOME)
+	_check(u.lv.sel == 0 and u.lv.top == 0, "Home: the first")
+	_key(u, KEY_ENTER)
+	await get_tree().process_frame
+	_check(not u._done, "Enter on the list opens nothing and does not close")
+	u.focus = 0
+	_key(u, KEY_SPACE)
+	await get_tree().process_frame
+	_check(u._done, "Space on 确定 closes")
+	u.queue_free()
+	var il := ItemListWindow.new()
+	il.dlu = Vector2(318, 209)
+	il.dlu_scale = Vector2(1.95, 2.0)
+	ui.add_child(il)
+	await get_tree().process_frame
+	var t0 := il.tab
+	_key(il, KEY_RIGHT)
+	_check(il.tab != t0, "道具一览: Left / Right still switch the tab")
+	_key(il, KEY_TAB)
+	_key(il, KEY_DOWN)
+	_check(il.focus == 1 and il.lists[il.tab].sel == (0 if il.lists[il.tab].rows.size() > 0 else -1), "Tab to the list, Down selects")
+	il.close()
+	il.queue_free()
+	Mem.set_ev(4093, 1)
+	Game.history.clear()
+	Game.add_history(1, "1一条")
+	var hw := HistoryWindow.new()
+	hw.dlu_scale = Vector2.ONE
+	hw.dlu = Vector2(376, 408)
+	ui.add_child(hw)
+	await get_tree().process_frame
+	_key(hw, KEY_SPACE)
+	_check(Mem.ev(4093) == 0, "历史情报: Space toggles 按顺序显示")
+	_key(hw, KEY_SPACE)
+	_check(Mem.ev(4093) == 1, "and back")
+	hw.close()
+	hw.queue_free()
 
 
 func _settings(ui: GameUI) -> void:

@@ -161,6 +161,28 @@ func close() -> void:
 	super.close()
 
 
+## KANKYOU's tab stops in the template's order, grouped by WS_GROUP: 确定 1 and 取消 2; 1036 / 1037 (1038 cannot be
+## changed here); 武将移动速度 1034 / 1044 / 1040 and 讯息显示速度 1033 / 1043 / 1035, each radio a tab stop; 1005 /
+## 1006 / 1008; the 花色 drop-down list 1488.
+func focus_stops() -> Array:
+	var out := [{"key": ["ok", 0], "kind": "button", "group": 0}, {"key": ["cancel", 0], "kind": "button", "group": 0},
+		{"key": ["bit", Settings.BGM], "kind": "check", "group": 1}, {"key": ["bit", Settings.SE], "kind": "check", "group": 1}]
+	for c in MOVE_RADIOS:
+		out.append({"key": ["move", c[1]], "kind": "radio", "group": 2})
+	for c in MSG_RADIOS:
+		out.append({"key": ["msg", c[1]], "kind": "radio", "group": 3})
+	for k in [["bit", Settings.MINIMAP], ["bit", Settings.NO_AUTO_CLOSE], ["level", 0]]:
+		out.append({"key": k, "kind": "check", "group": 4})
+	out.append({"key": ["combo", -1], "kind": "combo", "group": 5})
+	return out
+
+
+func _on_combo_key(_stop: Dictionary, d: int) -> void:
+	var to := clampi(_skin + d, 0, Settings.SKINS.size() - 1)
+	if to != _skin:
+		_on_hit(["skin", to])
+
+
 func _on_key(ev: InputEvent) -> bool:
 	if ev.is_action_pressed("ui_accept"):
 		_apply()

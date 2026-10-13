@@ -133,6 +133,16 @@ func _on_hover(key: Variant) -> void:
 		_cells()
 
 
+## Dialog 186's tab stops: 确定 2 and the list 1026, one group (the 我军 / 敌军 radios are not tab stops). The keys
+## only move the list's selection; as in the original (no NM_RETURN, an empty LVN_ITEMCHANGED slot) they open nothing.
+func focus_stops() -> Array:
+	return [{"key": ["ok", 0], "kind": "button", "group": 0}, {"key": "list", "kind": "list", "group": 0, "lv": lv}]
+
+
+func _on_list_key(_stop: Dictionary) -> void:
+	_cells()
+
+
 func _on_hit(key: Variant) -> void:
 	if not (key is Array):
 		return
