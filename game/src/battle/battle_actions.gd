@@ -11,7 +11,6 @@ var _strikes_done := 0
 ## Sound ids from the engine (wave player 0x47467a call sites): hit 0x23 / critical 0x24 (0x40437b),
 ## no-damage 0x1e / 0x1f (0x4043fa), level-up 0x0b (0x4074ff), equipment level-up 0x0d (0x4084db),
 ## retreat 0x10 (0x441814), vanish 0x11 (0x441be8), appear 0x2a / 0x0f (0x4570ee).
-const SE_DIE := "se16"
 const SE_HEAL := "se19"
 const SE_LEVELUP := "se11"
 const SE_EQUIP_UP := "se13"
@@ -921,17 +920,13 @@ func kill_rewards() -> void:
 ## A unit's HP reached 0 in an attack or a strategy: EV[10] = 1 for the scripts (mod 0x4d67b8, called at
 ## 0x405bb7 / 0x422c87). The unit stays on the map at HP 0 until the command is over: the player and AI
 ## loops then remove it (BattleStage.remove_dead, 0x44cc03) and poll the event scene.
+## Nothing is played here: SE 16 and the blinks are RemoveUnit's (0x441814), when the unit leaves.
 func unit_fell(u: BUnit) -> void:
 	u.hp = 0
 	u.extra["dying"] = true
 	Mem.set_ev(10, 1)
-	if u.node and not Game.instant:
-		Audio.play_se(SE_DIE)
-		var n := u.node
-		for k in 6:
-			n.visible = k % 2 == 0
-			await wait(0.08)
-		n.visible = true
+	if false:
+		await wait(0)
 
 
 ## A script brought a unit's HP to 0 (0x4121b0: EV[10] = 1, then RemoveUnit at once, whose SE 16 and blinks are

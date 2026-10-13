@@ -131,11 +131,16 @@ func run() -> void:
 	var a := _unit(0, 0, 0, Vector2i(2, 2))
 	var d := _unit(35, 300, 2, Vector2i(3, 2))
 	Mem.set_ev(10, 0)
+	var ses: Array[String] = []
+	var on_se := func(n: String) -> void: ses.append(n)
+	Audio.se_played.connect(on_se)
 	await st.actions.unit_fell(d)
 	_check(Mem.ev(10) == 1, "EV[10] = 1 when a unit falls")
+	_check(ses.is_empty(), "nothing is played when a unit falls (%s)" % [ses])
 	_check(d.state == BUnit.STATE_ON_MAP and d.hp == 0 and not d.active(), "fallen unit waits on the map")
 	await st.remove_dead()
 	_check(d.state == 3, "remove_dead takes it off the map")
+	Audio.se_played.disconnect(on_se)
 	# a script kill (0x4121b0) removes at once
 	var e := _unit(36, 301, 2, Vector2i(4, 2))
 	Mem.set_ev(10, 0)
