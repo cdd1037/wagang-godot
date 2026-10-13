@@ -172,6 +172,10 @@ The harness (`WG_AUTOSAVE`) keeps random play moving:
   (op 0x06) join the party when the sortie is built (S_31 needs its four 主攻手 to take the corners). Not from
   scenario 0: R_08 forces 雄阔海, who joins only in S_08, and with him S_08 would field a seventh unit, which the
   six op 0x4b places leave at S_07's spot, shut in behind the city wall.
+* A thin jump-start party can hang S_45: its section 妖风1 starts when any player-side unit (slot < 35, selector
+  0x401 in 0x45b4a5) is in the area (4, 19)–(33, 34), then picks player slots 0–14 at random (special function 0,
+  rand(15)) until one of them is in that area. When the only one there is a guest (尉迟恭, slot 29), it loops
+  forever, as the original would; start at R_46 (92) to test what follows, or from earlier with the real party.
 * An **ending** in the last chapters stops the run.
 
 Autoplay clicks mostly go to actors whose click would run a section that has not run yet in this file (the
