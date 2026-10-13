@@ -17,8 +17,14 @@ LOG=$OUT/uitest.log
 HL=(--headless)
 [ -n "$WINDOW" ] && HL=()
 cd "$ROOT/game" || exit 1
+# under a pseudo-terminal, as from a shell; BSD script (macOS) takes the command after the file, util-linux's with -c
+if [ "$(uname)" = Darwin ]; then
+	RUN=(script -q /dev/null godot "${HL[@]}" --path .)
+else
+	RUN=(script -qec "godot ${HL[*]} --path ." /dev/null)
+fi
 WG_UIBOT="$OUT" WG_STOP=$STOP WG_GOD=${WG_GOD-1} WG_NOVIDEO=${WG_NOVIDEO-1} WG_UIBOT_TIME=$SECS \
-	perl -e "alarm $((SECS + 120)); exec @ARGV" script -q /dev/null godot "${HL[@]}" --path . < /dev/null > "$LOG" 2>&1
+	perl -e "alarm $((SECS + 120)); exec @ARGV" "${RUN[@]}" < /dev/null > "$LOG" 2>&1
 # leaks reported at exit (resources, RIDs) are shutdown noise of headless runs, not errors of the game
 ERRS=$(grep -a "SCRIPT ERROR\|ERROR:" "$LOG" | grep -av "Case mismatch\|at exit")
 grep -a "UIBOT" "$LOG"

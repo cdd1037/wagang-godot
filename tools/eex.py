@@ -218,6 +218,7 @@ class Reader:
             try:
                 return s.decode('gbk')
             except UnicodeDecodeError:
+                print('WARNING: string at %x is not valid GBK; the bad bytes became U+FFFD' % (self.p - len(s) - 1))
                 return s.decode('gbk', errors='replace')
         v = self.u16()
         if tag in INDIRECT_TAGS and 0xEFFF <= v <= 0xFFFE:

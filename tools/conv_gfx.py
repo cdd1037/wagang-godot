@@ -212,8 +212,10 @@ def main():
     ap.add_argument('--out', default=g.OUT)
     a = ap.parse_args()
     out = a.out if a.out.endswith('/') else a.out + '/'
+    g.OUT = out                           # the index files go with the pictures
     only = set(filter(None, a.only.split(',')))
     summary = {}
+    failed = []
     for k, fn in LOCAL.items():
         if only and k not in only:
             continue
@@ -226,15 +228,20 @@ def main():
         try:
             m = importlib.import_module(mod)
         except ImportError as ex:
-            print('%-10s skipped (%s)' % (k, ex))
+            print('%-10s FAILED: %s' % (k, ex))
+            failed.append(k)
             continue
         t = time.time()
         r = m.convert(out, a.quantize)
         summary[k] = r
         print('%-10s done in %.1fs' % (k, time.time() - t), flush=True)
     json.dump(summary, open(out + 'summary.json', 'w'), ensure_ascii=False, indent=1, default=str)
+    if failed:
+        print('not converted: %s (the output is incomplete)' % ', '.join(failed))
+        return 1
+    return 0
     print(json.dumps(summary, ensure_ascii=False, default=str)[:2000])
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

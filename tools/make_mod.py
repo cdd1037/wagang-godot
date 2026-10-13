@@ -17,7 +17,15 @@ ASSETS = os.path.join(_REPO, 'game', 'assets')
 
 
 def run(args):
-    subprocess.run([sys.executable, '-I'] + args, check=True, stdout=subprocess.DEVNULL)
+    """Runs a converter; when it fails, shows what it said (which file, what is wrong) and stops."""
+    r = subprocess.run([sys.executable, '-I'] + args, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.stdout.write(r.stdout)
+        sys.stderr.write(r.stderr)
+        raise SystemExit('%s failed (exit status %d): nothing was packed' % (os.path.basename(args[0]), r.returncode))
+    for line in r.stdout.splitlines():
+        if line.startswith('WARNING'):
+            print(line)
 
 
 def changed(conv, sub):

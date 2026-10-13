@@ -14,6 +14,11 @@ ver="$("$godot" --version | cut -d. -f1-3)"
 src="$root/build/godot-src"
 if [ ! -d "$src" ]; then
   git clone --depth 1 --branch "${ver}-stable" https://github.com/godotengine/godot.git "$src"
+elif ! git -C "$src" describe --tags --exact-match 2>/dev/null | grep -qx "${ver}-stable"; then
+  # a source tree of another Godot version (a Godot update since the last build): move it to this one
+  echo "== build/godot-src is not ${ver}-stable: fetching that tag"
+  git -C "$src" fetch --depth 1 origin tag "${ver}-stable"
+  git -C "$src" checkout -q "${ver}-stable"
 fi
 scons="$root/tools/venv/bin/scons"
 [ -x "$scons" ] || "$root/tools/venv/bin/pip" install scons

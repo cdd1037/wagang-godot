@@ -8,11 +8,16 @@ name: Release builds
 on:
   push:
     branches: [main]
-    paths-ignore:          # documentation and offline tools don't change the game
-      - "docs/**"
-      - "**/*.md"
-      - "tools/**"
-      - ".gitignore"
+    paths:                 # documentation and the offline tools don't change the game; the tools a build runs do
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!.gitignore"
+      - "!tools/**"
+      - "tools/build_ios.sh"
+      - "tools/check_hd_exclude.py"
+      - "tools/test_all.sh"
+      - "tools/gtest.sh"
   workflow_dispatch:
 
 permissions:

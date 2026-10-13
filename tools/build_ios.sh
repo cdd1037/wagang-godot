@@ -76,7 +76,10 @@ rm -rf "$root/build/ios"
 mkdir -p "$root/build/ios"
 (cd "$root/game" && "$godot" --headless --path . --export-release "iOS" ../build/ios/WaGang.ipa) > "$root/build/ios_export.log" 2>&1 \
   || { tail -30 "$root/build/ios_export.log"; exit 1; }
-test -s "$root/build/ios/WaGang.pck" && test -d "$root/build/ios/WaGang.xcodeproj"
+if ! test -s "$root/build/ios/WaGang.pck" || ! test -d "$root/build/ios/WaGang.xcodeproj"; then
+  echo "the export made no WaGang.pck / WaGang.xcodeproj (build/ios_export.log)" >&2
+  exit 1
+fi
 
 echo "== building ($mode)"
 sym="$root/build/ios_sym"

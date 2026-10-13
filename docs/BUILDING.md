@@ -169,7 +169,7 @@ Everything under `game/assets/` is produced from the original game by the conver
 
 * The original game directory, placed at `wg2025/` in the repository root. It is not part of the repository. It
   contains `wagan.wa` (the executable), the `*.wa` / `*.e5` data archives, the `R_xx.wagan` / `S_xx.wagan` scripts,
-  `SoundTrk/`, the `Se*.wav` sound effects and the `*.wmv` / `*.avi` videos.
+  `SoundTrk/`, the `Se*.wav` sound effects and the `*.wmv` videos.
 * Python 3 with a virtual environment in `tools/venv`:
   ```sh
   python3 -m venv tools/venv
