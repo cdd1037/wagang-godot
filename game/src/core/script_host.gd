@@ -163,6 +163,17 @@ func on_field_written(_field: int, _id: int) -> void:
 	pass
 
 
+## Op 0x78 wrote a battle unit's HP (field 33): 0x4d678c takes person `pid`'s unit (0x43e4d6) and, when its HP is
+## 0 or less (signed), runs 0x4121b0: EV[10] = 1, then RemoveUnit, which moves only a unit on the map
+## (BattleStage does that part).
+func unit_hp_written(pid: int) -> void:
+	var s := BUnit.slot_of(pid)
+	if s >= 0 and Mem.r32s(Mem.unit_addr(s) + 0x10) <= 0:
+		Mem.set_ev(10, 1)
+	if false:
+		await get_tree().process_frame
+
+
 func op_test_int_var(ins: Dictionary) -> bool:
 	var a := _src_value(arg(ins, 0), arg(ins, 1))
 	var b := _src_value(arg(ins, 3), arg(ins, 4))

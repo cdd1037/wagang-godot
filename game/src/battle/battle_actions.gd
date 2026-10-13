@@ -921,9 +921,10 @@ func unit_fell(u: BUnit) -> void:
 		n.visible = true
 
 
-## A script brought a unit's HP to 0 (0x4121b0: EV[10] = 1, then RemoveUnit at once).
+## A script brought a unit's HP to 0 (0x4121b0: EV[10] = 1, then RemoveUnit at once, whose SE 16 and blinks are
+## the only ones).
 func unit_defeated(u: BUnit) -> void:
-	await unit_fell(u)
+	Mem.set_ev(10, 1)
 	await st.unit_ops.remove_unit(u, false)
 	st.unit_died.emit(u)
 

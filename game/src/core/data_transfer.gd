@@ -73,3 +73,6 @@ static func run(host: ScriptHost, ins: Dictionary) -> void:
 		write_field(field, id, Mem.ev(evi))
 		host._after_poke(field_addr(field, id))
 		host.on_field_written(field, id)
+		# 0x4d0653: after a write (dir byte 1) to field 33, a battle unit's HP, 0x4d678c checks that unit
+		if dir & 0xff == 1 and field & 0xff == 33:
+			await host.unit_hp_written(id)

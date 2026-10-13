@@ -395,6 +395,12 @@ func on_field_written(_field: int, _id: int) -> void:
 	refresh_units()
 
 
+func unit_hp_written(pid: int) -> void:
+	var s := BUnit.slot_of(pid)
+	if s >= 0 and Mem.r32s(Mem.unit_addr(s) + 0x10) <= 0:
+		await actions.unit_defeated(units[s])
+
+
 ## 0x40b922: the scene object (0x4ac63c) is in mode 3, i.e. from change_scene 3 (the battlefield) on. Before it
 ## (deployment) and after a later change_scene (aftermath pictures) a battle file counts as story mode.
 func in_battle() -> bool:
