@@ -160,7 +160,7 @@ UI ops and save / restore. The rest lives in components it creates (`deployment`
 | `BattleActions` | movement with zones of control, attacks (with area and piercing targets, the 【技】 techniques of the attack wrapper), counters, criticals, strategies, items, EXP, level-ups, retreats, the end-of-action skills and kill rewards (formulas in `core/rules.gd`, spec in `docs/rules.md` §4, §5, §12) |
 | `BattleCommands` | the mod's commands 绝招, 围攻 and 交给, and ChangeUnit (spec in `docs/mod_patches.md` B5 F1–F3) |
 | `BattleAI` | enemy and ally decision making, a port of the original AIAct scoring |
-| `BattleHUD` | hovered-unit panel, turn and weather, phase banners, damage numbers |
+| `BattleHUD` | hovered-unit panel, turn box and weather pane, phase banners, the HP / MP / EXP change box (`gauge`) |
 | `EffectPlayer` | strategy and effect animations (Xben / MCALL animation sets) |
 | `DuelLayer` | the 单挑 screen, implemented from `docs/duel.md` |
 | `SortieScreen` | 选择武将 (dialog 236), choosing who goes into battle; `SortieMap` its 出战位置 preview |
