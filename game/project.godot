@@ -29,6 +29,10 @@ window/handheld/orientation=4
 window/ios/hide_home_indicator=true
 window/ios/suppress_ui_gesture=true
 
+[internationalization]
+
+locale/include_text_server_data=true
+
 [rendering]
 
 textures/vram_compression/import_etc2_astc=true

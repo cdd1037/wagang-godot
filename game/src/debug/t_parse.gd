@@ -23,6 +23,11 @@ func run() -> void:
 	var files: Array = []
 	_scan("res://src", files)
 	var bad := 0
+	# exports carry the text server's line-break data (ICU): without it Chinese text, which has no spaces, does not
+	# wrap in DlgPanel.paragraph (issue #2); the editor has the data built in, so only exported builds would show it
+	if not ProjectSettings.get_setting("internationalization/locale/include_text_server_data", false):
+		print("t_parse: internationalization/locale/include_text_server_data is off: exported builds would not wrap Chinese text")
+		bad += 1
 	for f in files:
 		var s: GDScript = load(f)
 		if s == null or not s.can_instantiate():
