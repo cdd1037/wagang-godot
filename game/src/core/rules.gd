@@ -55,8 +55,8 @@ static func terrain_effect(u: BUnit, terrain: int) -> int:
 		return 10
 	var arr: Array = fam["terrain_effect"]
 	var t := int(arr[terrain]) if terrain < arr.size() else 10
-	if u.pid == 6 and terrain in [9, 10, 13]:
-		t = 11
+	if Skills.holds("dingtianqing", u.pid) and terrain in Skills.rule("dingtianqing")["terrains"]:
+		t = Skills.num("dingtianqing", "terrain_effect")
 	if u.has_effect(86):   # 辅助地形移动
 		t = maxi(t, 10)
 	return t
@@ -78,12 +78,14 @@ static func move_cost(u: BUnit, terrain: int) -> int:
 	if u.has_effect(34):
 		return 1
 	var p := u.person
-	if u.pid == 4 and Mem.r8(Mem.EV + 4 * 3190) >= 3 and Mem.r8(p.base + 0x34) == 0x2f:
+	if Skills.holds("shanxiongxin_mount", u.pid) \
+			and Mem.r8(Mem.EV + 4 * Skills.num("shanxiongxin_mount", "ev_byte")) >= Skills.num("shanxiongxin_mount", "min") \
+			and Mem.r8(p.base + 0x34) == Skills.num("shanxiongxin_mount", "accessory"):
 		return 1
 	var n := int(c)
-	if n > 1 and (u.has_effect(86) or (u.pid == 25 and u.cls() == 41)):
+	if n > 1 and (u.has_effect(86) or Skills.holds("feijiangjun", u.pid, u)):
 		n -= 1
-	if u.pid == 6 and terrain in [9, 10, 13]:
+	if Skills.holds("dingtianqing", u.pid) and terrain in Skills.rule("dingtianqing")["terrains"]:
 		return 1
 	return n
 
@@ -103,11 +105,11 @@ static func hit_rate(att: BUnit, def: BUnit) -> int:
 	if special_running():
 		# 绝招 (0x4d2f90): sure hits, except 程咬金's 三板斧: 50 %, plus 2 per weapon level with 八卦宣花斧 once
 		# EV[3185] ≥ 1 (4 per level from 3); a confused target is always hit
-		if att.pid != 1 or (def.status & BUnit.ST_CONFUSION):
+		if not Skills.holds("sanbanfu", att.pid) or (def.status & BUnit.ST_CONFUSION):
 			return _shuanglei(100)
-		var p1 := Game.person(1)
-		var h1 := 50
-		if p1.weapon == 25 and Mem.r8(0x55e1c4) >= 1:
+		var p1 := att.person
+		var h1 := Skills.num("sanbanfu", "hit")
+		if p1.weapon == Skills.num("sanbanfu", "weapon") and Mem.r8(0x55e1c4) >= 1:
 			h1 += p1.weapon_lvl * (4 if Mem.r8(0x55e1c4) >= 3 else 2)
 		return _shuanglei(h1)
 	if is_ranged(att.family()) and def.has_effect(56):
@@ -139,7 +141,7 @@ static func special_running() -> bool:
 
 static func crit_rate(att: BUnit, def: BUnit) -> int:
 	if special_running():
-		return 0 if att.pid in [7, 26] else 100    # 0x4d34c9: 伍天锡 and 雄阔海 never, the others always
+		return 0 if Skills.holds("special_no_crit", att.pid) else 100    # 0x4d34c9: 伍天锡 and 雄阔海 never
 	if att.has_effect(41):
 		return 100
 	var m := att.morale()
@@ -214,7 +216,7 @@ static func calc_damage(att: BUnit, def: BUnit, t_att: int, t_def: int, real: bo
 	var td := terrain_effect(def, t_def)
 	var A := att.formation_atk() * ta / 10
 	var D := def.formation_def() * td / 10
-	if special_running() and att.pid == 17:
+	if special_running() and Skills.holds("jinming", att.pid):
 		D = 0       # 裴元庆's 尽命三锤 ignores defence (0x4d3501)
 	var dmg: int
 	if att.has_effect(85):
@@ -279,10 +281,10 @@ static func _count_hit() -> void:
 ## dynamic slot 10, 王伯当) below 60 % HP deals 130 %; else 罗成 (19, 【术】智将) adds 15 % of his 精神. Both at
 ## most the target's HP.
 static func damage_post(att: BUnit, def: BUnit, dmg: int) -> int:
-	if att.pid == Skills.dyn(10) and (att.hp & 0xffff) < att.max_hp() * 60 / 100:
-		return mini(dmg * 130 / 100, def.hp)
-	if att.pid == 19:
-		return mini(att.spirit() * 15 / 100 + dmg, def.hp)
+	if Skills.holds("sheming", att.pid) and (att.hp & 0xffff) < att.max_hp() * Skills.num("sheming", "hp_below") / 100:
+		return mini(dmg * Skills.num("sheming", "percent") / 100, def.hp)
+	if Skills.holds("zhijiang", att.pid):
+		return mini(att.spirit() * Skills.num("zhijiang", "percent") / 100 + dmg, def.hp)
 	return dmg
 
 
@@ -297,13 +299,15 @@ static func strat_power(s: int) -> int:
 	return Mem.r8(STRAT_POWER_TABLE + s) if s >= 0 and s <= 0x41 else 0
 
 
-const DAMAGE_STRATS := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 33, 34, 35, 36, 38, 64, 65]
-# hit factor numerator/denominator per strategy (table 0x43bc07)
-const STRAT_HIT_9_10 := [1, 2, 6, 7, 11, 13, 14, 16, 22, 23, 25, 33]
-const STRAT_HIT_4_5 := [3, 8, 18, 24, 26, 27, 29, 31, 34, 35, 37]
-const STRAT_HIT_3_5 := [4, 20, 28, 30, 36]
-const STRAT_HIT_1_2 := [32]
-const STRAT_HIT_ALWAYS := [21, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 67]
+## What a strategy does is its record in data/strategy_rules.json (Game.strategy_rule; the fields are listed in
+## docs/MODDING.md): the original's handler for it (the dispatcher 0x425627), the hit factor (0x43bc07), the damage
+## and heal kinds, the statuses and stat codes, the AI's use. These read it.
+static func handler(s: int) -> String:
+	return str(Game.strategy_rule(s).get("handler", "none"))
+
+
+static func strat_has(s: int, key: String) -> bool:
+	return bool(Game.strategy_rule(s).get(key, false))
 
 
 static func strat_element(s: int) -> int:
@@ -311,13 +315,15 @@ static func strat_element(s: int) -> int:
 	return e
 
 
-## Terrain usability of element strategies (0x420422 categories 0-3; also the area filter 0x42097a).
+## Terrain usability of element strategies (0x420422 categories 0-3; also the area filter 0x42097a): the record's
+## "element" (0 火 0..4, 1 水 5..9, 2 风 10..14, 3 地 15..19); others are usable anywhere.
 static func strat_terrain_ok(s: int, caster: BUnit, target_terrain: int, _weather := 0) -> bool:
-	if s >= 20:
+	var e: Variant = Game.strategy_rule(s).get("element")
+	if e == null:
 		return true
 	if caster.has_effect(50):
 		return true
-	return element_ok(s / 5, target_terrain)
+	return element_ok(int(e), target_terrain)
 
 
 ## The element tests by terrain: 0 火 (0x420ab6), 1 水 (0x420b17), 2 风 (0x420b42), 3 地 (0x420b98).
@@ -400,11 +406,11 @@ static func _code_level(code: int, t: BUnit) -> int:
 ## in rain, heavy rain or snow (weather > 1) unless the caster has effect 50; 战备 once per turn (byte
 ## 0x55af00[caster], cleared at the side's phase start); 暝思 needs 兵力 >= 3.
 static func strat_castable(s: int, caster: BUnit, weather: int) -> String:
-	if s <= 4 and not caster.has_effect(50) and weather > 1:
+	if Game.strategy_rule(s).get("element") == 0 and not caster.has_effect(50) and weather > 1:
 		return "在恶劣天气时无法使用。"
-	if s == 57 and Mem.r8(ZHANBEI_USED + caster.slot) != 0:
+	if handler(s) == "again" and Mem.r8(ZHANBEI_USED + caster.slot) != 0:
 		return "不能再用了！"
-	if s == 62 and caster.hp < 3:
+	if handler(s) == "meditate" and caster.hp < 3:
 		return "ＨＰ不足。"
 	return ""
 
@@ -417,33 +423,29 @@ const ZHANBEI_USED := 0x55af00
 ## player's forecast (`forecast`, 0x4404bd). 狂澜 against slot 0 or the enemy commander (BattleStage.BOSS) starts
 ## from 0 but still takes the modifiers after it, so it can end above 0.
 static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int, _weather: int, forecast := false) -> int:
-	if target.pid == 0x89:
+	if Skills.holds("strategy_immune", target.pid):
 		return 0
-	if s == 21 and target.colour != 0 and target.pid < 0xd2:
+	var r := Game.strategy_rule(s)
+	if r.get("assassinate", false) and target.colour != 0 and target.pid < 0xd2:
 		return 0      # 暗杀: named officers that are not red units are immune
 	if not strat_usable(s, caster, target, target_terrain):
 		return 0
-	if s in STRAT_HIT_ALWAYS:
+	var f: Variant = r.get("hit")       # "always", [numerator, denominator] or "leader_third" (狂澜); none: the curve
+	if f is String and f == "always":
 		return 100
-	if (target.status & BUnit.ST_CONFUSION) and s != 9 and s != 21:
+	if (target.status & BUnit.ST_CONFUSION) and not (f is String and f == "leader_third"):
 		return 100
 	var h := band_curve(caster.spirit() + caster.morale(), target.spirit() + target.morale())
-	if s in STRAT_HIT_9_10:
-		h = h * 9 / 10
-	elif s in STRAT_HIT_4_5:
-		h = h * 4 / 5
-	elif s in STRAT_HIT_3_5:
-		h = h * 3 / 5
-	elif s in STRAT_HIT_1_2:
-		h = h / 2
-	elif s == 9:
+	if f is Array:
+		h = h * int(f[0]) / int(f[1])
+	elif f is String and f == "leader_third":
 		h = 0 if target.slot == 0 or target.pid == Mem.r16(BattleStage.BOSS) else h / 3
-	if s == 20 and caster.family() == 12:
+	if r.get("absorb_hp", false) and caster.family() == 12:
 		h = h * 3 / 2
 	if caster.has_effect(52):
 		h = mini(h + caster.effect_value(52), 100)
-	if Skills.beside(185, caster if forecast else target):
-		h = mini(h + 20, 100)
+	if Skills.near("duduan", caster if forecast else target):
+		h = mini(h + Skills.num("duduan", "hit"), 100)
 	if target.has_effect(54):
 		h = sat_sub(h, target.effect_value(54))
 	if target.has_effect(55):
@@ -451,25 +453,22 @@ static func strat_hit(caster: BUnit, target: BUnit, s: int, target_terrain: int,
 	return clampi(h, 0, 100)
 
 
-## The forecast's (0x4404bd) strategy kinds: HP damage (0x449bac, a table over 0..0x41), MP damage (0x449c36: 暗鬼),
-## HP heal (0x449c55: 0x27-0x2b) and MP heal (0x449c7a: 0x2c-0x2d).
-const STRAT_HP_DAMAGE := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 33, 34, 35, 36, 38, 64, 65]
-
-
+## The forecast's (0x4404bd) strategy kinds: HP damage (0x449bac, a table over 0..0x41: "hp_damage"), MP damage
+## (0x449c36: 暗鬼, "mp_damage"), HP heal (0x449c55: 0x27-0x2b) and MP heal (0x449c7a: 0x2c-0x2d), the heal handler's.
 static func strat_hp_damage(s: int) -> bool:
-	return s in STRAT_HP_DAMAGE
+	return strat_has(s, "hp_damage")
 
 
 static func strat_mp_damage(s: int) -> bool:
-	return s == 22
+	return strat_has(s, "mp_damage")
 
 
 static func strat_hp_heal(s: int) -> bool:
-	return s >= 39 and s <= 43
+	return handler(s) == "heal" and Game.strategy_rule(s).get("heal") == "hp"
 
 
 static func strat_mp_heal(s: int) -> bool:
-	return s == 44 or s == 45
+	return handler(s) == "heal" and Game.strategy_rule(s).get("heal") == "mp"
 
 
 static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) -> int:
@@ -485,15 +484,16 @@ static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) ->
 		39: dmg = dmg * 9 / 10
 		42, 43, 49, 50: dmg = dmg * 11 / 10
 		45: dmg = dmg * 13 / 10
-	if s == 20 and caster.family() == 12:
+	if strat_has(s, "absorb_hp") and caster.family() == 12:
 		dmg *= 2
 	var el := strat_element(s)
 	if el == 0 and caster.has_effect(47):
 		dmg += dmg * caster.effect_value(47) / 100
 	if el == 3 and caster.has_effect(48):
 		dmg += dmg * caster.effect_value(48) / 100
-	if caster.pid == 22 and s >= 20 and s <= 37:
-		dmg += dmg * 50 / 100
+	var xu: Array = Skills.rule("xu_maogong").get("strategies", [0, -1])
+	if Skills.holds("xu_maogong", caster.pid) and s >= xu[0] and s <= xu[1]:
+		dmg += dmg * Skills.num("xu_maogong", "percent") / 100
 	if target.has_effect(59):
 		dmg -= dmg * target.effect_value(59) / 100
 	if not preview:
@@ -505,23 +505,27 @@ static func strat_damage(caster: BUnit, target: BUnit, s: int, preview: bool) ->
 			return 0
 		if caster.slot < 35 and not Game.hooks.spared(target):
 			dmg *= 20
-	return mini(dmg, target.mp if s == 22 else target.hp)
+	return mini(dmg, target.mp if strat_has(s, "mp_damage") else target.hp)
 
 
+## A heal's amount: "heal_size" small 精神/8 + 60, large 精神/2 + 100, an MP heal its MP cost, 八阵 / 玄武 the
+## missing 兵力; an HP heal by size may add 5..10 (士气 roll); capped by what is missing.
 static func heal_amount(caster: BUnit, target: BUnit, s: int, preview: bool) -> int:
+	var r := Game.strategy_rule(s)
+	var size := str(r.get("heal_size", ""))
+	var mp: bool = r.get("heal") == "mp"
 	var h := 0
-	match s:
-		39, 41:
-			h = caster.spirit() / 8 + 60
-		40, 42, 43, 67:
-			h = caster.spirit() / 2 + 100
-		38, 66:
-			h = target.max_hp() - target.hp
-		44, 45:
-			h = int(Game.strategy(s).get("mp", 0))
-	if s in [39, 40, 41, 42, 43, 67] and not preview and target.morale() > rand(200):
+	if size == "small":
+		h = caster.spirit() / 8 + 60
+	elif size == "large":
+		h = caster.spirit() / 2 + 100
+	elif handler(s) in ["bazhen", "xuanwu"]:
+		h = target.max_hp() - target.hp
+	elif mp:
+		h = int(Game.strategy(s).get("mp", 0))
+	if size != "" and not preview and target.morale() > rand(200):
 		h += rand(6) + 5
-	if s in [44, 45]:
+	if mp:
 		return mini(h, target.max_mp() - target.mp)
 	return mini(h, target.max_hp() - target.hp)
 

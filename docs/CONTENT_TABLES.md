@@ -1,13 +1,14 @@
-# Content tables (proposal)
+# Content tables
 
-**Status:** proposal of 2026-10-13. Nothing here is built yet. It needs three decisions, listed at the end.
+**Status:** built on 2026-10-13 (scope B of "Decisions taken" below). The fields are
+documented for modders in [MODDING.md](MODDING.md), "Rules as tables". This page keeps the design and why.
 
 The goal is to let a mod change *who has a skill*, *what a strategy does* and *what an item does* by editing a data
-file instead of the game's code. Today those rules are written into the code as numbers.
+file instead of the game's code. Before the tables, those rules were numbers in the code.
 
-## What the code has today
+## What the code had before
 
-**Character skills.** The code checks a person id in about 70 places across 8 files. The busiest are `battle_actions.gd`
+**Character skills.** The code checked a person id in about 70 places across 8 files. The busiest are `battle_actions.gd`
 (22), `person.gd` (18), `battle_commands.gd` (14) and `rules.gd` (12). A skill's holder is one of three kinds:
 
 | Holder | Example | How the original decides it |
@@ -36,7 +37,7 @@ mod could edit, so the port has to write it down itself.
 functions: `item_usable_on`, `use_item` and `_item_check`. Their status-cure masks (0x48, 0x12, 0x7e, 0x24) are
 bare numbers in that code.
 
-## Proposal
+## The design
 
 ### 1. Strategies: `data/strategy_rules.json`, one record per strategy id
 
@@ -87,19 +88,22 @@ The 绝招 moves (`battle_commands.gd`, one routine per person) stay code; the t
 * A new check, `t_tables`, compares each record with the constant it replaces, so a typo in a table fails CI.
 * `t_skills`, `t_rules`, `t_commands` and `t_strat` must pass unchanged, followed by a full autoplay run.
 
-## Decisions needed
+## Decisions taken
 
-1. **Scope.**
-   * **A:** strategies and items only. This is the smallest and most mechanical step.
-   * **B (recommended):** A plus the skill holders, conditions and numbers.
-   * **C:** B plus generic effect records (hit bonus, damage multiplier, on-hit status …) that the engine
-     interprets, so a mod could add a skill without code. Not recommended now: many skills don't fit such records,
-     and building them risks changing behaviour.
-2. **Where the tables live.**
-   * **JSON under `game/assets/data` (recommended):** mods already override these files, and `make_mod.py`
-     packs them from its extra folder.
-   * **GDScript constants:** no loading step, but a mod could not change them.
-3. **Read the fixed holders from the program image?** The original compares fixed holders as constants in its
-   code. Reading them from `exe_image.bin`, as strategy power is read, would carry a mod made by patching the
-   original program over automatically. That needs every compare site found in Ghidra: about 60, some checked in
-   several places. **Recommended: not now.** The JSON is then the place a mod edits.
+1. **Scope: B.** Strategies, items, and the skill holders, conditions and numbers. Generic effect records (C) were
+   left out.
+2. **JSON under `game/assets/data`:** `strategy_rules.json`, `item_rules.json`, `skills.json`.
+3. **Fixed holders are not read from the program image.** The JSON is the place a mod edits.
+
+How it turned out: about 70 person checks, ten strategy lists and the item-type branches now read the tables.
+`Skills.holds(id, pid)`, `Skills.num(id, key)` and `Skills.near(id, unit)` answer for skills, `Rules.handler(s)` and
+`Game.strategy_rule(s)` for strategies, and `Game.item_rule(id)` for items. Two protagonist-only checks
+(管毅's entrance animation and the 现金 line in 武将情报) and the critical-hit shout table stay in the code: they
+are not skills.
+
+The 绝招 records are kept in the order the original tests the persons. Its enable check (0x4d5444) tests them in a
+slightly different order, which matters only if one person held two 绝招. The scripts never assign that (dynamic
+slot 4, 夺面鞭, only ever holds 尉迟恭), so the table's single order plays the same.
+
+`t_tables` compares every record with the constant it replaced and shows that a changed record changes the game.
+`t_skills`, `t_rules`, `t_commands`, `t_strat` and the flow runs pass unchanged.

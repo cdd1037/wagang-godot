@@ -40,14 +40,14 @@ func attack_range_code(u: BUnit) -> int:
 	if u.status & BUnit.ST_FEAR:
 		return 11
 	if not Rules.special_running():
-		if u.pid == 204:
-			return 12
-		if u.pid == 25 and u.cls() == 41:
-			return 4
-	elif u.pid == 8:
-		return 6
-	elif u.pid in [5, 26, 14, 19]:
-		return 0
+		if Skills.holds("qiangmuzi", u.pid):
+			return Skills.num("qiangmuzi", "range")
+		if Skills.holds("feijiangjun", u.pid, u):
+			return Skills.num("feijiangjun", "range")
+	elif Skills.holds("special_range_6", u.pid):
+		return Skills.num("special_range_6", "range")
+	elif Skills.holds("special_range_adjacent", u.pid):
+		return Skills.num("special_range_adjacent", "range")
 	if u.has_effect(42):
 		return u.effect_value(42)
 	var c := u.cls()
@@ -184,7 +184,9 @@ const T_NUMU := 0x55ac4c         # 怒目 (单雄信): drains all MP
 const T_SHA := 0x55ac50          # 煞 (尉迟恭): up to three attacks
 const T_SHUANGLEI := 0x55ac54    # 双雷引 attacking (定彦平, 东方伯): the target strikes first, then a double counter
 const T_DOUBLE := 0x55ac68       # byte: 抽屉枪's forced second strike
-const TECHNIQUES := {44: T_HENGTUI, 34: T_GAIMA, 33: T_FENGWU, 32: T_LONGYIN, 43: T_GUIMEN, 4: T_NUMU, 3: T_SHA}
+## The flag each technique sets; who has it is the skill record's holder (data/skills.json, "technique").
+const TECHNIQUES := {"hengtui": T_HENGTUI, "gaima": T_GAIMA, "fengwu": T_FENGWU, "longyin": T_LONGYIN,
+	"guimen": T_GUIMEN, "numu": T_NUMU, "sha": T_SHA}
 const BANNERS := [[T_LONGYIN, 1, "龙吟"], [T_FENGWU, 1, "凤舞九天"], [T_FIRST, 1, "双雷引"], [T_GAIMA, 1, "盖马三锤"],
 	[T_HENGTUI, 1, "横推八马倒"], [T_GUIMEN, 1, "鬼门刀"], [T_NUMU, 1, "怒目"], [T_SHA, 1, "煞"], [T_FIRST, 2, "抽屉枪"]]
 
@@ -223,8 +225,11 @@ func attack_cmd(att: BUnit, def: BUnit) -> void:
 
 ## 0x4d76d0: the attacker's technique, on chance min(50·士气 / target's 士气, 100) % (0x4d75d2).
 func _trigger(att: BUnit, def: BUnit) -> bool:
-	var flag: int = TECHNIQUES.get(att.pid, 0)
-	if flag == 0 and not (att.pid in [101, 136]):
+	var flag := 0
+	for id in TECHNIQUES:
+		if Skills.holds(id, att.pid):
+			flag = TECHNIQUES[id]
+	if flag == 0 and not Skills.holds("shuanglei", att.pid):
 		return false
 	if not Rules.chance(mini(att.morale() * 50 / maxi(def.morale(), 1), 100)):
 		return false
@@ -324,7 +329,7 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			await _technique_hit(targets[maxi(i - 1, 0)])
 			if (dmgs[i] != 0 or mps[i] != 0) and not t.has_effect(57):
 				_on_hit_effects(att, t, targets)
-			if att.pid == 204 and Mem.r8(Skills.MAP_NO) <= 34:
+			if Skills.holds("zhang_poison", att.pid) and Mem.r8(Skills.MAP_NO) <= Skills.num("zhang_poison", "map_max"):
 				t.status |= BUnit.ST_POISON      # 张善相 (0x4d568d): hit or miss
 			if mps[i] > 0:
 				t.mp = maxi(t.mp - mps[i], 0)
@@ -337,7 +342,7 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			if killed:
 				fallen.append(t)
 			elif dmgs[i] > 0:
-				if t.pid == 24 and Mem.r8(Mem.EV + 4 * 3223) >= 3:
+				if Skills.holds("guanshi", t.pid) and Mem.r8(Mem.EV + 4 * Skills.num("guanshi", "ev")) >= Skills.num("guanshi", "min"):
 					# 谢映登's 贯石 (0x4da0a7): the damage also comes off his MP (its low byte)
 					Mem.w8(t.addr + 0x14, maxi((t.mp & 0xff) - dmgs[i], 0))
 				# 笼屉 (effect 62 使用馒头) once the unit is 100 or more below its maximum (mod 0x4d681c)
@@ -460,8 +465,8 @@ func area_code(u: BUnit) -> int:
 		a = 10                        # 横推八马倒
 	elif Mem.r8(Addr.TAPO) == 1:
 		a = 12                        # 踏破连营
-	if u.pid == 178:
-		a = 6                         # 文士弘 长缨奔破
+	if Skills.holds("changying", u.pid):
+		a = Skills.num("changying", "area")     # 文士弘 长缨奔破
 	if a < 4 and u.has_effect(21) and u.cls() in [15, 16, 17]:
 		return 2 if u.cls() == 17 else 1
 	if u.has_effect(43):
@@ -472,7 +477,7 @@ func area_code(u: BUnit) -> int:
 ## A secondary target takes half damage (mode bit 2) for the area codes 1-3 and 12 only, the lines and sweeps
 ## hitting in full; 宇文成都 (33) only for code 1 (mod 0x4d93e5 / 0x4d93af).
 func _halved(att: BUnit, code: int) -> bool:
-	if att.pid == 33:
+	if Skills.holds("yuwen_halved", att.pid):
 		return code == 1
 	return (code >= 1 and code <= 3) or code == 12
 
@@ -535,8 +540,8 @@ func _crit_rate(att: BUnit, t: BUnit, hit: bool) -> int:
 	_bingdi_count(t)
 	if not hit and _xuanyuan(att, t):
 		att.status |= BUnit.ST_PARALYSIS
-	if r < 100 and _counter_depth != 1 and att.pid == Mem.ev(3972) \
-			and st.range_unit != null and st.range_unit.pid == 0:
+	if r < 100 and _counter_depth != 1 and att.pid == Skills.holder("bingdi") \
+			and st.range_unit != null and st.range_unit.pid == Skills.num("bingdi", "partner"):
 		return 100
 	return r
 
@@ -545,8 +550,8 @@ func _crit_rate(att: BUnit, t: BUnit, hit: bool) -> int:
 ## counts in byte [0x55ee04], one on 管毅 in [0x55ee06]. The phase start copies them to 0x55ee00 (0x4d1e21), and
 ## a player unit's regeneration clears them (0x43cf75).
 func _bingdi_count(t: BUnit) -> void:
-	var w := Skills.unit_on_map(Skills.dyn(2))
-	var g := Skills.unit_on_map(0)
+	var w := Skills.unit_on_map(Skills.holder("bingdi"))
+	var g := Skills.unit_on_map(Skills.num("bingdi", "partner"))
 	if w == null or g == null or Skills.distance(w.pos, g.pos) >= 0x9a:
 		return
 	if t.slot == w.slot:
@@ -559,12 +564,12 @@ func _bingdi_count(t: BUnit) -> void:
 ## paralysed, once EV[3184] ≥ 1, with chance EV[2700] (doubled from EV[3184] ≥ 3), while he carries the spear (23).
 ## No script sets EV[2700], so it never happens in the shipped game.
 func _xuanyuan(att: BUnit, t: BUnit) -> bool:
-	if t.pid != 0 or absi(t.pos.x - att.pos.x) > 1 or absi(t.pos.y - att.pos.y) > 1:
+	if not Skills.holds("xuanyuan", t.pid) or absi(t.pos.x - att.pos.x) > 1 or absi(t.pos.y - att.pos.y) > 1:
 		return false
-	var lv := Mem.r8(Mem.EV + 4 * 3184)
-	if lv == 0 or not Rules.chance(Mem.ev(2700) * (2 if lv >= 3 else 1)):
+	var lv := Mem.r8(Mem.EV + 4 * Skills.num("xuanyuan", "ev"))
+	if lv == 0 or not Rules.chance(Mem.ev(Skills.num("xuanyuan", "chance_ev")) * (2 if lv >= 3 else 1)):
 		return false
-	return Game.person(0).weapon == 23
+	return t.person.weapon == Skills.num("xuanyuan", "weapon")
 
 
 ## Counterattack (0x40639a): a defender left standing and not confused hits back when the attacker is in its
@@ -616,7 +621,7 @@ const SHOUT_PIDS := [0, 1, 2, 5, 7, 8, 9, 13, 14, 15, 16, 17, 19, 22, 24, 32, 33
 func _crit_shout(att: BUnit) -> void:
 	var roll := Rules.chance(25)
 	if Rules.special_running():
-		if att.pid == 1:
+		if Skills.holds("sanbanfu", att.pid):
 			return
 	elif not roll:
 		return
@@ -659,7 +664,7 @@ func _on_hit_effects(att: BUnit, def: BUnit, targets: Array[BUnit]) -> void:
 		def.status |= BUnit.ST_PARALYSIS
 	if att.has_effect(37):
 		_random_statuses(att, def)
-	if att.pid == 67:
+	if Skills.holds("mengyan", att.pid):
 		for t in targets:
 			if t.level() > att.level():
 				break
@@ -704,7 +709,7 @@ const ANIM_TICK := 0.05
 
 
 static func anim_table(att: BUnit) -> int:
-	if att.pid == 0 or att.pid == 204:
+	if Skills.holds("windup", att.pid):
 		return ANIM_TABLE_WINDUP
 	return ANIM_TABLE_TRIPLE if Mem.r8(TRIPLE_STRIKE) == 1 else ANIM_TABLE
 
@@ -798,9 +803,9 @@ func end_action(u: BUnit) -> void:
 		return
 	var n := Mem.r8(BattleStage.PATH_LEN)
 	var skill := 0
-	if u.pid == 15 and Mem.r8(Addr.BORUO) != 0:
+	if Skills.holds("boruo", u.pid) and Mem.r8(Skills.num("boruo", "flag")) != 0:
 		skill = 15
-	elif u.pid == 16 and Mem.r8(Addr.DUANZAO) != 0:
+	elif Skills.holds("duanzao", u.pid) and Mem.r8(Skills.num("duanzao", "flag")) != 0:
 		skill = 16
 	if skill == 0 or n < 2:
 		return
@@ -890,14 +895,14 @@ func kill_rewards() -> void:
 		if Rules.chance(10):
 			var j := 3007 + Rules.rand(3)
 			Mem.set_ev(j, Mem.ev(j) + 1)
-	if Mem.ev(3183) >= 4:
-		var s := BUnit.slot_of(3)
+	if Mem.ev(Skills.num("kill_mp", "ev")) >= Skills.num("kill_mp", "min"):
+		var s := BUnit.slot_of(Skills.holder("kill_mp"))
 		if s >= 0:
-			var p3 := Game.person(3)
+			var p3 := Game.person(Skills.holder("kill_mp"))
 			var acc := Mem.r8(p3.base + 0x34)
 			var cap := p3.mp_base + (15 if acc == 0x43 else 30 if acc == 0x44 else 0)
 			var a := st.units[s].addr + 0x14
-			Mem.w8(a, mini(Mem.r8(a) + 5 * count, cap))
+			Mem.w8(a, mini(Mem.r8(a) + Skills.num("kill_mp", "per_kill") * count, cap))
 
 
 ## A unit's HP reached 0 in an attack or a strategy: EV[10] = 1 for the scripts (mod 0x4d67b8, called at
@@ -1092,7 +1097,7 @@ func strategy_cost(u: BUnit, s: int) -> int:
 	var cost := strategy_mp(s)
 	if u.has_effect(49):
 		cost -= cost * u.effect_value(49) / 100
-	if Skills.beside(179, u):
+	if Skills.near("fangmou", u):
 		cost = maxi(cost >> 1, 1)
 	return cost
 
@@ -1114,8 +1119,8 @@ func strategy_cast_cells(u: BUnit, s: int) -> Array[Vector2i]:
 	var sd := Game.strategy(s)
 	var ally := int(sd.get("target", 0)) == 1
 	var r := int(sd.get("range", 0))
-	if r != 10 and u.pid == 35:
-		r = 13
+	if r != 10 and Skills.holds("zhuying", u.pid):
+		r = Skills.num("zhuying", "range")
 	# range 11: cast on the caster's own cell (weather 58-60, 飓风, the self buffs)
 	return Shapes.range_cells(r, u.pos, view().map_w, view().map_h, ally or r == 11)
 
@@ -1123,10 +1128,7 @@ func strategy_cast_cells(u: BUnit, s: int) -> Array[Vector2i]:
 ## 【术】烈魔 (the persons in EV[3985..3988]): every strategy they cast covers more (mod 0x528200): area 0 → 1,
 ## 1 → 2, 2 → 3, any other → 6.
 func lie_mo(u: BUnit) -> bool:
-	for k in range(15, 19):
-		if u.pid == Skills.dyn(k):
-			return true
-	return false
+	return Skills.holds("liemo", u.pid)
 
 
 func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
@@ -1140,13 +1142,13 @@ func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
 func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 	var side := int(Game.strategy(s).get("target", 0))
 	var out: Array[BUnit] = []
-	if s == 14:
+	if Rules.handler(s) == "storm":
 		# 飓风 (0x42423a): every opposing unit on the map where the strategy is usable
 		for t in st.units:
 			if t.active() and t.is_enemy_of(u) and usable_on(u, s, t):
 				out.append(t)
 		return out
-	if s == 66:
+	if Rules.handler(s) == "xuanwu":
 		# 玄武 (0x424810): every unit on the map, of either side (0x42097a passes for strategies >= 0x14)
 		for t in st.units:
 			if t.active():
@@ -1163,7 +1165,7 @@ func strategy_targets(u: BUnit, s: int, target: Vector2i) -> Array[BUnit]:
 			continue
 		if t == main or Rules.strat_terrain_ok(s, u, view().terrain_at(t.pos)):
 			out.append(t)
-	if (s in DAMAGE_HANDLER or s in STATUS_HANDLER) and u.pid in [Skills.dyn(19), Skills.dyn(20)]:
+	if Rules.handler(s) in REPEATED_HANDLERS and Skills.holds("ruosha", u.pid):
 		# 【术】弱杀 (0x528270): every unit on the map with a status joins, of either side (no script hands it out)
 		for t in st.units:
 			if t.exists() and t.state == BUnit.STATE_ON_MAP and (t.status & 0x7e) and not out.has(t):
@@ -1195,10 +1197,8 @@ func cast_refusal(u: BUnit, s: int) -> String:
 	return Rules.strat_castable(s, u, st.weather())
 
 
-## The strategies of the damage handler 0x42313e and the status handler 0x423549, which 烈魔 runs twice and 弱杀
-## extends.
-const DAMAGE_HANDLER := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 65]
-const STATUS_HANDLER := [31, 32, 33, 34, 35, 36, 37, 46, 47]
+## The handlers whose strategies 烈魔 runs twice and 弱杀 extends: damage 0x42313e and status 0x423549.
+const REPEATED_HANDLERS := ["damage", "status"]
 
 
 func cast(u: BUnit, s: int, target: Vector2i) -> void:
@@ -1208,7 +1208,7 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	var targets := strategy_targets(u, s, target)
 	for t in targets:
 		t.extra.erase("mp_taken")
-	if s == 57 and not targets.is_empty():
+	if Rules.handler(s) == "again" and not targets.is_empty():
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
 	if not Game.autoplay:
@@ -1219,7 +1219,7 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
 	var best_exp := 0
-	if s in [58, 59, 60]:
+	if Rules.handler(s) == "weather":
 		# 0x423b2f: no hit roll. The climate gives the level (0x44a1f9); the level there is already fails (Xben.wa
 		# 0x2d at the caster), any other is set after SE 134 and 1.5 s (0x449f91). 20 EXP either way (0x420efb).
 		var w := st.weather_strategy_level(s)
@@ -1240,7 +1240,7 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	for t in targets:
 		var e := await _apply_strategy(u, s, t)
 		best_exp = maxi(best_exp, e)
-	if lie_mo(u) and (s in DAMAGE_HANDLER or s in STATUS_HANDLER):
+	if lie_mo(u) and Rules.handler(s) in REPEATED_HANDLERS:
 		# 烈魔 (0x528100 / 0x528160): the same targets once more, with new rolls
 		for t in targets:
 			if t.active():
@@ -1248,7 +1248,7 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 				best_exp = maxi(best_exp, e)
 	# 0x422f0d: the cost is paid after the effect; 暗鬼 (22) gives the caster the MP it took, up to its maximum
 	u.mp = Rules.sat_sub(u.mp, cost)
-	if s == 22 and not targets.is_empty():
+	if Rules.strat_mp_damage(s) and not targets.is_empty():
 		u.mp += clampi(int(targets[0].extra.get("mp_taken", 0)), 0, maxi(u.max_mp() - u.mp, 0))
 	if u.slot < 15 and best_exp > 0:
 		await gain_exp(u, best_exp * exp_mult(u) / 100)
@@ -1264,17 +1264,20 @@ func _strat_exp(u: BUnit, t: BUnit, killed: bool, damage_strat: bool) -> int:
 	return Rules.strategy_exp(la, lt)
 
 
+## One target of a cast, by the strategy's record (Rules.handler and the fields of data/strategy_rules.json).
 func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
-	if s == 38 or s == 66:
+	var r := Game.strategy_rule(s)
+	var h := Rules.handler(s)
+	if h in ["bazhen", "xuanwu"]:
 		return await _apply_random_strategy(u, s, t)
-	var damage_set := s in Rules.DAMAGE_STRATS or s == 21
+	var damage_set: bool = Rules.strat_hp_damage(s) or Rules.strat_mp_damage(s) or r.get("assassinate", false)
 	# heals (0x42378d) have no hit roll: the amount is capped by what is missing
-	var hit := s in [39, 40, 41, 42, 43, 44, 45] or Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
+	var hit := h == "heal" or Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
 	if not hit:
 		if not Game.autoplay:
 			st.hud.popup_number("失败", t.pos, Color(0.7, 0.7, 0.7))
 		return _strat_exp(u, t, false, false)
-	if s == 21:
+	if r.get("assassinate", false):
 		# 暗杀 (0x43c058): no damage; the target is marked (0x569f00[t] = 2, assassin 0x569f73[t]) and drops
 		# to 1 HP two phase starts later (BattleStage._assassination_countdown). The hit still counts as one
 		# (0x569fe7 toggles, 0x42322d), and the EXP is that of a strategy that kills nothing.
@@ -1286,7 +1289,7 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		return _strat_exp(u, t, false, false)
 	if damage_set:
 		var dmg := Rules.strat_damage(u, t, s, false)
-		if s == 22:
+		if Rules.strat_mp_damage(s):
 			t.mp = maxi(t.mp - dmg, 0)
 			t.extra["mp_taken"] = dmg
 			if not Game.autoplay:
@@ -1300,58 +1303,47 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 				await wait(0.25)
 				t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
 		_apply_damage(t, dmg)
-		if s == 20:   # 暗算: absorb HP
+		if r.get("absorb_hp", false):   # 暗算: absorb HP
 			u.hp = mini(u.hp + dmg, u.max_hp())
 		if killed:
 			await unit_fell(t)
 		else:
-			if s in [33, 34]:
-				t.status |= BUnit.ST_POISON
-			elif s in [35, 36]:
-				t.status |= BUnit.ST_PARALYSIS
+			t.status |= _status_bit(r)      # 毒烟 / 瘴雾 中毒, 陷阱 / 濠壑 麻痹: only on a target that survives
 			await _strategy_bun(t, dmg)
 		return _strat_exp(u, t, killed, true)
-	match s:
-		23, 24: _buff(t, 3, false)
-		25, 26: _buff(t, 4, false)
-		27, 28: _buff(t, 2 if t.family() in [8, 9, 10, 18] else 0, false)
-		29, 30: _buff(t, 1, false)
-		31, 32: t.status |= BUnit.ST_CONFUSION
-		37: t.status |= BUnit.ST_SEAL
-		39, 40, 41, 42, 43, 67:
+	t.status |= _status_bit(r)              # 伪书 / 伪令 混乱, 封印 封策
+	if r.has("cure"):
+		t.status &= ~int(r["cure"])         # 棒喝 / 超脱
+	for c in r.get("stat_codes", []):
+		_stat_code(t, int(c))               # the stat strategies (0x42335b) and 聚气 / 豪气 (0x423cc0)
+	match r.get("heal"):
+		"hp":
 			var h2 := Rules.heal_amount(u, t, s, false)
 			t.hp = mini(t.hp + h2, t.max_hp())
 			Audio.play_se(SE_HEAL)
 			if not Game.autoplay: st.hud.popup_number("+%d" % h2, t.pos, Color(0.4, 1, 0.4))
-		44, 45:
+		"mp":
 			var m := Rules.heal_amount(u, t, s, false)
 			t.mp = mini(t.mp + m, t.max_mp())
 			if not Game.autoplay: st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
-		46, 47: t.status &= ~0x7e
-		48: _buff(t, 5, true)
-		49, 50: _buff(t, 3, true)
-		51, 52: _buff(t, 4, true)
-		53, 54:
-			if t.cls() == 50 or (t.cls() >= 24 and t.cls() <= 26):
-				_buff(t, 0, true)
-				_buff(t, 2, true)
-			else:
-				_buff(t, 2 if t.family() in [8, 9, 10, 18] else 0, true)
-		55, 56: _buff(t, 1, true)
-		57:
+	match h:
+		"again":                            # 战备 (0x423960)
 			t.moved = false
 			t.acted = false
-		61:
-			_stat_code(t, 0x35)                  # 聚气: code 0xa0
-		62:
+		"meditate":                         # 暝思 (0x423d6c)
 			t.mp = mini(t.mp + t.max_mp() / 4, t.max_mp())
-		63:
-			for c in [0x31, 0x33, 0x35, 0x37]:   # 豪气: code 0xaf
-				_stat_code(t, c)
-		_:
-			pass
 	st.refresh_units()
 	return _strat_exp(u, t, false, false)
+
+
+## The status a strategy's record gives ("status": confusion, poison, paralysis, seal), or 0.
+static func _status_bit(r: Dictionary) -> int:
+	match r.get("status"):
+		"confusion": return BUnit.ST_CONFUSION
+		"poison": return BUnit.ST_POISON
+		"paralysis": return BUnit.ST_PARALYSIS
+		"seal": return BUnit.ST_SEAL
+	return 0
 
 
 ## 八阵 (0x423edc) and 玄武 (0x424810): no hit roll; each target gets one random outcome. 八阵 draws rand(8):
@@ -1361,18 +1353,19 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 ## 八阵 is a damage strategy, so its kill formula applies when the stored amount is not below the target's
 ## 兵力 (a heal is stored negated and compares as a huge unsigned value); 玄武 always gives the small one.
 func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
-	var k: int = Rules.rand(8) if s == 38 else Rules.rand(7) + 1
+	var bazhen := Rules.handler(s) == "bazhen"
+	var k: int = Rules.rand(8) if bazhen else Rules.rand(7) + 1
 	var amount := 0       # damage, or −heal
 	match k:
 		0, 4:
-			if s == 38:
-				var hs := 38 if k == 0 else 33
+			if bazhen:
+				var hs := s if k == 0 else 33
 				if Rules.chance(Rules.strat_hit(u, t, hs, view().terrain_at(t.pos), st.weather())):
 					amount = Rules.strat_damage(u, t, hs, false)
 		7:
 			amount = -(t.max_hp() - t.hp)
 	var stored := amount if amount >= 0 else 0x100000000 + amount
-	var e := _strat_exp(u, t, s == 38 and stored >= t.hp, s == 38)
+	var e := _strat_exp(u, t, bazhen and stored >= t.hp, bazhen)
 	var survives := amount < t.hp
 	match k:
 		1:
@@ -1502,7 +1495,7 @@ func eat_bun(t: BUnit) -> void:
 func heal_value(iid: int, t: BUnit) -> int:
 	var it := Game.item(iid)
 	var v := int(it.get("value", 0))
-	if int(it.get("type", 0)) == 64:
+	if Game.item_rule(iid).get("kind") == "heal_mp":
 		var mm := t.max_mp() - t.mp
 		return mm if v == 0xff or (mm >= 0 and mm < v) else v
 	var mh := t.max_hp() - t.hp
@@ -1518,17 +1511,20 @@ func usable_items() -> Array:
 	return out
 
 
+## Whether a consumable's handler takes `t`, by the kind of its type (data/item_rules.json).
 func item_usable_on(iid: int, t: BUnit) -> bool:
-	var it := Game.item(iid)
-	match int(it.get("type", 0)):
-		63: return t.hp < t.max_hp()
-		64: return t.mp < t.max_mp()
-		65: return t.status & 0x48 != 0
-		66: return t.status & 0x12 != 0
-		67: return t.status & 0x7e != 0
-		68: return t.status & 0x24 != 0
-		76: return t.cls() <= 38 and t.cls() % 3 < 2 and t.level() >= (20 if t.cls() % 3 == 0 else 40)
+	var r := Game.item_rule(iid)
+	match r.get("kind"):
+		"heal_hp": return t.hp < t.max_hp()
+		"heal_mp": return t.mp < t.max_mp()
+		"cure": return t.status & int(r["mask"]) != 0
+		"promote": return t.cls() <= 38 and t.cls() % 3 < 2 and t.level() >= (20 if t.cls() % 3 == 0 else 40)
 	return true
+
+
+## Fruits, 仙人果 and 印绶 take any unit of one's own and refuse afterwards (_item_check).
+static func item_checked_after(iid: int) -> bool:
+	return Game.item_rule(iid).get("kind") in ["fruit", "level_up", "promote"]
 
 
 ## Use a consumable on t; false when the handler refuses (the item stays and the unit keeps its turn).
@@ -1537,27 +1533,25 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 	var it := Game.item(iid)
 	var v := int(it.get("value", 0))
 	var p := t.person
-	var ty := int(it.get("type", 0))
+	var r := Game.item_rule(iid)
 	face(u, t.pos)
-	if ty >= 70:
-		if not await _item_check(ty, p):
+	if item_checked_after(iid):
+		if not await _item_check(r, p):
 			return false
 	else:
 		Audio.play_se(SE_HEAL)
-	match ty:
-		63:
+	match r.get("kind"):
+		"heal_hp":
 			var h := heal_value(iid, t)
 			t.hp += h
 			st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
-		64:
+		"heal_mp":
 			var m := heal_value(iid, t)
 			t.mp += m
 			st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
-		65: t.status &= ~0x48
-		66: t.status &= ~0x12
-		67: t.status &= ~0x7e
-		68: t.status &= ~0x24
-		69:
+		"cure":
+			t.status &= ~int(r["mask"])
+		"all_up":
 			# 太保令 (mod 0x4d2d5a): the five stat words +2 (at most 9999) and the abilities +2 (at most 100), no buff;
 			# the unit's poses 11 and 7 (0x45778f)
 			for i in 5:
@@ -1566,17 +1560,17 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 				p.set_raw(i, Person._min_add(p.get_raw(i), 2, 100))
 			await st.unit_ops.op_unit_status({"args": [p.id, 11, 0xff, 0xff]})
 			await st.unit_ops.op_unit_status({"args": [p.id, 7, 0, 0]})
-		70, 71, 72, 73, 74:
+		"fruit":
 			# fruits (0x41d080): word and ability up, the stat-up effect, the battle level of that stat one step up;
 			# no message
-			var si: int = [0, 2, 1, 3, 4][ty - 70]
+			var si := int(r["stat"])
 			var word := mini(p.get_stat_word(si) + v, 9999)
 			var raw := mini(p.get_raw(si) + v, 100)
-			await _use_anim(u, t, iid, [0x22, 0x22, 0x23, 0x24, 0x25][ty - 70])
+			await _use_anim(u, t, iid, int(r["fx"]))
 			p.set_stat_word(si, word)
 			p.set_raw(si, raw)
 			t.set_buff(si, Rules.buff_step(t.buff(si), true))
-		75:
+		"level_up":
 			# 仙人果 (0x41d3d9): counted per person (0x55a400), the +1 grade bonus for the next five stats, its value as
 			# experience through SetExp, then 兵力 and 策略 to full
 			await _use_anim(u, t, iid, 0xff)
@@ -1585,7 +1579,7 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 			await set_exp(p, p.exp + v)
 			t.hp = t.max_hp()
 			t.mp = t.max_mp()
-		76:
+		"promote":
 			await _promote(u, t, iid)
 	_consume(entry)
 	st.refresh_units()
@@ -1593,12 +1587,12 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 
 
 ## The refusals of 0x41c4e9 / 0x40934d (timed boxes) for fruits, 仙人果 and 印绶.
-func _item_check(ty: int, p: Person) -> bool:
+func _item_check(r: Dictionary, p: Person) -> bool:
 	var why := ""
-	if ty <= 74:
-		if p.get_raw([0, 2, 1, 3, 4][ty - 70]) >= 100:
+	if r.get("kind") == "fruit":
+		if p.get_raw(int(r["stat"])) >= 100:
 			why = "该项能力已经达到100，不能再提升了。"
-	elif ty == 75:
+	elif r.get("kind") == "level_up":
 		if p.level >= 70:
 			why = "不能再升级了。"
 	elif p.cls > 38:

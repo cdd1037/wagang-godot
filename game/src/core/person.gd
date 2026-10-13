@@ -247,11 +247,11 @@ func can_equip(iid: int) -> bool:
 	var it := _item(iid)
 	if it.is_empty():
 		return false
-	if id == 11 and slot_of(it) == 2:
+	if Skills.holds("fanhu", id) and slot_of(it) == 2:
 		return false
 	match slot_of(it):
 		0, 1:
-			if id == Skills.dyn(9):
+			if Skills.holds("baibao", id):
 				return true
 			var eq: Array = Game.cls(cls).get("equip_raw", [])
 			var t := int(it["type"])
@@ -339,28 +339,31 @@ func stat(s: int) -> int:
 			Mem.w32(Addr.BINGDI, 0)       # the attack getter clears 并蒂's hit counters in towns (0x4dbcf6)
 		return maxi(_min_add(_scar(s, get_stat_word(s)), b, 9999), 0)
 	var v := mini(get_stat_word(s) + b, 9999)
-	match s:
-		0:
-			var d := _aura_distance(0, 0)
-			if d >= 0:
-				return v * (100 + 5 * (5 - d)) / 100 if d < 5 else v
-			if id == (Skills.dyn(2) & 0xffff):
-				return v * (100 + 8 * Mem.r8(0x55ee02)) / 100      # 并蒂 (0x4dbd2c)
-		1, 3, 4:
-			var d := _aura_distance([0, 1, 0, 1, 0][s], [0, 0, 0, 12, 29][s])
-			if d >= 0 and d < 5:
-				return v * (100 + 5 * (5 - d)) / 100
+	var d := _aura_distance(s)
+	var within := Skills.num("lianli", "within")
+	if d >= 0 and d < within:
+		return v * (100 + Skills.num("lianli", "percent") * (within - d)) / 100
+	if s == 0:
+		if d >= 0:
+			return v            # the aura's holder, too far: no 并蒂 either (0x4db4c5 returns first)
+		if id == (Skills.holder("bingdi") & 0xffff):
+			return v * (100 + Skills.num("bingdi", "percent") * Mem.r8(0x55ee02)) / 100      # 并蒂 (0x4dbd2c)
 	return v
 
 
-## The 连理 auras (0x4db4c5 and its copies): 攻击 of the person in dynamic slot 0 (鲁明星) and 防御 of slot 1
-## (鲁明月) near 管毅, 反应 of slot 1 near 鲁明星 (12), 士气 of slot 0 near 鲁明月 (29): +5 % per cell closer than 5.
-## Returns the distance |dx| + |dy| when this person holds slot k and both units are on the map, else -1.
-func _aura_distance(k: int, partner: int) -> int:
-	if id != Skills.dyn(k):
+## The 连理 auras (0x4db4c5 and its copies; skill "lianli": per stat, a dynamic slot and a partner): 攻击 of the
+## person in dynamic slot 0 (鲁明星) and 防御 of slot 1 (鲁明月) near 管毅, 反应 of slot 1 near 鲁明星 (12), 士气 of
+## slot 0 near 鲁明月 (29): +5 % per cell closer than 5. Returns the distance |dx| + |dy| when this person holds the
+## slot of stat s's aura and both units are on the map, else -1.
+func _aura_distance(s: int) -> int:
+	var aura: Dictionary = {}
+	for a in Skills.rule("lianli").get("auras", []):
+		if int(a["stat"]) == s:
+			aura = a
+	if aura.is_empty() or id != Skills.dyn(int(aura["dyn"])):
 		return -1
 	var me := Skills.unit_on_map(id)
-	var p := Skills.unit_on_map(partner)
+	var p := Skills.unit_on_map(int(aura["partner"]))
 	if me == null or p == null:
 		return -1
 	return Skills.distance(me.pos, p.pos)
@@ -379,36 +382,17 @@ static func _min_add(a: int, b: int, mx: int) -> int:
 ## base e and the factor k in EV, on 32 bits as the original computes. 谢映登's attack derives from his MP once
 ## EV[3223] ≥ 3 (贯石).
 func _scar(s: int, w: int) -> int:
-	var wl := weapon_lvl
-	match s:
-		0:
-			if id == 8 and Mem.r8(Mem.EV + 4 * 3181) >= 1 and weapon == 0x18:
-				return _scaled(w, Mem.ev(3401), wl, Mem.ev(3201))
-			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
-				return _scaled(w, Mem.ev(3416), wl, Mem.ev(3204))
-			if id == 24 and Mem.ev(3223) >= 3:
-				var m := mp_base + (15 if accessory == 0x43 else 30 if accessory == 0x44 else 0)
-				return ((m * Mem.ev(3257) & 0xffffffff) / 100 + w - Mem.ev(3451)) & 0xffffffff
-		1:
-			if id == 1 and Mem.r8(Mem.EV + 4 * 3185) >= 1 and weapon == 0x19:
-				return _scaled(w, Mem.ev(3422), wl, Mem.ev(3205))
-			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
-				return _scaled(w, Mem.ev(3417), wl, Mem.ev(3204))
-		2:
-			if id == 21 and Mem.r8(Mem.EV + 4 * 3186) >= 1 and weapon == 0x23:
-				return _scaled(w, 0, wl, Mem.ev(3206))
-			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
-				return _scaled(w, Mem.ev(3418), wl, Mem.ev(3204))
-		3:
-			if id == 19 and Mem.r8(Mem.EV + 4 * 3189) >= 1 and weapon == 0x1a:
-				return _scaled(w, 0, wl, Mem.ev(3209))
-			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
-				return _scaled(w, Mem.ev(3419), wl, Mem.ev(3204))
-		4:
-			if id == 13 and Mem.r8(Mem.EV + 4 * 3182) >= 1 and armor == 0x2e:
-				return _scaled(w, 0, armor_lvl, Mem.ev(3202))
-			if id == 0 and Mem.r8(Mem.EV + 4 * 3184) >= 1 and weapon == 0x17:
-				return _scaled(w, Mem.ev(3420), wl, Mem.ev(3204))
+	# skill "suhen": the entries in the original's order; the first that fits stat s and this person counts
+	for e: Dictionary in Skills.rule("suhen").get("entries", []):
+		if int(e["stat"]) != s or int(e["pid"]) != id or Mem.r8(Mem.EV + 4 * int(e["flag_ev"])) < 1:
+			continue
+		if (e.has("weapon") and weapon != int(e["weapon"])) or (e.has("armor") and armor != int(e["armor"])):
+			continue
+		var base := Mem.ev(int(e["base_ev"])) if int(e["base_ev"]) >= 0 else 0
+		return _scaled(w, base, armor_lvl if e.has("armor") else weapon_lvl, Mem.ev(int(e["factor_ev"])))
+	if s == 0 and Skills.holds("guanshi", id) and Mem.ev(Skills.num("guanshi", "ev")) >= Skills.num("guanshi", "min"):
+		var m := mp_base + (15 if accessory == 0x43 else 30 if accessory == 0x44 else 0)
+		return ((m * Mem.ev(Skills.num("guanshi", "mp_ev")) & 0xffffffff) / 100 + w - Mem.ev(Skills.num("guanshi", "base_ev"))) & 0xffffffff
 	return w
 
 
@@ -429,9 +413,9 @@ func max_mp() -> int:
 ## member, every party member riding a mount (accessory 0x2f, 0x3b..0x3f) moves one more (on a byte).
 func move_points() -> int:
 	var m := mini(int(Game.cls(cls).get("move", 4)) + equip_bonus(7), 255)
-	var h := Skills.dyn(7)
-	if h != 0x400 and h < 1024 and Game.person(h).member_byte == 0 and member_byte == 0 \
-			and Mem.r8(base + 0x34) in [0x3d, 0x3e, 0x3f, 0x2f, 0x3b, 0x3c]:
+	var h := Skills.holder("xiangma")
+	if h != 0x400 and h >= 0 and h < 1024 and Game.person(h).member_byte == 0 and member_byte == 0 \
+			and Mem.r8(base + 0x34) in Skills.rule("xiangma").get("mounts", []):
 		m = (m + 1) & 0xff
 	return m
 
@@ -507,7 +491,7 @@ func level_up(n := 1) -> Array:
 		elif member_byte == 0 and mp_base != 1:
 			g -= _catchup_penalty(i)     # mod 0x4d65f5
 		for k in n:
-			if id == 10 and i <= 4 and i == lucky:
+			if Skills.holds("tianyun", id) and i <= 4 and i == lucky:
 				g += 1
 				lucky = 5
 			if i <= 4 and g == 0:

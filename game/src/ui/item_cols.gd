@@ -37,7 +37,8 @@ static func treasure(id: int) -> bool:
 ## Buy price (0x426ff4): price byte × 100, × 4/5 while 贾润甫 (20) is in the party (the mod's 【术】市侩).
 static func buy_price(id: int) -> int:
 	var p := int(Game.item(id).get("price", 0)) * 100
-	if Mem.r8(Game.person(20).base + 0x2a) != 0xff:
+	var shikuai := Skills.holder("shikuai")
+	if shikuai >= 0 and Mem.r8(Game.person(shikuai).base + 0x2a) != 0xff:
 		p = p * 4 / 5
 	return p
 

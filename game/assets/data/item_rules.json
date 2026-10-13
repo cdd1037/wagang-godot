@@ -1,0 +1,16 @@
+[
+{"type": 63, "name": "恢复HP", "kind": "heal_hp"},
+{"type": 64, "name": "恢复MP", "kind": "heal_mp"},
+{"type": 65, "name": "治疗迷、乱", "kind": "cure", "mask": 72},
+{"type": 66, "name": "治疗毒、麻", "kind": "cure", "mask": 18},
+{"type": 67, "name": "治疗全状态", "kind": "cure", "mask": 126},
+{"type": 68, "name": "治疗穷、怯", "kind": "cure", "mask": 36},
+{"type": 69, "name": "全能力上升", "kind": "all_up"},
+{"type": 70, "name": "武艺上升", "kind": "fruit", "stat": 0, "fx": 34},
+{"type": 71, "name": "智谋上升", "kind": "fruit", "stat": 2, "fx": 34},
+{"type": 72, "name": "统制上升", "kind": "fruit", "stat": 1, "fx": 35},
+{"type": 73, "name": "感知上升", "kind": "fruit", "stat": 3, "fx": 36},
+{"type": 74, "name": "胆魄上升", "kind": "fruit", "stat": 4, "fx": 37},
+{"type": 75, "name": "等级上升", "kind": "level_up"},
+{"type": 76, "name": "兵种上升", "kind": "promote"}
+]

@@ -19,6 +19,80 @@ static func dyn(k: int) -> int:
 	return Mem.ev(DYN + k)
 
 
+# ------------------------------------------------------------------ the skill records (data/skills.json)
+## Each record names a skill, who holds it and its numbers (docs/MODDING.md): "holder" is {"pid": n}, {"pids": [..]},
+## {"dyn": k} (dynamic slot k, set by the scripts), {"dyns": [..]}, {"mem": address} (a u32 the scripts set) or
+## {"beside": pid} (that person standing next to the unit). What a skill does stays in the code that asks.
+static var _by_id := {}
+
+
+static func index(records: Array) -> void:
+	_by_id.clear()
+	for r in records:
+		if r is Dictionary and r.has("id"):
+			_by_id[str(r["id"])] = _ints(r)
+
+
+## JSON numbers come as floats; whole ones become ints, so `in` and == compare as the code's constants did.
+static func _ints(v: Variant) -> Variant:
+	if v is float and v == floorf(v):
+		return int(v)
+	if v is Array:
+		return v.map(_ints)
+	if v is Dictionary:
+		var d := {}
+		for key in v:
+			d[key] = _ints(v[key])
+		return d
+	return v
+
+
+static func rule(id: String) -> Dictionary:
+	return _by_id.get(id, {})
+
+
+## A number of skill `id` (`default` when the record lacks it).
+static func num(id: String, key: String, default := 0) -> int:
+	return int(rule(id).get(key, default))
+
+
+## The persons who hold skill `id` now (a dynamic slot or memory holder as set at this moment; 1024 = nobody).
+static func holders(id: String) -> Array[int]:
+	var h: Dictionary = rule(id).get("holder", {})
+	var out: Array[int] = []
+	if h.has("pid"):
+		out.append(int(h["pid"]))
+	for p in h.get("pids", []):
+		out.append(int(p))
+	if h.has("dyn"):
+		out.append(dyn(int(h["dyn"])))
+	for k in h.get("dyns", []):
+		out.append(dyn(int(k)))
+	if h.has("mem"):
+		out.append(Mem.r32(int(h["mem"])))
+	return out
+
+
+## Person `pid` holds skill `id`, and the record's "if" (a class) holds for unit `u` when one is given.
+static func holds(id: String, pid: int, u: BUnit = null) -> bool:
+	if pid < 0 or not pid in holders(id):
+		return false
+	var c: Variant = rule(id).get("if", {}).get("class")
+	return c == null or (u != null and u.cls() == int(c))
+
+
+## The first holder of skill `id` (-1 if the record has none).
+static func holder(id: String) -> int:
+	var h := holders(id)
+	return h[0] if not h.is_empty() else -1
+
+
+## For a {"beside": pid} skill: its holder stands next to `u` on u's side (beside()).
+static func near(id: String, u: BUnit) -> bool:
+	var p: Variant = rule(id).get("holder", {}).get("beside")
+	return p != null and beside(int(p), u)
+
+
 ## 0x4dc761: person `pid` holds dynamic skill k.
 static func has_dyn(pid: int, k: int) -> bool:
 	return k < 30 and pid >= 0 and pid == dyn(k)

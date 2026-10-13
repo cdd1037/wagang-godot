@@ -461,12 +461,14 @@ func set_weather(w: int) -> void:
 			await e.done
 
 
-## 0x44a1f9: the level a weather strategy sets: 晴明 (59) the climate's first level that is 晴, 叆叇 (60) its first
-## that is 阴, 阴雨 (58) its last that is 雨, 暴雨 or 雪 (6 when there is none: set_weather then steps at random).
+## 0x44a1f9: the level a weather strategy sets, by its record's "weather" (the kind 0x44a1f9 is called with): 0
+## 晴明 the climate's first level that is 晴, 1 叆叇 its first that is 阴, 2 阴雨 its last that is 雨, 暴雨 or 雪 (6
+## when there is none: set_weather then steps at random).
 func weather_strategy_level(s: int) -> int:
 	var row := WEATHER_ROWS + climate * 6
-	if s != 58:
-		var want := 0 if s == 59 else 1
+	var kind := int(Game.strategy_rule(s).get("weather", 2))
+	if kind < 2:
+		var want := kind
 		for b in 6:
 			if Mem.r8(row + b) == want:
 				return b

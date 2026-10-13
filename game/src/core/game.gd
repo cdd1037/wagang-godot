@@ -9,6 +9,9 @@ var items_db: Array = []
 var classes_db: Array = []
 var families_db: Array = []
 var strategies_db: Array = []
+var strategy_rules_db: Array = []      # what each strategy does (data/strategy_rules.json, docs/MODDING.md)
+var item_rules: Dictionary = {}        # item type → what a consumable of that type does (data/item_rules.json)
+var skills_db: Array = []              # the character skills: holders and numbers (data/skills.json, Skills)
 var shops_db: Array = []
 var names_db: Dictionary = {}
 var texts_db: Dictionary = {}
@@ -81,6 +84,12 @@ func load_data() -> void:
 	classes_db = _table("data/classes.json", [])
 	families_db = _table("data/class_families.json", [])
 	strategies_db = _table("data/strategies.json", [])
+	strategy_rules_db = _table("data/strategy_rules.json", [])
+	item_rules.clear()
+	for r in _table("data/item_rules.json", []):
+		item_rules[int(r["type"])] = r
+	skills_db = _table("data/skills.json", [])
+	Skills.index(skills_db)
 	shops_db = _table("data/shops.json", [])
 	names_db = _table("data/names.json", {})
 	texts_db = _table("data/texts.json", {})
@@ -161,6 +170,18 @@ func cls(id: int) -> Dictionary:
 	if id < 0 or id >= classes_db.size():
 		return {}
 	return classes_db[id]
+
+
+## What a consumable of item `id`'s type does: its record in data/item_rules.json ({} for none).
+func item_rule(id: int) -> Dictionary:
+	return item_rules.get(int(item(id).get("type", -1)), {})
+
+
+## What strategy `id` does: its record in data/strategy_rules.json ({} for none).
+func strategy_rule(id: int) -> Dictionary:
+	if id < 0 or id >= strategy_rules_db.size():
+		return {}
+	return strategy_rules_db[id]
 
 
 func strategy(id: int) -> Dictionary:

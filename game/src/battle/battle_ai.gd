@@ -122,7 +122,7 @@ func act(unit: BUnit) -> bool:
 				and Game.hooks.may_hit(u, choice_target):
 			await st.actions.cast(u, choice_strategy, choice_target.pos)
 			st.actions.second_cast(u)      # 0x43b3c3 → 0x43dc99 → 0x4d0d71
-			if choice_strategy == 57:
+			if Rules.handler(choice_strategy) == "again":   # 战备
 				Mem.w32(REORDER, 1)        # 0x43b3d5
 		else:
 			await _physical_attack()
@@ -402,7 +402,7 @@ func _best_strategy(c: Vector2i) -> Array:
 	var own := Mem.r8(u.addr + 8)
 	for s in usable_strats:
 		var sd := Game.strategy(s)
-		var side_opp := s <= 38 or s >= 64
+		var side_opp := Rules.strat_has(s, "ai_opposing")
 		var cast := Shapes.range_cells(int(sd.get("range", 0)), c, st.view.map_w, st.view.map_h, not side_opp)
 		for cell in cast:
 			var t := st.unit_at(cell)
@@ -429,58 +429,60 @@ func _best_strategy(c: Vector2i) -> Array:
 ## StratScore (0x4395ae). The strategies with an area add AreaAdjust here, before BestStrategy's cap: the damage
 ## and status ones (kind 0), 补给 / 犒劳 (kind 1, also on a target that scores 0) and 棒喝 / 超脱 (kind 5).
 func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
+	var r := Game.strategy_rule(s)
 	var hpp := t.hp * 100 / maxi(t.max_hp(), 1)
 	var area := int(Game.strategy(s).get("area", 0)) != 0
-	if s in [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 33, 34, 35, 36]:
-		if not Rules.strat_terrain_ok(s, u, st.view.terrain_at(t.pos), st.weather()) and s <= 19:
-			return 0
-		var d := Rules.strat_damage(u, t, s, true)
-		var mh := maxi(t.max_hp(), 1)
-		var v := 1
-		if d >= t.hp:
-			v = 76
-		else:
-			if d * 10 / mh >= 3: v = 30
-			elif d * 10 / mh >= 1: v = 10
-			# the extra terms only for a target it does not kill
-			if s == 20:
-				if u.hp < u.max_hp(): v += 5
-				if _wounded(u): v += 10
-			if s in [33, 34] and hpp >= 40: v += 8
-			# 0x45afca(U, t, 1): adjacent on any of the 8 neighbours (0x4359f5 directions 0..7)
-			if s in [35, 36] and maxi(absi(t.pos.x - u.pos.x), absi(t.pos.y - u.pos.y)) != 1: v += 10
-		return _area_adjust(s, t.pos, v, 0) if area else v
-	match s:
-		21, 31, 32:
+	# the score by the record's "ai" kind (data/strategy_rules.json)
+	match str(r.get("ai", "")):
+		"damage":
+			if not Rules.strat_terrain_ok(s, u, st.view.terrain_at(t.pos), st.weather()):
+				return 0
+			var d := Rules.strat_damage(u, t, s, true)
+			var mh := maxi(t.max_hp(), 1)
+			var v := 1
+			if d >= t.hp:
+				v = 76
+			else:
+				if d * 10 / mh >= 3: v = 30
+				elif d * 10 / mh >= 1: v = 10
+				# the extra terms only for a target it does not kill
+				if r.get("absorb_hp", false):
+					if u.hp < u.max_hp(): v += 5
+					if _wounded(u): v += 10
+				if r.get("status") == "poison" and hpp >= 40: v += 8
+				# 0x45afca(U, t, 1): adjacent on any of the 8 neighbours (0x4359f5 directions 0..7)
+				if r.get("status") == "paralysis" and maxi(absi(t.pos.x - u.pos.x), absi(t.pos.y - u.pos.y)) != 1: v += 10
+			return _area_adjust(s, t.pos, v, 0) if area else v
+		"hit35":
 			var h := Rules.strat_hit(u, t, s, st.view.terrain_at(t.pos), st.weather())
 			if h >= 35:
 				var v := 15 + (15 if hpp >= 80 else 0)
 				return _area_adjust(s, t.pos, v, 0) if area else v
 			return 0
-		22:
+		"drain_mp":
 			return 20 if (u.mp <= u.max_mp() / 5 and t.mp >= 30) else 0
-		37:
+		"seal":
 			if t.family() in [8, 9, 10, 11, 18, 19, 20] and Rules.strat_hit(u, t, s, st.view.terrain_at(t.pos), st.weather()) >= 60:
 				return 15 + (7 if hpp >= 80 else 0)
 			return 0
-		39, 40, 43:
-			return (50 + (5 if s == 40 else (10 if s == 43 else 0))) if _wounded(t) else 0
-		41, 42:
+		"heal":
+			return (50 + int(r.get("ai_bonus", 0))) if _wounded(t) else 0
+		"supply":
 			var v1 := 50 if _wounded(t) else 0
 			return _area_adjust(s, t.pos, v1, 1) if area else v1
-		44, 45, 62:
+		"mp":
 			if t.mp <= t.max_mp() / 5 and u.mp >= st.actions.strategy_mp(s):
 				if t.family() == 9: return 1
 				if t.family() in MAGIC_FAMILIES or t.has_effect(0x40): return 12    # 0x407a09(person, 0x40)
 				if t.family() == 0: return 6
 			return 0
-		46, 47:
+		"cure":
 			var v2 := 5
 			if t.status == BUnit.ST_PARALYSIS and not (t.mode in [2, 3]): v2 += 25
 			elif t.status == BUnit.ST_SEAL and t.family() in MAGIC_FAMILIES: v2 += 30
 			elif t.status == BUnit.ST_CONFUSION: v2 += 35
 			return _area_adjust(s, t.pos, v2, 5) if area else v2
-		57:
+		"again":
 			if t.mode in [2, 3] or t.family() == 9: return 0
 			if t.family() in [0, 19]: return 15
 			if t.family() == 5: return 10 + Rules.rand(4)
@@ -493,7 +495,7 @@ func _strat_score(t: BUnit, s: int, _c: Vector2i) -> int:
 ## the strategy is usable on adds, by kind: 0 (damage, status) 3, or 6 when it is U's own AI target; 1 (supplies)
 ## 5 below 60 % HP; 5 (cures) 3 with a status.
 func _area_adjust(s: int, center: Vector2i, v: int, kind: int) -> int:
-	var side_opp := s <= 38 or s >= 64
+	var side_opp := Rules.strat_has(s, "ai_opposing")
 	var hits: Array[BUnit] = []
 	for cell in Shapes.area_cells(int(Game.strategy(s).get("area", 0)), u.pos, center, st.view.map_w, st.view.map_h):
 		if cell == center:

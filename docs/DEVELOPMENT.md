@@ -132,7 +132,8 @@ phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜�
 terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards, the weather strategies), `t_rules` the general battle rules (反应 / 士气 equipment,
 组阵, effect 37, 笼屉, 怀恨攻击 and the counterattack's combat object, 太保令, the level-up penalty and report, SetExp
 past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience, op 0x38's signed AddStat, the unit lookup 0x43e4d6),
-`t_save` saves (a save loads back; a damaged one, or one whose memory ranges do not fit, is refused before
+`t_tables` the content tables (every record of strategy_rules.json, item_rules.json and skills.json is the
+original's value the code had as a constant; a changed record changes the game), `t_save` saves (a save loads back; a damaged one, or one whose memory ranges do not fit, is refused before
 anything changes; it uses user://test/saves/), `t_shop` the shops and the warehouse (prices with
 八折, the bonus fruit, goods per record, buying = wearing, 装备 moves, selling), `t_menus` the group 5 windows
 (环境设定 applied without writing Niuniu.wa, 历史情报 line order, the sortie builder and 选择武将 rules, 部队情报一览

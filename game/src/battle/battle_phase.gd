@@ -72,24 +72,24 @@ func _assassination_countdown(a: int, b: int) -> void:
 ## 神将 (42) and every 雄师 (class family 16), on the units of the 3×3 around it (0x4011a9).
 func _phase_skills(u: BUnit) -> void:
 	var p := u.pid
-	if p == 29:
+	if Skills.holds("yunxiu", p):
 		await _aura(u, false, 10, 0, func(t: BUnit) -> String:
 			var h := mini(u.level() + 50, t.max_hp() - t.hp)   # 0x4d4966
 			t.hp += h
 			return "+%d" % h)
-	if p == 31:
+	if Skills.holds("mp_aura", p):
 		await _aura(u, false, 11, 0, func(t: BUnit) -> String:
 			var m := mini(u.level() / 4 + 1, t.max_mp() - t.mp)    # 0x4d4928
 			t.mp += maxi(m, 0)
 			return "策略 +%d" % m)
-	if p == Mem.r32(Addr.TIANMO):
+	if Skills.holds("tianmo", p):
 		for t in _aura_units(u, false):
 			for c in [0x31, 0x33, 0x35, 0x37]:
 				st.actions._stat_code(t, c)       # code 0xaf through 0x4224a8
-	if p == Mem.r32(Addr.MOGONG):
+	if Skills.holds("mogong", p):
 		for t in _aura_units(u, true):
 			await st.commands.change_unit(t, 6, BUnit.ST_POISON)    # code 0x70 through 0x4224a8
-	if p == 42:
+	if Skills.holds("attack_aura", p):
 		await _aura(u, false, 0x11, 0x22, func(t: BUnit) -> String:
 			t.set_buff(0, 6)
 			return "攻击↑")
@@ -118,9 +118,9 @@ func _aura_units(owner: BUnit, opposite: bool) -> Array[BUnit]:
 ## with the camera on the first. 云袖 first plays 鲁明月's poses 12 and 1 (0x43d108), even with no one around.
 func _aura(owner: BUnit, opposite: bool, e1: int, e2: int, fx: Callable) -> void:
 	var ts := _aura_units(owner, opposite)
-	if owner.pid == 29:
-		await st.unit_ops.op_unit_status({"args": [29, 12, 1, 0]})
-		await st.unit_ops.op_unit_status({"args": [29, 1, 0, 0]})
+	if Skills.holds("yunxiu", owner.pid):
+		await st.unit_ops.op_unit_status({"args": [owner.pid, 12, 1, 0]})
+		await st.unit_ops.op_unit_status({"args": [owner.pid, 1, 0, 0]})
 	var texts := []
 	for t in ts:
 		texts.append(fx.call(t))
@@ -150,7 +150,7 @@ func _aura(owner: BUnit, opposite: bool, e1: int, e2: int, fx: Callable) -> void
 func _status_recovery(u: BUnit) -> void:
 	if u.status == 0:
 		return
-	if Skills.beside(23, u):
+	if Skills.near("mingjing", u):
 		await st.commands.change_unit(u, 6, 0xfe)
 		return
 	var r := 100 if u.has_effect(20) else u.person.get_raw(4)

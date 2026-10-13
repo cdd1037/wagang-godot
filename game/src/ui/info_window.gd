@@ -146,14 +146,14 @@ static func skill_info(p: Person) -> Array:
 				Mem.w8(codes + pid, 0x27 + i)
 				cap = Mem.str_at(0x5559a0 + 32 * i)
 				break
-	if cap == "" and pid == 25:                         # 0x4d562a
-		if p.cls == 0x29:
+	if cap == "" and Skills.holds("feijiangjun", pid):    # 0x4d562a
+		if p.cls == int(Skills.rule("feijiangjun").get("if", {}).get("class", -1)):
 			Mem.w8(codes + pid, 0x24)
 			cap = Mem.str_at(0x555970)
 		else:
 			Mem.w8(codes + pid, 0xff)
-	elif cap == "" and pid == 24:
-		if Mem.r8(0x55e25c) >= 3:
+	elif cap == "" and Skills.holds("guanshi", pid):
+		if Mem.r8(Mem.EV + 4 * Skills.num("guanshi", "ev")) >= Skills.num("guanshi", "min"):
 			Mem.w8(codes + pid, 0xf)
 			cap = Mem.str_at(0x555840)
 		else:
@@ -341,7 +341,7 @@ func _page_equip() -> void:
 		if iid >= 0 and hovered("eq%d" % k):
 			draw_rect(area, HOVER)
 		var lab_col := UIStyle.NAME_COLOR
-		if k == 2 and _p.id == 11:
+		if k == 2 and Skills.holds("fanhu", _p.id):
 			lab_col = DIM                     # the mod disables this label for pid 11 (0x4d0e6a)
 		text(pr(11, y0 + 4, 80, 8), sl[0] % (str(it.get("name", "?")) if iid >= 0 else "无"), HORIZONTAL_ALIGNMENT_LEFT, lab_col)
 		if iid >= 0:

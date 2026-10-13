@@ -39,7 +39,7 @@ through `Game.main`, never `/root/Main`.
 | `Assets` | `core/assets.gd` | Loads converted data at run time: textures from PNG bytes, JSON, MP3/WAV, OGV video, fonts (system Chinese fonts with fallbacks; on mobile a bundled Noto Serif SC subset, `tools/subset_font.py`). Everything under `res://assets` is imported with `importer="keep"`, so files are read raw. With the HD pack active, `tex()` substitutes the 4× `.webp` from `res://assets_hd` at the original's logical size (see [HD_GRAPHICS.md](HD_GRAPHICS.md)). |
 | `Audio` | `core/audio.gd` | BGM player (the original CD tracks as `audio/bgm/NN.mp3`) and a small pool of sound-effect players. |
 | `Mem` | `core/mem.gd` | The emulated memory (below). |
-| `Game` | `core/game.gd` | Static data tables (persons, classes, items, strategies, terrain …), the party and bag, scenario number, gold, and save/load. |
+| `Game` | `core/game.gd` | Static data tables (persons, classes, items, strategies, terrain …) and the rule tables (what strategies, consumables and character skills do: `strategy_rules.json`, `item_rules.json`, `skills.json`, read through `Rules.handler`, `Game.item_rule` and `Skills.holds` / `num`; [CONTENT_TABLES.md](CONTENT_TABLES.md)), the party and bag, scenario number, gold, and save/load. |
 
 ## Emulated memory (`core/mem.gd`)
 

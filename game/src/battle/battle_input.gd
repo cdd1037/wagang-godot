@@ -356,7 +356,7 @@ func _do_strategy(u: BUnit, strats: Array[int]) -> bool:
 			if not cells.has(c):
 				continue
 			var tg := st.actions.strategy_targets(u, s, c)
-			if tg.is_empty() and not (s in [58, 59, 60]):
+			if tg.is_empty() and Rules.handler(s) != "weather":
 				var main := st.unit_at(c)
 				if main and not st.actions.usable_on(u, s, main):
 					# 0x420422's messages for a player-commanded caster
@@ -402,7 +402,7 @@ func _do_item(u: BUnit, items: Array) -> bool:
 	st.view.set_attack_cells(cells)
 	var iid := int(entry["id"])
 	show_forecast(4, u, iid, cells)
-	var t70 := int(Game.item(iid).get("type", 0)) >= 70
+	var t70 := BattleActions.item_checked_after(iid)
 	# the own-side picker (0x45533d mode 4): a cancel plays SE 1; outside the range SE 2 + "不在范围之内。"; a unit
 	# of the other group SE 2 + "这是敌军部队。". Fruits, 仙人果 and 印绶 take any own unit and refuse afterwards.
 	while true:

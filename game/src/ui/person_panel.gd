@@ -184,7 +184,7 @@ func _draw_slot(s: int, p: Person, dim: bool) -> void:
 	if hover_slot == s and enabled:
 		w.draw_rect(title, UIStyle.HILITE)
 	# 樊虎 (11) has no 辅助: the label is greyed (mod 0x4d0eb4), the slot still answers
-	var tc := UIStyle.TEXT_COLOR if not dim and not (s == 2 and p.id == 11) else DlgPanel.DIM
+	var tc := UIStyle.TEXT_COLOR if not dim and not (s == 2 and Skills.holds("fanhu", p.id)) else DlgPanel.DIM
 	w.text(title, TITLES[s] % (str(it.get("name", "?")) if id != 0xff else "无"), HORIZONTAL_ALIGNMENT_LEFT, tc, DlgPanel.SMALL_SIZE)
 	if id != 0xff:
 		w.icon(w.r(332, y0 + 15, 23, 23), Assets.tex("gfx/icons/items/large/%03d.png" % int(it.get("icon", 0))))

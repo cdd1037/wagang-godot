@@ -87,21 +87,30 @@ func _banner(name: String) -> void:
 
 
 # ------------------------------------------------------------------ 绝招 (B5 F1)
+## The skill record of the 绝招 person `pid` holds: the first record with a "special" routine whose holder is
+## `pid`, in the order of data/skills.json (the original's: 威震八荒, 苍龙过阵枪, 夺面鞭, 三板斧, 踏破连营, 横扫千军,
+## 杀手锏, 尽命三锤, 回马枪), or "".
+static func special_of(pid: int) -> String:
+	for r: Dictionary in Game.skills_db:
+		if r.has("special") and Skills.holds(str(r["id"]), pid):
+			return str(r["id"])
+	return ""
+
+
 ## The 绝招 entry is enabled for the commanded person (0x4d5444 on [0x4cf310]); MP is tested when it is used.
+## 三板斧 once R_11 taught it ([0x55ac04]) while [0x55ac05] and [0x55ac06] are clear; 踏破连营 unless paralysed.
 func special_enabled() -> bool:
 	var pid := Mem.r32(BattleStage.CMD_PID)
-	match pid:
-		0, 7, 8:
-			return true
-		1:
-			# 三板斧: once R_11 taught it ([0x55ac04]), while [0x55ac05] and [0x55ac06] are clear
+	var id := special_of(pid)
+	match str(Skills.rule(id).get("enable", "")) if id != "" else "none":
+		"none":
+			return false
+		"taught":
 			return Mem.r8(Addr.SANBANFU) != 0 and Mem.r8(0x55ac05) == 0 and Mem.r8(0x55ac06) == 0
-		5:
-			var u5 := st.unit_by_pid(5)
+		"not_paralysed":
+			var u5 := st.unit_by_pid(pid)
 			return u5 != null and not (u5.status & BUnit.ST_PARALYSIS)
-	if pid == Mem.ev(3974):
-		return true             # 夺面鞭: the person in dynamic skill slot 4 (尉迟恭)
-	return pid in [17, 19, 26]
+	return true
 
 
 ## 绝招 (0x4d3007). The MP bar must be full, unless the person has 无限绝技 (effect 58) or a maximum of 1. The
@@ -122,31 +131,25 @@ func special(u: BUnit) -> bool:
 	return done
 
 
+## The routine of the skill record (its "special"). 威震八荒 needs no target; the others first pick one.
 func _special_run(u: BUnit) -> bool:
-	var pid := u.pid
-	if pid == 7:
+	var routine := str(Skills.rule(special_of(u.pid)).get("special", ""))
+	if routine == "wei_zhen_ba_huang":
 		return await _wei_zhen_ba_huang(u)
 	# the attack picker with the 绝招 ranges (0x45533d mode 1); a cancel spends nothing
 	var t := await st.input.pick_unit(st.actions.attack_cells(u, u.pos), func(x: BUnit) -> bool: return x.is_enemy_of(u) and x.active(), 1, u)
 	if t == null:
 		return false
 	u.mp = 0
-	if pid == 0:
-		await _cang_long(u, t)
-	elif pid == Mem.ev(3974):
-		await _duo_mian_bian(u, t)
-	elif pid == 1:
-		await _san_ban_fu(u, t)
-	elif pid == 5:
-		await _ta_po_lian_ying(u, t)
-	elif pid == 26:
-		await _heng_sao(u, t)
-	elif pid == 8:
-		await _sha_shou_jian(u, t)
-	elif pid == 17:
-		await _jin_ming(u, t)
-	elif pid == 19:
-		await _hui_ma_qiang(u, t)
+	match routine:
+		"cang_long": await _cang_long(u, t)
+		"duo_mian_bian": await _duo_mian_bian(u, t)
+		"san_ban_fu": await _san_ban_fu(u, t)
+		"ta_po_lian_ying": await _ta_po_lian_ying(u, t)
+		"heng_sao": await _heng_sao(u, t)
+		"sha_shou_jian": await _sha_shou_jian(u, t)
+		"jin_ming": await _jin_ming(u, t)
+		"hui_ma_qiang": await _hui_ma_qiang(u, t)
 	return true
 
 
@@ -246,7 +249,7 @@ func _heng_sao(u: BUnit, t: BUnit) -> void:
 ## 秦琼) his classes' area code becomes 4 for the blow (the cell behind the target too, in full), and the unit
 ## there is weakened as well.
 func _sha_shou_jian(u: BUnit, t: BUnit) -> void:
-	var spin := Mem.ev(3981) == 8
+	var spin := Skills.holds("huixuan", u.pid)
 	await _banner("回旋杀手锏" if spin else "杀手锏")
 	var saved_a := Mem.r32(0x4091b2)
 	var saved_b := Mem.r8(0x4091bc)
@@ -468,9 +471,9 @@ func _siege_break(t: BUnit, a: BUnit) -> bool:
 	if not (t.status & BUnit.ST_CONFUSION) and t.hp > 0:
 		if t.has_effect(60):
 			ok = true
-		elif t.pid in [101, 136, 14]:
+		elif Skills.holds("shuanglei", t.pid) or Skills.holds("choutiqiang", t.pid):
 			ok = Rules.chance(mini(t.morale() * 50 / maxi(a.morale(), 1), 100))
-			if ok and t.pid == 14:
+			if ok and Skills.holds("choutiqiang", t.pid):
 				Mem.w8(BattleActions.T_DOUBLE, 1)
 		elif Mem.r32(BattleActions.T_SHUANGLEI) == 1:
 			ok = true
@@ -485,7 +488,7 @@ func _siege_break(t: BUnit, a: BUnit) -> bool:
 ## 交给 is enabled (0x4d9cc9) for 樊虎 (11) when the bag holds an accessory (id ≥ 0x35), for anyone else when an
 ## accessory is equipped.
 func give_enabled(u: BUnit) -> bool:
-	if Mem.r32(BattleStage.CMD_PID) & 0xff == 11:
+	if Skills.holds("fanhu", Mem.r32(BattleStage.CMD_PID) & 0xff):
 		for i in Game.BAG_SLOTS:
 			var id := Mem.r8(Game.BAG + 3 * i)
 			if id != 0xff and id >= 0x35:
@@ -497,7 +500,7 @@ func give_enabled(u: BUnit) -> bool:
 ## The 交给 command (0x4d287e). 樊虎's 行囊 hands out accessories from the bag (one list row per item id in 0x2f
 ## and 0x35..0x56 present there); the others give their own accessory. Returns true when the action ended.
 func give_command(u: BUnit) -> bool:
-	if u.pid != 11:
+	if not Skills.holds("fanhu", u.pid):
 		return await give(u, u.person.accessory)
 	while not u.acted:
 		var ids: Array[int] = []
@@ -532,7 +535,7 @@ func give(u: BUnit, item: int) -> bool:
 		if r == u:
 			continue
 		var rp := r.person
-		if r.pid == 11:
+		if Skills.holds("fanhu", r.pid):
 			for i in Game.BAG_SLOTS:          # 0x4d9c85: the first free bag slot
 				if Mem.r8(Game.BAG + 3 * i) == 0xff:
 					Mem.w8(Game.BAG + 3 * i, item)
