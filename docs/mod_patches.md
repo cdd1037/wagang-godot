@@ -551,8 +551,11 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
       Xben 44; nothing plays SE 19 (only a terrain change does). The battle's item pictures are Yoyo.wa entries by
       item id: the large Itemicon picture with the item's id (the icon field differs for 92..95), 狮面盾's own.
       交给 shows it rising over the giver and settling on the receiver (0x4d2b66).
+    * The battle's start screen (0x44d427): SE 4 loops while the field is built, GHAI #4 at (0, 56) on black with
+      the title pane's text (0x4b0758), 30 ticks.
     **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`,
-    `EffectPlayer`, `BattleActions.cast`, `use_item`, `Game.item_picture`, `BattleCommands._give_fx`; `t_battle`,
+    `EffectPlayer`, `BattleActions.cast`, `use_item`, `Game.item_picture`, `BattleCommands._give_fx`,
+    `BattleStage._start_screen`; `t_battle`,
     `t_menus`, `t_rules`).
 50. **Window details**: the list views' cells and headers end in "…" when too wide (DrawTextExA DT_END_ELLIPSIS,
     0x464d62 → 0x47130c); two clicks on a 部队情报一览 row while the map pans give one 武将情报 window, for the last

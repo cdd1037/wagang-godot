@@ -341,7 +341,12 @@ func op_change_scene(ins: Dictionary) -> void:
 		var v := arg(ins, 4)
 		if v == 0xffff:
 			v = 0
+		var screen := _start_screen() if not Game.instant else null
 		await deployment.create_battlefield(v)
+		if screen:
+			await wait(1.5)               # 0x44d427 waits 30 ticks over it
+			SoundMap.stop_loop()
+			screen.queue_free()
 	else:
 		# story-style picture inside a battle file (rare): show it full screen
 		var val := 0
@@ -351,6 +356,34 @@ func op_change_scene(ins: Dictionary) -> void:
 			2: val = arg(ins, 3)
 		var entry := val + ({0: 0, 1: 114, 2: 40}.get(mode, 0) as int)
 		hud.show_picture(Assets.tex("gfx/backgrounds/%03d.png" % entry))
+
+
+## The battle's start screen (0x44d427): SE 4 loops while the field is built (0x4746ca(4)), GHAI #4 at (0, 56) with
+## the title pane's text (0x44f8f0 → 0x4b0758) in white over two dark shadows; BattleStage.op_change_scene takes it
+## down after 30 ticks.
+func _start_screen() -> Node2D:
+	SoundMap.play_se_id(4, 0)
+	var n := StartScreen.new()
+	n.title = Mem.str_at(0x4b0758, 32)
+	n.z_index = 40
+	ui.add_child(n)
+	return n
+
+
+class StartScreen extends Node2D:
+	var title := ""
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), Color.BLACK)    # the field is not drawn yet
+		var tex := Assets.tex("gfx/screens/04.png")
+		if tex:
+			draw_texture_rect(tex, Rect2(0, 56, 640, 400), false)
+		var f := Assets.font()
+		var w := f.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 32).x
+		var p := Vector2((640 - w) / 2, 56 + 64)
+		for d in [[Vector2(2, 2), Color8(0x33, 0x33, 0x33)], [Vector2(1, 1), Color8(0x66, 0x66, 0x66)]]:
+			draw_string(f, p + d[0], title, HORIZONTAL_ALIGNMENT_LEFT, -1, 32, d[1])
+		draw_string(f, p, title, HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
 
 
 ## The active unit on cell c (the lowest slot if several), other than `exclude`. Looked up in a cell → unit
