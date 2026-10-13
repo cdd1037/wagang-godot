@@ -217,7 +217,7 @@ rpg_sprites/backgrounds/screens), effects (`tools/gfx_effects.py`). Shared helpe
 |---|---|---|
 | Jiqi.wa (16 × 64x64) | attack-range diagrams (blue unit, red reach; 8x8 grid of 8px cells); loaders 0x46fcb4/0x478164; index = attack-range type of the class | `effects/ranges/attack/NN.png` |
 | Drink.wa (13 × 64x64) | strategy effect-area diagrams (red target, green area, arrows = lines); loader 0x46fdda | `effects/ranges/strategy/NN.png` |
-| Xthree.wa (5 × 216x200) | weather panel backdrops, 4 frames of 216x50 each: 0 clear, 1 cloudy, 2 rain, 3 storm, 4 snow (loader 0x449f27 → Kao buffer +0x1c8e0) | `effects/weather/N.png` |
+| Xthree.wa (5 × 216x200) | weather panel backdrops, 4 frames of 216x50 each: 0 clear, 1 cloudy, 2 rain, 3 storm, 4 snow (loader 0x449f27 → Kao buffer +0x1c8e0); drawn into the status window's pane (surface 4) one frame per 500 ms timer tick (0x44a2fc) | `effects/weather/N.png` |
 | Nima.wa (186 × 20736) | 3x3-cell (144x144) battle-map patches stored cell-by-cell like HM, for terrain changes (0x456140 rewrites the terrain grid at 0x4aeb38+0x640 and redraws); palette = current map | `effects/map_patches/NNN.png` (best-fit Fei preview) + `idx/NNN.png` (raw indices as grey) |
 | Yoyo.wa (104 × 32x32) | item pictures drawn by the game itself (same art as ItemIcon.dll) | `effects/items32/NNN.png` |
 | Qusi.wa (15 mixed) | small buttons (50x50), blue dragon-pattern window backgrounds 400x296 / 400x128, 576x72 sea panoramas, 3 pieces with 2-byte headers (dims unknown) | `effects/qusi/NN.png` |

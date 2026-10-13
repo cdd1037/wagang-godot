@@ -190,6 +190,15 @@ func _gauge(st: BattleStage) -> void:
 	Game.instant = true
 	for u in st.units:
 		u.clear(u.slot)
+	# the weather pane (0x44a2fc): a frame of the 216 × 50 picture each 500 ms, at the top right
+	var vis := st.hud.visible
+	st.hud.visible = true
+	var f0 := st.hud.weather_frame
+	st.hud._process(0.3)
+	st.hud._process(0.3)
+	_check(st.hud.weather_frame == (f0 + 1) & 3, "weather pane: one frame per 0.5 s")
+	_check(st.hud.weather_rect(Vector2(640, 480)) == Rect2(640 - 222, 6, 216, 50), "at the top right")
+	st.hud.visible = vis
 
 
 func _effect_sound() -> void:

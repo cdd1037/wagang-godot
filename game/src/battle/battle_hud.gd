@@ -25,12 +25,43 @@ func _init() -> void:
 func _process(delta: float) -> void:
 	if not visible:
 		return
+	_weather_t += delta
+	if _weather_t >= 0.5:
+		_weather_t = fmod(_weather_t, 0.5)
+		weather_frame = (weather_frame + 1) & 3
 	var alive := []
 	for p in popups:
 		p["t"] += delta
 		if p["t"] < 1.0:
 			alive.append(p)
 	popups = alive
+	queue_redraw()
+
+
+## The weather picture of the original's status window (its 216 × 50 pane at (406, 1), drawing surface 4,
+## 0x4760c8): Xthree.wa's picture for the weather (0x449ef0, the kind of 0x44a1d4), four frames of 216 × 50 shown
+## in turn, one per tick of the 500 ms timer 999 (WM_TIMER → 0x449c9f → 0x44a2fc). Here at the top right, over
+## the turn box. A change of weather plays Xben.wa 0x34 + the new kind in the pane first (0x449f91).
+var weather_frame := 0
+var weather_fx := false
+var _weather_t := 0.0
+
+
+func weather_rect(vs: Vector2) -> Rect2:
+	return Rect2(vs.x - 216 - 6, 6, 216, 50)
+
+
+func play_weather_change(kind: int) -> void:
+	var e := EffectPlayer.create("xben", 0x34 + kind)
+	if e == null:
+		return
+	var r := weather_rect(get_viewport_rect().size)
+	e.position = r.get_center()
+	weather_fx = true
+	queue_redraw()
+	add_child(e)
+	await e.done
+	weather_fx = false
 	queue_redraw()
 
 
@@ -175,8 +206,14 @@ func _draw() -> void:
 		if stage.turn_limit > 0:
 			t += " / %d" % stage.turn_limit
 		t += "　" + BattleStage.WEATHER_NAMES[stage.weather()]
+		var wr := weather_rect(vs)
+		var wt := Assets.tex("gfx/effects/weather/%d.png" % stage.weather())
+		draw_rect(wr, Color(0, 0, 0, 0.55))
+		if wt and not weather_fx:
+			draw_texture_rect_region(wt, wr, Rect2(0, 50 * weather_frame, 216, 50))
+		draw_rect(wr.grow(1), Color(0.8, 0.7, 0.4), false, 1.0)
 		var tw := Assets.font().get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		var tr := Rect2(vs.x - tw - 20, 4, tw + 16, 22)
+		var tr := Rect2(vs.x - tw - 20, wr.end.y + 4, tw + 16, 22)
 		draw_rect(tr, Color(0, 0, 0, 0.55))
 		UIStyle.draw_text(self, tr.position + Vector2(8, 16), t, Color(1, 1, 1), 14)
 		if hover_cell.x >= 0 and stage.view.in_bounds(hover_cell):

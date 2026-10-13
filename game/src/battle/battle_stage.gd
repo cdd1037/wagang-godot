@@ -530,7 +530,7 @@ func weather() -> int:
 
 ## 0x449f91: the weather level becomes `w` when it is below 6, else takes a random step (c = level + 1 moves one
 ## towards rand(8), which is drawn either way; 0 wraps to level 5, 7 to level 0). When the weather shown changes,
-## its picture (Xben.wa 0x34 + weather) plays in the middle of the screen.
+## Xben.wa 0x34 + the new kind (216 × 50) plays in the weather pane, which then shows the new picture.
 func set_weather(w: int) -> void:
 	var r := Rules.rand(8)
 	var shown := weather()
@@ -545,11 +545,7 @@ func set_weather(w: int) -> void:
 		weather_level = 5 if c == 0 else (0 if c == 7 else c - 1)
 	hud.queue_redraw()
 	if weather() != shown and not Game.instant:
-		var e := EffectPlayer.create("xben", 0x34 + weather())
-		if e:
-			e.position = ui.vsize() / 2
-			ui.add_child(e)
-			await e.done
+		await hud.play_weather_change(weather())
 
 
 ## 0x44a1f9: the level a weather strategy sets, by its record's "weather" (the kind 0x44a1f9 is called with): 0

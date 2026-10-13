@@ -612,6 +612,11 @@ not ported.
     check box or radio button, the arrows move through a group (choosing auto radios) or a list view's selection,
     and Enter presses the focused push button. **Done** (`DlgPanel._dialog_key`, each window's `focus_stops`;
     `t_menus`). The item list keeps the port's Left / Right tab switch wherever the focus is.
+56. **The weather pane**: the battle's status window has a 216 × 50 pane (drawing surface 4, at (406, 1),
+    0x4760c8) with Xthree.wa's picture for the weather kind (0x449ef0), its four frames in turn on the 500 ms timer
+    999 (WM_TIMER → 0x449c9f → 0x44a2fc); a change of weather plays Xben.wa 0x34 + kind (216 × 50) in the pane
+    (0x449f91), which the port played in the middle of the screen. **Done** (`BattleHUD.weather_rect`,
+    `play_weather_change`, at the top right above the turn box; `t_battle`, checked in a capture).
 
 ### Deliberate differences (port design, keep unless asked)
 
