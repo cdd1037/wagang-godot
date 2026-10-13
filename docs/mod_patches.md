@@ -488,6 +488,15 @@ All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests;
     * terrain changes: the sounds by new terrain, the holds with SE on, op 0x58 arg 6 as "quiet", EV[0] as "no patch";
     * battle steps play their sound (0x43f38b).
 
+### 6. Found in the 2026-10-14 review
+
+Differences the review of 2026-10-14 found by reading the decompile; each is ported with a check.
+
+42. **Op 0x78 writing a unit's HP** (field 33) runs 0x4d678c (0x4d0653): HP 0 or less (signed) is a script kill
+    0x4121b0, EV[10] = 1 and RemoveUnit at once. **Done** (`ScriptHost.unit_hp_written`, `t_battle`).
+43. **Buff and debuff percentages from EV[3000..3003]**: mod code in a .text gap at 0x44d158, not in the site table;
+    see rules.md §2.2. **Done** (`BUnit._buffed`, `t_rules`).
+
 ### Deliberate differences (port design, keep unless asked)
 
 * **Autosave:** the original saves silently into slots 0..4 in rotation after every player phase; the port keeps

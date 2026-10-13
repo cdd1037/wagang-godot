@@ -96,9 +96,36 @@ func run() -> void:
 	await _regen_exp()
 	_exe_tables()
 	_add_stat()
+	_buff_rates()
 
 	Game.main = old_main
 	print("t_rules: PASS" if _ok else "t_rules: FAILED")
+
+
+## 0x44d158 before 0x43f54c: 120 % / 80 %, a player's buff from byte EV[3001] and an enemy's debuff from byte
+## EV[3003] while EV[3000] / EV[3002] ≠ 0; allies and the other direction keep 120 / 80.
+func _buff_rates() -> void:
+	_clear()
+	var me := _unit(0, 0, Vector2i(2, 2), 20, 100)
+	var ally := _unit(20, 1, Vector2i(3, 2), 20, 100)
+	var foe := _unit(40, 300, Vector2i(4, 2), 20, 100)
+	for e in [3000, 3001, 3002, 3003]:
+		Mem.set_ev(e, 0)
+	for u in [me, ally, foe]:
+		u.set_buff(0, 6)
+		u.set_buff(1, 0)
+	var base := [me.stat(0), me.stat(1), ally.stat(0), ally.stat(1), foe.stat(0), foe.stat(1)]
+	_check(base == [120, 80, 120, 80, 120, 80], "default buff / debuff 120 / 80: %s" % [base])
+	Mem.set_ev(3000, 1)
+	Mem.set_ev(3001, 130)
+	Mem.set_ev(3002, 1)
+	Mem.set_ev(3003, 60)
+	var mod := [me.stat(0), me.stat(1), ally.stat(0), ally.stat(1), foe.stat(0), foe.stat(1)]
+	_check(mod == [130, 80, 120, 80, 120, 60], "EV[3000..3003] = 1, 130, 1, 60: %s" % [mod])
+	Mem.set_ev(3000, 0x100)     # only the low byte counts
+	_check(me.stat(0) == 120, "EV[3000] = 0x100 is off (byte test)")
+	for e in [3000, 3001, 3002, 3003]:
+		Mem.set_ev(e, 0)
 
 
 # ------------------------------------------------------------------ 反应 / 士气 equipment (B2 §C)

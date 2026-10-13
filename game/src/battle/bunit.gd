@@ -198,11 +198,21 @@ func effect_value(e: int) -> int:
 	return person.effect_value(e)
 
 
+## 0x43f54c: a buff level of 4 or more multiplies the stat by the buff percentage, 2 or less by the debuff one. The
+## mod's 0x44d158, which every battle stat getter calls first, sets them: 120 and 80, but a player unit's (slot < 15)
+## buff is byte EV[3001] while byte EV[3000] ≠ 0, and an enemy's (slot ≥ 35) debuff is byte EV[3003] while byte
+## EV[3002] ≠ 0 (the story files from R_16 on set 130 % and 60 %).
 func _buffed(v: int, b: int) -> int:
 	if b >= 4:
-		v = v * 120 / 100
+		var m := 120
+		if slot < 15 and Mem.r8(Mem.EV + 4 * 3000) != 0:
+			m = Mem.r8(Mem.EV + 4 * 3001)
+		v = v * m / 100
 	elif b <= 2:
-		v = v * 80 / 100
+		var m := 80
+		if slot >= 35 and Mem.r8(Mem.EV + 4 * 3002) != 0:
+			m = Mem.r8(Mem.EV + 4 * 3003)
+		v = v * m / 100
 	return mini(v, 9999)
 
 

@@ -181,8 +181,11 @@ whose learn level for the class equals the new level: "学会了策略「%s」�
 * MaxHP = min(hp_base + equip_bonus(5), 9999) (0x40721b); MaxMP = min(mp_base + equip_bonus(6), 255) (0x40724a).
 * Move = min(class.move + equip_bonus(7), 255) (0x40727b).
 * Battle-unit stat (0x43f4fe.. on unit struct) applies buff level byte unit[0x18+s] (s=0..4):
-  level ≥4 → ×120/100, level ≤2 → ×80/100, 3 = normal (0x43f54c; 120/80 overridable by globals
-  [0x55dee4]/[0x55deec]), clamp 9999.
+  level ≥4 → ×120/100, level ≤2 → ×80/100, 3 = normal (0x43f54c), clamp 9999. Every getter first calls the
+  mod's 0x44d158 (call sites 0x43f511, 0x43f5a8, 0x43f5f6, 0x43f644, 0x43f692), which sets the two percentages
+  (bytes 0x44d156 / 0x44d157) to 120 / 80, then for a player unit (below 0x4b2e6c, slot < 15) the buff to byte
+  EV[3001] while byte EV[3000] ≠ 0, and for an enemy (from 0x4b313c, slot ≥ 35) the debuff to byte EV[3003] while
+  byte EV[3002] ≠ 0. The story files from R_16 on set EV[3000..3003] = 1, 130, 1, 60 and never reset them.
 * Fruits (types 70..74, 0x41d120): stat_word += value (≤9999), raw ability += value (≤100).
 
 ### 2.3 RNG [C]
