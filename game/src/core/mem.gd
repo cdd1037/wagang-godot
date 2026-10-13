@@ -251,14 +251,29 @@ func unit_addr(slot: int) -> int:
 const SAVE_RANGES := [[0x48b000, 0x4ccbbc], [0x4ce000, 0x4d0000], [0x55a000, 0x59a960]]
 
 
+## The persistent state as a save stores it (base64 text).
 func snapshot() -> Dictionary:
+	return encode_snapshot(raw_snapshot())
+
+
+## The persistent state as copies of the bytes: quick to take (the autosave takes one at every checkpoint) and
+## encoded only when written (encode_snapshot).
+func raw_snapshot() -> Dictionary:
 	var parts := []
 	for r in SAVE_RANGES:
-		parts.append(Marshalls.raw_to_base64(img.slice(r[0] - IMG_BASE, r[1] - IMG_BASE)))
+		parts.append(img.slice(r[0] - IMG_BASE, r[1] - IMG_BASE))
 	var pg := {}
 	for k in pages:
-		pg[str(k)] = Marshalls.raw_to_base64(pages[k])
-	return {"ranges": parts, "heap": Marshalls.raw_to_base64(heap), "pages": pg}
+		pg[str(k)] = (pages[k] as PackedByteArray).duplicate()
+	return {"ranges": parts, "heap": heap.duplicate(), "pages": pg}
+
+
+static func encode_snapshot(raw: Dictionary) -> Dictionary:
+	var pg := {}
+	for k in raw["pages"]:
+		pg[k] = Marshalls.raw_to_base64(raw["pages"][k])
+	return {"ranges": (raw["ranges"] as Array).map(func(b: PackedByteArray) -> String: return Marshalls.raw_to_base64(b)),
+		"heap": Marshalls.raw_to_base64(raw["heap"]), "pages": pg}
 
 
 ## True when `d` is a snapshot this build can restore: every range and the person heap at their sizes, 4 KiB pages

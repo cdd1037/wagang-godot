@@ -467,6 +467,8 @@ func save_game(slot: int, extra: Dictionary = {}) -> bool:
 
 
 ## The current state as save text, taken now (so later changes do not leak in) and written by write_capture.
+## The save of the game as it is now, for write_capture: memory is copied, not yet encoded, and the rest copied
+## too, so that a capture taken at a checkpoint and written later still holds that checkpoint.
 func capture_save(extra: Dictionary = {}) -> Dictionary:
 	var info := {
 		"version": SAVE_VERSION,
@@ -480,17 +482,19 @@ func capture_save(extra: Dictionary = {}) -> Dictionary:
 		"party": party_ids(),       # (only so that builds before 2026-10-13 can read the save: they need these keys)
 		"inventory": [],
 		"ivars": {},
-		"history": history,
-		"mem": Mem.snapshot(),
-		"extra": extra,
+		"history": history.duplicate(true),
+		"mem": Mem.raw_snapshot(),
+		"extra": extra.duplicate(true),
 	})
-	return {"data": JSON.stringify(d), "info": JSON.stringify(info)}
+	return {"data": d, "info": info}
 
 
 func write_capture(slot: int, cap: Dictionary) -> bool:
-	if not _write_atomic(save_path(slot), cap["data"]):
+	var d: Dictionary = (cap["data"] as Dictionary).duplicate()
+	d["mem"] = Mem.encode_snapshot(d["mem"])
+	if not _write_atomic(save_path(slot), JSON.stringify(d)):
 		return false
-	_write_atomic(_info_path(slot), cap["info"])
+	_write_atomic(_info_path(slot), JSON.stringify(cap["info"]))
 	return true
 
 
