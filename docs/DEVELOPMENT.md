@@ -116,8 +116,8 @@ status, fails a check that hits a script error, and stops one still running afte
 scripts use has a handler on that stage (`EexVM.handler`), `t_mods` a mod zip (its JSON and its picture replace
 the game's, HD version included; in `user://test/mods/`),
 `t_equip` checks the equipment codes of ops 0x3e/0x48, `t_strat` the strategy usability rules (0x420422, 0x41fec9),
-`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling; a drag or cursor
-key that stops a camera scroll lets whoever awaits it go on), `t_rpgwalk` story
+`t_touch` the touch controls (map taps and drag-panning, menu taps, slides and drag-scrolling, window lists
+scrolled by a drag; a drag or cursor key that stops a camera scroll lets whoever awaits it go on), `t_rpgwalk` story
 walking (route order and facing per step, 0x429159), `t_dialog` the message box growing to fit long texts (the
 9-line 胜利条件 window), `t_info` the 武将情报 window (status line, 技能 box, strategy list, item effect texts, pages,
 上一/下一, closing, the details, a pointer right click versus Esc on the map, long presses, story-scene right
@@ -129,7 +129,7 @@ restored battle save, the 史录 rules),
 `t_commands` the mod's battle commands (the 绝招 enable rules and moves, multi-target strikes, 围攻, 交给,
 连续策略, the move record), `t_skills` the character skills (the 【技】 techniques with an attack trace, the
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
-terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards), `t_rules` the general battle rules (反应 / 士气 equipment,
+terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards, the weather strategies), `t_rules` the general battle rules (反应 / 士气 equipment,
 组阵, effect 37, 笼屉, 怀恨攻击 and the counterattack's combat object, 太保令, the level-up penalty and report, SetExp
 past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience, op 0x38's signed AddStat, the unit lookup 0x43e4d6),
 `t_save` saves (a save loads back; a damaged one, or one whose memory ranges do not fit, is refused before
