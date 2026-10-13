@@ -1,5 +1,5 @@
 extends Node
-## Global game state: static data tables, runtime persons, party, inventory, variables.
+## Global game state: static data tables, runtime persons, the bag, saves, the chronicle.
 
 const MAX_PERSONS := 1024
 const INVENTORY_MAX := 100
@@ -18,12 +18,7 @@ var person_overrides: Dictionary = {}
 var portraits: Dictionary = {}
 
 # runtime state
-var persons: Array[Person] = []
-var party: Array[int] = []            # person ids in the player's army (我军)
-var inventory: Array = []             # [{id, lvl, exp}]
-var flags: Dictionary = {}            # (unused; flags live in Mem)
-var ivars: Dictionary = {}            # integer variables, key "kind:index"
-var scenario_jumped := false
+var persons: Array[Person] = []       # the party is person byte +0x2a (is_member), the bag is in GS (BAG)
 var autoplay := OS.get_environment("WG_AUTO") != ""
 var demo := OS.get_environment("WG_DEMO") != ""
 var god := OS.get_environment("WG_GOD") != ""   # debug: player side invulnerable & strong
@@ -83,13 +78,13 @@ func skip_held() -> bool:
 
 
 func load_data() -> void:
-	items_db = Assets.json("data/items.json")
-	classes_db = Assets.json("data/classes.json")
-	families_db = Assets.json("data/class_families.json")
-	strategies_db = Assets.json("data/strategies.json")
-	shops_db = Assets.json("data/shops.json")
-	names_db = Assets.json("data/names.json")
-	texts_db = Assets.json("data/texts.json")
+	items_db = _table("data/items.json", [])
+	classes_db = _table("data/classes.json", [])
+	families_db = _table("data/class_families.json", [])
+	strategies_db = _table("data/strategies.json", [])
+	shops_db = _table("data/shops.json", [])
+	names_db = _table("data/names.json", {})
+	texts_db = _table("data/texts.json", {})
 	var t: Variant = Assets.json("data/terrain.json")
 	terrain_names = t["names"] if t else []
 	var ui: Variant = Assets.json("gfx/units/index.json")
@@ -103,9 +98,18 @@ func load_data() -> void:
 	loaded = true
 
 
+## A data table: a missing or damaged file (a broken mod, docs/MODDING.md) is named in the log and left empty.
+func _table(rel: String, empty: Variant) -> Variant:
+	var v: Variant = Assets.json(rel)
+	if typeof(v) != typeof(empty):
+		push_error("data file %s is missing or not valid JSON" % rel)
+		return empty
+	return v
+
+
 ## Reload a person's base record from data.wa (0x41b606) — used for generated battle units.
 func reset_person(pid: int) -> void:
-	var recs: Array = Assets.json("data/persons.json")
+	var recs: Array = _table("data/persons.json", [])
 	if pid < 0 or pid >= recs.size():
 		return
 	var keep_face := person(pid).face
@@ -118,11 +122,9 @@ func reset_person(pid: int) -> void:
 func new_game_state() -> void:
 	Mem.reset()
 	persons.clear()
-	var recs: Array = Assets.json("data/persons.json")
+	var recs: Array = _table("data/persons.json", [])
 	for r in recs:
 		persons.append(Person.init_record(r))
-	party.clear()
-	inventory.clear()
 	history.clear()
 	init_bag()
 	# sortie parameters default: max 1, no forced persons, protagonist flags (u32 0x4b0a04[0..9]) set
@@ -131,7 +133,6 @@ func new_game_state() -> void:
 		Mem.w32(0x4b09f0 + 4 * k, 0xffff)
 	for k in 10:
 		Mem.w32(0x4b0a04 + 4 * k, 0xffff)
-	ivars.clear()
 	play_time = 0.0
 	chapter_title = ""          # a new game's first saves are not labelled with the last game's chapter
 	_name_index.clear()
@@ -247,7 +248,7 @@ func person_face(pid: int, small := false) -> Texture2D:
 	return face_texture(resolved_face(pid), small)
 
 
-# ------------------------------------------------------------------ party / inventory
+# ------------------------------------------------------------------ party
 ## Party membership = person byte +0x2a (0 = member, 0xff = not) (0x41a190).
 func is_member(pid: int) -> bool:
 	if pid < 0 or pid >= 1024:
@@ -309,13 +310,6 @@ func join_party(pid: int, mode := 1, arg := 0xff) -> void:
 			var tier := 2 if p.level >= 40 else (1 if p.level >= 20 else 0)
 			p.cls = (p.cls / 3) * 3 + tier
 	Mem.w8(p.base + 0x2a, 0)
-	if not party.has(pid):
-		party.append(pid)
-
-
-func leave_party(pid: int) -> void:
-	join_party(pid, 0xff)
-	party.erase(pid)
 
 
 ## Item bag in GS: 200 slots × 3 bytes (id, level, exp) at 0x4b0783 (0xff = empty);
@@ -415,36 +409,6 @@ func remove_item_id(id: int) -> bool:
 	return false
 
 
-func has_item(id: int) -> bool:
-	if is_stack_item(id):
-		return stack_count(id) > 0
-	for i in BAG_SLOTS:
-		if Mem.r8(BAG + 3 * i) == id:
-			return true
-	for pid in party:
-		var p := person(pid)
-		if p and (p.weapon == id or p.armor == id or p.accessory == id):
-			return true
-	return false
-
-
-# ------------------------------------------------------------------ variables
-func get_flag(i: int) -> bool:
-	return Mem.flag(i)
-
-
-func set_flag(i: int, v: bool) -> void:
-	Mem.set_flag(i, v)
-
-
-func get_ivar(kind: int, i: int) -> int:
-	return int(ivars.get("%d:%d" % [kind, i], 0))
-
-
-func set_ivar(kind: int, i: int, v: int) -> void:
-	ivars["%d:%d" % [kind, i]] = v
-
-
 # ------------------------------------------------------------------ save / load
 const SAVE_VERSION := 1
 const AUTO_SLOT := -1          # the autosave (继续游戏), a file of its own beside the numbered slots
@@ -513,9 +477,9 @@ func capture_save(extra: Dictionary = {}) -> Dictionary:
 	var d := info.duplicate()
 	d.merge({
 		"play_time": play_time,
-		"party": party,
-		"inventory": inventory,
-		"ivars": ivars,
+		"party": party_ids(),       # (only so that builds before 2026-10-13 can read the save: they need these keys)
+		"inventory": [],
+		"ivars": {},
 		"history": history,
 		"mem": Mem.snapshot(),
 		"extra": extra,
@@ -556,12 +520,16 @@ func read_save(slot: int) -> Variant:
 	var p := save_path(slot)
 	if not FileAccess.file_exists(p):
 		return null
-	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p))
+	var j := JSON.new()                 # (JSON.parse_string would log a damaged file as an engine error)
+	if j.parse(FileAccess.get_file_as_string(p)) != OK:
+		return null
+	var d: Variant = j.data
 	if not d is Dictionary or int(d.get("version", 0)) > SAVE_VERSION:
 		return null
-	for k in ["mem", "party", "inventory", "ivars", "scenario"]:
-		if not d.has(k):
-			return null
+	if not d.has("mem") or not d.has("scenario") or not d.get("history", []) is Array \
+			or not d.get("extra", {}) is Dictionary \
+			or not (d["scenario"] is float or d["scenario"] is int) or not Mem.check_snapshot(d["mem"]):
+		return null
 	return d
 
 
@@ -573,11 +541,6 @@ func load_game(slot: int) -> Variant:
 		return null
 	chapter_title = str(d.get("chapter_title", ""))
 	play_time = float(d.get("play_time", 0))
-	party.clear()
-	for x in d["party"]:
-		party.append(int(x))
-	inventory = d["inventory"]
-	ivars = d["ivars"]
 	history.clear()
 	for h in d.get("history", []):
 		if h is Dictionary:
@@ -620,10 +583,6 @@ func person_id_by_name(n: String) -> int:
 
 
 ## Text substitution hook (engine 0x4179a5). Plain pass-through for now.
-func substitute_names(s: String) -> String:
-	return s
-
-
 # ------------------------------------------------------------------ resources (EEX 0x3a / 0x37)
 ## kind 0 = gold (GS+0xc), kind 2 = 0..100 value at GS+0x12, kind 1 = byte GS+6 (0x418c70).
 func get_resource(kind: int) -> int:

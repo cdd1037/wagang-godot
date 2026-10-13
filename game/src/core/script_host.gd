@@ -85,7 +85,6 @@ func op_goto_scenario(ins: Dictionary) -> void:
 	# GS+7 = arg; the file ends and scenario arg+1 is loaded next
 	Game.scenario = arg(ins, 0)
 	Mem.w8(Mem.GS + 7, Game.scenario)
-	Game.scenario_jumped = true
 
 
 ## op 0x08 设定结果 (0x41431e → 0x42c858): GS+2 = arg. In a story scene it turns the town's menu, toolbar and
@@ -250,7 +249,7 @@ func speaker_face(pid: int) -> Texture2D:
 ## "&Name\ntext\ntext&Name2\ntext" -> boxes
 func parse_dialog(s: String) -> Array:
 	var boxes := []
-	s = Game.substitute_names(s)
+	s = s
 	if not s.begins_with("&"):
 		boxes.append({"name": "", "text": s})
 		return boxes
@@ -289,7 +288,7 @@ func op_dialog(ins: Dictionary) -> void:
 ## op 0x16 (0x413a57): a message box, unless EV[4095] (u32 @0x55effc) is set: then the mod adds the text
 ## to its chronicle (史录) with that category instead of showing it. EV[4095] is cleared either way.
 func op_info(ins: Dictionary) -> void:
-	var t := Game.substitute_names(sarg(ins, 0))
+	var t := sarg(ins, 0)
 	var cat := Mem.r32(0x55effc)
 	Mem.w32(0x55effc, 0)
 	if cat != 0:
@@ -301,7 +300,7 @@ func op_info(ins: Dictionary) -> void:
 ## op 0x69 (0x413a05 → 0x4335d0): "|name" shows the mod's special-technique banner (0x4d6366),
 ## other text a message box.
 func op_popup(ins: Dictionary) -> void:
-	var t := Game.substitute_names(sarg(ins, 0))
+	var t := sarg(ins, 0)
 	if t.begins_with("|"):
 		await ui.skill_banner(t.substr(1))
 		return
@@ -453,7 +452,7 @@ func op_set_equipment(ins: Dictionary) -> void:
 		if codes[i] == 0xffff: codes[i] = 0
 		if lvls[i] == 0xffff: lvls[i] = 0
 	var battle := in_battle()
-	if battle and DataTransfer.unit_slot_of(pid) < 0:
+	if battle and BUnit.slot_of(pid) < 0:
 		return
 	for i in 3:
 		var c: int = codes[i]

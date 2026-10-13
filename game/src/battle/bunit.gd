@@ -100,6 +100,17 @@ var side: int:
 		return Side.ENEMY
 
 
+## 0x43e4d6: the first unit slot (0..114) whose u32 at +0 is `pid` (the whole u32, so a reset slot's 0xffff
+## matches 0xffff), or -1 (also for pid < 0).
+static func slot_of(pid: int) -> int:
+	if pid < 0:
+		return -1
+	for s in 115:
+		if Mem.r32(Mem.UNITS + s * Mem.UNIT_SIZE) == pid:
+			return s
+	return -1
+
+
 static func at(s: int) -> BUnit:
 	var u := BUnit.new()
 	u.slot = s

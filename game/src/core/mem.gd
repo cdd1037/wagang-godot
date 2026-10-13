@@ -261,6 +261,28 @@ func snapshot() -> Dictionary:
 	return {"ranges": parts, "heap": Marshalls.raw_to_base64(heap), "pages": pg}
 
 
+## True when `d` is a snapshot this build can restore: every range and the person heap at their sizes, 4 KiB pages
+## (a damaged save, or one from a build with other SAVE_RANGES, is refused before anything changes).
+func check_snapshot(d: Variant) -> bool:
+	if not d is Dictionary or not d.get("ranges") is Array or not d.get("heap") is String:
+		return false
+	var parts: Array = d["ranges"]
+	if parts.size() != SAVE_RANGES.size():
+		return false
+	for i in parts.size():
+		if not parts[i] is String or Marshalls.base64_to_raw(parts[i]).size() != SAVE_RANGES[i][1] - SAVE_RANGES[i][0]:
+			return false
+	if Marshalls.base64_to_raw(d["heap"]).size() != 1024 * PERSON_SIZE:
+		return false
+	var pg: Variant = d.get("pages", {})
+	if not pg is Dictionary:
+		return false
+	for k in pg:
+		if not str(k).is_valid_int() or not pg[k] is String or Marshalls.base64_to_raw(pg[k]).size() != 4096:
+			return false
+	return true
+
+
 func restore(d: Dictionary) -> void:
 	reset()
 	var parts: Array = d["ranges"]

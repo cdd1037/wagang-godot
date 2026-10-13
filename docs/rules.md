@@ -133,7 +133,8 @@ u16 a, u16 b (unknown, raw), 16 equipment ids, 16 consumable ids (0xff = end). 1
 ## 2. Character growth
 
 ### 2.1 Level up (0x4073b9 LevelUp(n, show); patched heavily) [C]
-Byte +0x2a of the person is the party-membership byte (0 = member; the port calls it `fixed_growth_flag`).
+Byte +0x2a of the person is the party-membership byte (0 = member; the port calls it `member_byte`, persons.json
+`fixed_growth_flag`).
 ```
 n = min(n, 255 - level)
 bonus_stat = rand(5)                                  # mod: only used for person id 10 (盛彦师)

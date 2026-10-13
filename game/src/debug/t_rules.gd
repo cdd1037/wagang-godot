@@ -95,6 +95,7 @@ func run() -> void:
 	_kuanglan()
 	await _regen_exp()
 	_exe_tables()
+	_add_stat()
 
 	Game.main = old_main
 	print("t_rules: PASS" if _ok else "t_rules: FAILED")
@@ -274,7 +275,7 @@ func _level_up() -> void:
 	var u := _unit(2, 5, Vector2i(3, 1), 30, 100, 0)
 	var p := u.person
 	var growth: Dictionary = Game.cls(0)["growth"]
-	p.fixed_growth_flag = 0
+	p.member_byte = 0
 	u.hp = u.max_hp() - 100
 	var hp_before := u.hp
 	var g := p.level_up(1)
@@ -282,11 +283,11 @@ func _level_up() -> void:
 	_check(g[5] == int(growth["hp"]) - 13, "HP growth less the penalty: %d" % g[5])
 	_check(g[6] == int(growth["mp"]) - 13, "MP growth less the penalty: %d" % g[6])
 	_check(u.hp == mini(hp_before + int(growth["hp"]), u.max_hp()), "the unit gets the class's HP growth")
-	p.fixed_growth_flag = 0xff
+	p.member_byte = 0xff
 	var g2 := p.level_up(1)
 	_check(g2[5] == int(growth["hp"]), "no penalty for others")
 	# the report: by default only the level line, then the strategies learnt at the new level
-	p.fixed_growth_flag = 0xff
+	p.member_byte = 0xff
 	p.level = 14
 	var g3 := p.level_up(1)
 	Mem.w8(0x4dbe25, 0)
@@ -383,6 +384,34 @@ func _regen_exp() -> void:
 	u.colour = 1
 	await st.phase_fx._regen(u)
 	_check(p.armor_exp == 3, "red units only")
+
+
+## op 0x38 AddStat (0x406e17) sums signed 32-bit (0x47fa89): a value from EV ≥ 0x80000000 lowers the stat; HP / MP
+## bases that come to 0 are 1. The unit lookup 0x43e4d6 compares the whole u32 at unit+0.
+func _add_stat() -> void:
+	var p := Game.person(40)
+	p.set_stat_word(0, 100)
+	PersonAttrs.set_attr(40, 0, 1, 0xfffffff6)
+	_check(p.get_stat_word(0) == 90, "AddStat −10 to a stat word: %d" % p.get_stat_word(0))
+	PersonAttrs.set_attr(40, 0, 1, 20000)
+	_check(p.get_stat_word(0) == 9999, "AddStat caps a stat word at 9999")
+	p.hp_base = 50
+	PersonAttrs.set_attr(40, 5, 1, 0xffffffce)
+	_check(p.hp_base == 1, "AddStat −50 to a base MaxHP of 50 gives 1: %d" % p.hp_base)
+	p.mp_base = 30
+	PersonAttrs.set_attr(40, 6, 1, 0xfffffffb)
+	_check(p.mp_base == 25, "AddStat −5 to a base MaxMP: %d" % p.mp_base)
+	p.set_raw(0, 80)
+	for k in 3:
+		Mem.w8(p.base + 0x22 + k, 0)
+	PersonAttrs.set_attr(40, 10, 1, 0xfffffff6)
+	_check(p.get_raw(0) == 70, "AddStat −10 to an ability whose next bytes are 0: %d" % p.get_raw(0))
+	var u := _unit(60, 40, Vector2i(3, 3))
+	_check(BUnit.slot_of(40) == 60 and DataTransfer.field_addr(28, 40) == u.addr + 0x04, "the unit of person 40")
+	Mem.w32(u.addr, 40 | 0x10000)
+	_check(BUnit.slot_of(40) == -1, "a unit whose u32 is not the person id is not found (0x43e4d6 compares it whole)")
+	Mem.w32(u.addr, 40)
+	_clear()
 
 
 ## The tables Rules reads from the program image (0x43c35c power, 0x42093c category, 0x43ffc4 mounted families)

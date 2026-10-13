@@ -347,7 +347,6 @@ func _run_flow() -> void:
 				return
 			await ending()
 			return
-		Game.scenario_jumped = false
 		# a new game, the next scenario or a loaded save: the start of this stage is a checkpoint
 		_autosave_checkpoint(_pending_load, true)
 		print("== scenario %d: %s" % [n, file])

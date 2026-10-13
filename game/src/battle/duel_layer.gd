@@ -138,7 +138,7 @@ func _init() -> void:
 
 # ------------------------------------------------------------------ timing helpers
 func _t(n: int) -> void:
-	if Game.autoplay or n <= 0:
+	if Game.autoplay or n <= 0 or not is_inside_tree():
 		return
 	await get_tree().create_timer(n * TICK).timeout
 
@@ -154,7 +154,7 @@ func _skippable(n: int) -> void:
 		return
 	var end := Time.get_ticks_msec() + int(n * 100 / maxf(Engine.time_scale, 0.01))
 	var c := Game.clicks
-	while Time.get_ticks_msec() < end:
+	while Time.get_ticks_msec() < end and is_inside_tree():
 		await get_tree().process_frame
 		if _clicked(c):
 			break
@@ -296,7 +296,7 @@ func say2(side: int, text: String, mode_: int) -> void:
 	var cut := text.find("\n&")
 	if cut >= 0:
 		text = text.substr(0, cut)
-	text = Game.substitute_names(text)
+	text = text
 	if OS.get_environment("WG_TRACE_TEXT") != "":
 		print("  [duel %s] %s" % [Game.person(pids[s]).name, text.replace("\n", " ")])
 	if text.strip_edges() == "":

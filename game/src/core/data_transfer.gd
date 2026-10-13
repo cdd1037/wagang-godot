@@ -20,16 +20,6 @@ const FIELDS := [
 const PERSON_EXT_TABLE := 0x565000
 
 
-## Slot of the battle unit holding person `pid` (0x43e4d6), or -1.
-static func unit_slot_of(pid: int) -> int:
-	for s in 115:
-		var a := Mem.UNITS + s * Mem.UNIT_SIZE
-		var v := Mem.r16(a)
-		if v != 0xffff and (v & 0xfff) == pid:
-			return s
-	return -1
-
-
 static func field_addr(field: int, id: int) -> int:
 	if field < 0 or field >= FIELDS.size():
 		return -1
@@ -42,7 +32,7 @@ static func field_addr(field: int, id: int) -> int:
 		1:
 			return Mem.BYTEVARS + id
 		2:
-			var s := unit_slot_of(id)
+			var s := BUnit.slot_of(id)
 			if s < 0:
 				return -1
 			return Mem.UNITS + s * Mem.UNIT_SIZE + f[1]

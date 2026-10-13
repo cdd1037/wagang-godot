@@ -25,8 +25,9 @@ func view() -> BattleView:
 	return st.view
 
 
+## t seconds of animation (none under autoplay, or once the stage has left the tree: 回到标题 / a load mid-way).
 func wait(t: float) -> void:
-	if Game.autoplay or t <= 0:
+	if Game.autoplay or t <= 0 or not is_instance_valid(st) or not st.is_inside_tree():
 		return
 	await st.get_tree().create_timer(t).timeout
 
@@ -889,7 +890,7 @@ func kill_rewards() -> void:
 			var j := 3007 + Rules.rand(3)
 			Mem.set_ev(j, Mem.ev(j) + 1)
 	if Mem.ev(3183) >= 4:
-		var s := Skills.unit_slot(3)
+		var s := BUnit.slot_of(3)
 		if s >= 0:
 			var p3 := Game.person(3)
 			var acc := Mem.r8(p3.base + 0x34)
@@ -1635,8 +1636,8 @@ func _promote(u: BUnit, t: BUnit, iid: int) -> void:
 	await _use_anim(u, t, iid, 0xff)
 	var old := p.cls
 	var g: Dictionary = Game.cls(old).get("growth", {})
-	p._add_stat(5, (2 * int(g.get("hp", 0))) & 0xff)
-	p._add_stat(6, (2 * int(g.get("mp", 0))) & 0xff)
+	p.add_stat(5, (2 * int(g.get("hp", 0))) & 0xff)
+	p.add_stat(6, (2 * int(g.get("mp", 0))) & 0xff)
 	t.hp = t.max_hp()
 	t.mp = t.max_mp()
 	await st.unit_ops.op_unit_status({"args": [p.id, 11, 0, 0]})

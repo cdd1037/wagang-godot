@@ -131,10 +131,12 @@ restored battle save, the 史录 rules),
 phase-start auras, 明镜, the stat auras, 并蒂, 宿痕, 舍命 / 智将, 杜断, 房谋, 烈魔, 逐影随行咒, the on-hit skills,
 terrain, 相马, 天运, 百宝, 统军, 锻造 / 波若, kill rewards), `t_rules` the general battle rules (反应 / 士气 equipment,
 组阵, effect 37, 笼屉, 怀恨攻击 and the counterattack's combat object, 太保令, the level-up penalty and report, SetExp
-past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience), `t_shop` the shops and the warehouse (prices with
+past 70, 引导攻击, 策略模仿, 狂澜, per-phase equipment experience, op 0x38's signed AddStat, the unit lookup 0x43e4d6),
+`t_save` saves (a save loads back; a damaged one, or one whose memory ranges do not fit, is refused before
+anything changes; it uses user://test/saves/), `t_shop` the shops and the warehouse (prices with
 八折, the bonus fruit, goods per record, buying = wearing, 装备 moves, selling), `t_menus` the group 5 windows
 (环境设定 applied without writing Niuniu.wa, 历史情报 line order, the sortie builder and 选择武将 rules, 部队情报一览
-sorting, 地形情报一览, the town gate GS+2; `OUT=dir` with a window saves their pictures), `t_screens` the screens of
+sorting, 地形情报一览, the town gate GS+2, the status panes kept in memory and put up again by a load; `OUT=dir` with a window saves their pictures), `t_screens` the screens of
 the script-op audit (开始作战, the 胜利条件 sequence, the chapter cards, the resource meter; `OUT=dir` with a window
 saves them), `t_storyclick` plays R_00 by hand up to the training 单挑 (the opening's captions gone, 攻击 runs nothing
 until 防御 has, the click on 防御 starts it; windowed, about two minutes, run with `WG_START=0 WG_NOVIDEO=1

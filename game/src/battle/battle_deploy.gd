@@ -267,7 +267,7 @@ func _set_ai(u: BUnit, ai_mode: int, ai_person: int, ax: int, ay: int) -> void:
 	u.mode = AI_CODE[ai_mode]
 	match ai_mode:
 		3, 5:
-			var s := DataTransfer.unit_slot_of(ai_person) if ai_person != 0xffff else -1
+			var s := BUnit.slot_of(ai_person) if ai_person != 0xffff else -1
 			if s >= 0:
 				Mem.w8(u.addr + 8, s)
 				u.extra["ai_person"] = ai_person

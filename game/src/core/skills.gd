@@ -24,19 +24,9 @@ static func has_dyn(pid: int, k: int) -> bool:
 	return k < 30 and pid >= 0 and pid == dyn(k)
 
 
-## 0x43e4d6: the first unit slot (0..114) whose person is `pid`, or -1.
-static func unit_slot(pid: int) -> int:
-	if pid < 0:
-		return -1
-	for s in 115:
-		if Mem.r32(Mem.UNITS + s * Mem.UNIT_SIZE) == pid:
-			return s
-	return -1
-
-
 ## The unit of person `pid` if it is on the map (state 2), else null.
 static func unit_on_map(pid: int) -> BUnit:
-	var s := unit_slot(pid)
+	var s := BUnit.slot_of(pid)
 	if s < 0:
 		return null
 	var u := BUnit.at(s)

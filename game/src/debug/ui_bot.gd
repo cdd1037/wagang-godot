@@ -511,7 +511,7 @@ func _tour_step(st: StoryStage) -> bool:
 
 
 func _state() -> Dictionary:
-	return {"scenario": Game.scenario, "gold": Game.gold, "party": Game.party.duplicate()}
+	return {"scenario": Game.scenario, "gold": Game.gold, "party": Game.party_ids()}
 
 
 ## A point of the scene view with no actor on it (where a right click opens the system menu).

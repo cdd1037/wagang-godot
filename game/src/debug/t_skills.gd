@@ -212,8 +212,8 @@ func _stat_auras() -> void:
 	# 相马 (dynamic slot 7): mounts move one more while the holder is in the party
 	var jr := Game.person(20)
 	var rider := Game.person(5)
-	jr.fixed_growth_flag = 0
-	rider.fixed_growth_flag = 0
+	jr.member_byte = 0
+	rider.member_byte = 0
 	rider.accessory = 0x3d
 	var mv := rider.move_points()
 	Mem.set_ev(3977, 20)
@@ -391,7 +391,7 @@ func _person_skills() -> void:
 	for pp in [sy, ref]:
 		pp.cls = 0
 		pp.level = 10
-		pp.fixed_growth_flag = 1
+		pp.member_byte = 1
 		pp.bonus_counter = 0
 		for i in 5:
 			pp.set_stat_word(i, 100)

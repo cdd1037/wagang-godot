@@ -607,7 +607,7 @@ func op_choice(ins: Dictionary) -> void:
 
 ## op 0x19 (0x413bd1): only stores the text (Reader+0x3d10) that the menu's 胜利条件 shows.
 func op_victory_cond_text(ins: Dictionary) -> void:
-	victory_text = Game.substitute_names(sarg(ins, 0))
+	victory_text = sarg(ins, 0)
 
 
 ## 胜利条件 (menu 106, 0x449cec): the stored text in an OK box titled 胜利条件 ("现在无法显示" when it is empty or

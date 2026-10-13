@@ -53,7 +53,7 @@ func _prices() -> void:
 	_check(ItemCols.buy_price(0) == 500, "buy price %d" % ItemCols.buy_price(0))
 	Game.join_party(20, 1)                  # 贾润甫 in the party: 八折
 	_check(ItemCols.buy_price(0) == 400, "八折 %d" % ItemCols.buy_price(0))
-	Game.leave_party(20)
+	Game.join_party(20, 0xff)
 	_check(ItemCols.sell_price(0, 1) == 375 and ItemCols.sell_price(0, 2) == 562 and ItemCols.sell_price(0, 3) == 750,
 		"sell price by level")
 	_check(ItemCols.sell_price(0x57, 0) == 75, "馒头 sells for 75")

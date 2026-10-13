@@ -34,7 +34,9 @@ var hp_base: int:
 var mp_base: int:
 	get: return Mem.r8(base + 0x20)
 	set(v): Mem.w8(base + 0x20, v)
-var fixed_growth_flag: int:
+## +0x2a: 0 = in the player's army (我军), 0xff = not (0x41a190, Game.is_member); level-ups and the move points
+## of party members read it too. (persons.json calls it fixed_growth_flag, after data.wa's byte 0x11.)
+var member_byte: int:
 	get: return Mem.r8(base + 0x2a)
 	set(v): Mem.w8(base + 0x2a, v)
 var weapon: int:
@@ -97,7 +99,7 @@ static func init_record(r: Dictionary) -> Person:
 	p.face = int(r["face"])
 	p.sprite = int(r["sprite"])
 	Mem.w8(b + 0x26, int(r.get("unk_10", 0)))
-	p.fixed_growth_flag = int(r.get("fixed_growth_flag", 255))
+	p.member_byte = int(r.get("fixed_growth_flag", 255))
 	for i in 5:
 		var v := int(r[STAT_KEYS[i]])
 		p.set_stat_word(i, v)
@@ -428,7 +430,7 @@ func max_mp() -> int:
 func move_points() -> int:
 	var m := mini(int(Game.cls(cls).get("move", 4)) + equip_bonus(7), 255)
 	var h := Skills.dyn(7)
-	if h != 0x400 and h < 1024 and Game.person(h).fixed_growth_flag == 0 and fixed_growth_flag == 0 \
+	if h != 0x400 and h < 1024 and Game.person(h).member_byte == 0 and member_byte == 0 \
 			and Mem.r8(base + 0x34) in [0x3d, 0x3e, 0x3f, 0x2f, 0x3b, 0x3c]:
 		m = (m + 1) & 0xff
 	return m
@@ -494,7 +496,7 @@ func level_up(n := 1) -> Array:
 	for i in 7:
 		var g := int(growth.get(gkeys[i], 0))
 		var jittered := g
-		if fixed_growth_flag == 0 and bonus_counter == 0:
+		if member_byte == 0 and bonus_counter == 0:
 			jittered = _jitter(g)
 		if i <= 4:
 			var grade := ability_grade(get_raw(i))
@@ -502,7 +504,7 @@ func level_up(n := 1) -> Array:
 				bonus_counter -= 1
 				grade += 1
 			g = (grade + jittered) >> 1
-		elif fixed_growth_flag == 0 and mp_base != 1:
+		elif member_byte == 0 and mp_base != 1:
 			g -= _catchup_penalty(i)     # mod 0x4d65f5
 		for k in n:
 			if id == 10 and i <= 4 and i == lucky:
@@ -511,11 +513,11 @@ func level_up(n := 1) -> Array:
 			if i <= 4 and g == 0:
 				g = 1
 			var old := _stat_value(i)
-			var nv := _add_stat(i, g)
+			var nv := add_stat(i, g)
 			gains[i] = nv - old if nv != 0 else 0
 	# the unit of the person (0x43e4d6; without one the loop leaves the last slot's record): HP and MP + the class
 	# growth, at most the new maximum, MP on its low byte
-	var s := Skills.unit_slot(id)
+	var s := BUnit.slot_of(id)
 	var ua := Mem.unit_addr(s if s >= 0 else 114)
 	var h := Mem.r32(ua + 0x10) + int(growth.get("hp", 0))
 	Mem.w32(ua + 0x10, mini(h, max_hp()))
@@ -593,7 +595,7 @@ func _jitter(g: int) -> int:
 ## AddStat (0x406e17) for i 0..6, returning the new value: a stat word at most 9999, the HP base at most 9999 and
 ## the MP base at most 255, on the signed sums of 0x47fa89 (a base that comes to 0 is 1). An MP base of 1 does not
 ## change, and g comes back. A lower maximum also lowers the battle unit's HP / MP (mod 0x4d6710).
-func _add_stat(i: int, g: int) -> int:
+func add_stat(i: int, g: int) -> int:
 	if i <= 4:
 		var r := _min_add(get_stat_word(i), g, 9999)
 		set_stat_word(i, r & 0xffff)
