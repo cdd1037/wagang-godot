@@ -193,6 +193,8 @@ func _draw() -> void:
 		_draw_seq(vs)
 	if not _epanel.is_empty():
 		_draw_equip_panel(vs)
+	if not _gauge.is_empty():
+		_draw_gauge()
 	# phase banner
 	if _banner_a > 0.01 and stage.field_ready and stage.turn > 0:
 		var f := Assets.font()
@@ -296,6 +298,154 @@ func equip_panel(iid: int, lvl: int, p: Person, weapon: bool) -> void:
 
 
 var _epanel := {}
+
+
+## The change box (0x450984; 0x450036 for a unit of the player's colour, 0x43ff54): beside the unit (0x44fc4b), its
+## name, "Lv%2u" and class, the 兵 / 策 bars (Kao 0x180 / 0x3c0, patterns 0x80 / 0x40), for the player's units also
+## 经验 (0x600, pattern 0x140; MAX at 0xff) and the weapon / armour icons (Kao 0x1a9c0 / 0x1aac0) with their
+## experience ("%3u" or MAX). The bars run from the current values to current − change in 5 steps of a tick (EXP up
+## by the gain, at most to 100; any bar step adds 2 ticks), then the equipment experience counts up in 4 steps
+## (the gain shown at most to 100, or 250 for a treasure, mod 0x4d3d89 / 0x4d3da7); held 2 ticks, 6 with `hold`.
+## Nothing when every change is 0. The callers apply the changes after it, as the original's do.
+func gauge(u: BUnit, other: BUnit, dhp: int, dmp: int, e := 0, we := 0, ae := 0, hold := false) -> void:
+	if dhp == 0 and dmp == 0 and e == 0 and we == 0 and ae == 0:
+		return
+	if Game.instant or u == null or u.person == null:
+		return
+	var p := u.person
+	var player := u.colour == 0
+	if p.exp == 0xff:
+		e = 0
+	elif p.exp + e > 100:
+		e = 100 - p.exp
+	var eq := [[p.weapon, p.weapon_exp, we], [p.armor, p.armor_exp, ae]]
+	for q in eq:
+		if q[0] < 0 or q[1] == 0xff:
+			q[2] = 0
+		else:
+			var cap := 250 if bool(Game.item(q[0]).get("treasure", false)) else 100
+			q[2] = mini(q[2], maxi(cap - q[1], 0))
+	_gauge = {"unit": u, "rect": gauge_rect(u, other, 3 if player else 2), "player": player,
+		"hp": u.hp, "mp": u.mp, "exp": p.exp, "eq": [q_shown(eq[0]), q_shown(eq[1])], "show_eq": [eq[0][0] >= 0, eq[1][0] >= 0]}
+	queue_redraw()
+	if dhp != 0 or dmp != 0 or (player and e != 0):
+		for k in range(4, -1, -1):
+			await stage.wait(GAUGE_TICK)
+			_gauge["hp"] = u.hp - dhp + _trunc4(dhp) * k
+			_gauge["mp"] = u.mp - dmp + _trunc4(dmp) * k
+			if p.exp != 0xff:
+				_gauge["exp"] = p.exp + e - (e >> 2) * k
+			queue_redraw()
+		if player:
+			await stage.wait(2 * GAUGE_TICK)
+	if player and (eq[0][2] != 0 or eq[1][2] != 0):
+		for k in range(3, -1, -1):
+			await stage.wait(GAUGE_TICK)
+			_gauge["eq"] = [q_shown(eq[0], k), q_shown(eq[1], k)]
+			queue_redraw()
+	await stage.wait((6 if hold else 2) * GAUGE_TICK)
+	_gauge = {}
+	queue_redraw()
+
+
+const GAUGE_TICK := 0.05
+var _gauge := {}
+
+
+## −1 for MAX, else the experience shown at step k of the count (exp + gain − gain / 3 · k).
+static func q_shown(q: Array, k := 3) -> int:
+	return -1 if q[1] == 0xff else q[1] + q[2] - (q[2] / 3) * k
+
+
+## A step of the bars (0x450984): (d + (d < 0 ? 3 : 0)) >> 2, a quarter rounded toward 0.
+static func _trunc4(d: int) -> int:
+	return (d + (3 if d < 0 else 0)) >> 2
+
+
+## Where 0x44fc4b puts a 4 × h-cell box for unit u (view cells): right of it in the left half of the view, else
+## left; from its row down in the upper half, else up to its row. If `other` is under the box it moves to the
+## other side of u when there is room, then a row at a time down (upper half; the original stops when the box would
+## reach the view's width in cells, its height being the other getter) or up to row 0 until `other` is clear.
+func gauge_rect(u: BUnit, other: BUnit, h: int) -> Rect2:
+	var v := stage.view
+	var vs := v.view_size()
+	var tl := Vector2i((v.camera.position / BattleView.CELL).floor())
+	var vw := int(vs.x) / BattleView.CELL
+	var hx := int(vs.x) / (2 * BattleView.CELL)
+	var hy := int(vs.y) / (2 * BattleView.CELL)
+	var c := u.pos - tl
+	var b := Vector2i(c.x + 1 if c.x < hx else c.x - 4, c.y if c.y < hy else c.y - (h - 1))
+	if other != null and other.exists():
+		var o := other.pos - tl
+		var under := func(bb: Vector2i) -> bool:
+			return o.x >= bb.x and o.x < bb.x + 4 and o.y >= bb.y and o.y < bb.y + h
+		if under.call(b):
+			if c.x < hx and c.x >= 4:
+				b.x -= 5
+			elif c.x >= hx and 4 < vw - c.x:
+				b.x += 5
+			while under.call(b):
+				if c.y < hy:
+					b.y += 1
+					if b.y + h >= vw:
+						break
+				else:
+					b.y -= 1
+					if b.y == 0:
+						break
+	return Rect2(v.cell_pos(tl + b) - v.camera.position, Vector2(4, h) * BattleView.CELL)
+
+
+func _draw_gauge() -> void:
+	var u: BUnit = _gauge["unit"]
+	if not u.exists() or u.person == null:
+		return
+	var p := u.person
+	var r: Rect2 = _gauge["rect"]
+	UIStyle.draw_panel(self, r)
+	var x := r.position.x + 8
+	var y := r.position.y + 8
+	var col := UIStyle.NAME_COLOR
+	if u.colour == 1:
+		col = Color(0.6, 1, 0.6)
+	elif u.colour >= 2:
+		col = Color(1, 0.55, 0.5)
+	UIStyle.draw_text(self, Vector2(x, y + 14), InfoWindow.display_name(p), col, 14)
+	UIStyle.draw_text(self, Vector2(x + 72, y + 14), "Lv%2d" % p.level, Color(1, 1, 1), 14)
+	UIStyle.draw_text(self, Vector2(x + 112, y + 14), p.class_name_str(), Color(1, 1, 1), 14)
+	var rows := [["00180", 0x80, int(_gauge["hp"]), u.max_hp()], ["003c0", 0x40, int(_gauge["mp"]), u.max_mp()]]
+	if _gauge["player"]:
+		rows.append(["00600", 0x140, int(_gauge["exp"]), 100])
+	for i in rows.size():
+		var ry := y + 32 + 24 * i
+		var ic := Assets.tex("gfx/effects/kao/%s_24x24.png" % rows[i][0])
+		if ic:
+			draw_texture_rect(ic, Rect2(x + 8, ry, 24, 24), false)
+		var v: int = rows[i][2]
+		var m: int = rows[i][3]
+		var bar := Rect2(x + 40, ry + 8, 128, 8)
+		draw_rect(bar, Color(0, 0, 0))
+		var full := i == 2 and v == 0xff
+		var fill := (100 if full else (0 if m <= 0 else clampi(v * 100 / m, 0, 100))) * 128 / 100     # 0x45111c
+		var pat := Assets.tex("gfx/effects/kao/%05x_8x8.png" % rows[i][1])
+		if fill > 0:
+			if pat:
+				draw_texture_rect(pat, Rect2(bar.position, Vector2(fill, 8)), true)
+			else:
+				draw_rect(Rect2(bar.position, Vector2(fill, 8)), Color(0.9, 0.3, 0.2))
+		var t := "MAX" if full else "%d / %d" % [v, m]
+		UIStyle.draw_text(self, Vector2(x + 64, ry + 7), t, Color(1, 1, 1), 11)
+	if _gauge["player"]:
+		var ey := y + 112
+		for k in 2:
+			if not _gauge["show_eq"][k]:
+				continue
+			var ic := Assets.tex("gfx/effects/kao/%s_16x16.png" % ["1a9c0", "1aac0"][k])
+			var ix := x + (16 if k == 0 else 104)
+			if ic:
+				draw_texture_rect(ic, Rect2(ix, ey, 16, 16), false)
+			var n: int = _gauge["eq"][k]
+			UIStyle.draw_text(self, Vector2(x + (40 if k == 0 else 128), ey + 13), "MAX" if n < 0 else "%3d" % n, Color(1, 1, 1), 13)
 
 
 func _draw_equip_panel(vs: Vector2) -> void:

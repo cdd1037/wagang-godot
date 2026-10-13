@@ -490,7 +490,8 @@ All of group 5 is ported (2026-10-11), with `t_shop` and `t_menus` as its tests;
 
 ### 6. Found in the 2026-10-14 review
 
-Differences the review of 2026-10-14 found by reading the decompile; each is ported with a check.
+Differences the review of 2026-10-14 found by reading the decompile; each is ported with a check unless marked
+not ported.
 
 42. **Op 0x78 writing a unit's HP** (field 33) runs 0x4d678c (0x4d0653): HP 0 or less (signed) is a script kill
     0x4121b0, EV[10] = 1 and RemoveUnit at once. **Done** (`ScriptHost.unit_hp_written`, `t_battle`).
@@ -525,8 +526,9 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     * A battle checkpoint (0x44c601) polls the event scene up to as many times as it has sections (0x410990) while
       the scene stays (0x44f7b0 reads the reader offset [R+8], reset only by a new selection 0x4100a1 / 0x40fba9 or
       a scene change): every qualifying section runs in the same checkpoint, and one that still qualifies runs again
-      at each remaining poll (S_17's always-true 暗杀). The port polled once: S_29's 第四区 / 第五区 fire walls froze,
-      S_09 / S_36 events came late. The port stops as soon as a poll ran only memory ops and changed nothing
+      at each remaining poll (S_17's always-true 暗杀). The port polled once, so such sections ran a checkpoint
+      late or not at all (a review agent read S_29's 第四区 / 第五区 fire walls and S_09 / S_36's events this way;
+      those scenarios cannot be jump-started, so it was not reproduced in a run). The port stops as soon as a poll ran only memory ops and changed nothing
       (EexVM.PURE_OPS), which the remaining polls would repeat exactly.
     * Op 0x0c in a one-section scene (0x4143a4 → status 8 → 0x4105a8 returns 5): the scene stays, so the next poll
       runs the section again (the story 单挑 draw path replays the duel); the scene and the file move on only at an
@@ -545,8 +547,8 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     * Effect animations play SE 100 + the low byte of their header id at the first record unless its sound byte
       (record byte 16) is 2, and at each record whose byte is 3 (Xben 0x401e5c → 0x4031e8 / 0x40205e, MCALL
       0x403014 → 0x403262 / 0x403147); `gfx/effects/index.json` keeps the byte as `sound`.
-    * Casting (0x4214bf → 0x4218d6, every strategy but 青龙): SE 8 after 8 ticks with the casting pose, then SE 39
-      and the strategy's name in a timed box.
+    * Casting (0x4214bf → 0x4218d6; 青龙's handler calls it itself, 0x424f3c): SE 8 after 8 ticks with the casting
+      pose, then SE 39 and the strategy's name in a timed box.
     * Items: HP / MP items and 笼屉's 馒头 run the use animation 0x41c762 without an effect, cures and 太保令 with
       Xben 44; nothing plays SE 19 (only a terrain change does). The battle's item pictures are Yoyo.wa entries by
       item id: the large Itemicon picture with the item's id (the icon field differs for 92..95), 狮面盾's own.
@@ -563,6 +565,35 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     0x46dd05 / 0x45e87d, no dialog keyboard then) Esc and a right click do not close the window (`DlgPanel.busy`);
     the port's menus page past greyed rows. **Done** (`DlgPanel`, `UnitListWindow`, `SortieScreen`, `ShopWindow`,
     `ChoiceMenu`; `t_menus`, `t_battle`).
+51. **The change box** (0x450984; 0x450036 for a unit of the player's colour): every HP / MP / EXP change of a
+    battle shows a 4 × 2-cell box beside the unit (4 × 3 with 经验 and the equipment for the player's units), placed
+    by 0x44fc4b (right of the unit in the left half of the view, else left; moved off the other unit), name,
+    "Lv%2u", class, bars of 128 px with "%4u /%4u", running from the current values to the new ones in 5 steps of a
+    tick (a quarter, rounded toward 0), then the weapon / armour experience counting up in 4 steps, held 2 ticks,
+    or 6 for a one-target action (area code 0) and the actor's own box. The callers then apply the change:
+    each target of a strike (0x405ab8, with its armour experience) and the attacker after it (0x405c6c, the 吸血
+    heal, experience and weapon experience; SetExp before the weapon's, 0x405c7a), each target of a strategy
+    (0x422bf5) and the caster after it (0x4230b6: the cost, 暗鬼's MP, 暗算's HP, both experiences), HP / MP items
+    and 笼屉's 馒头 (0x41ce15 / 0x41cf33), the phase start's regeneration (0x43d04f) and poison (0x44e086), each
+    after centring the view on the unit, and a won duel's experience (0x44996c). The port's damage numbers are
+    gone; its 暴击 / 格挡 / 失败 / 暗杀 words stay. **Done** (`BattleHUD.gauge`, `gauge_rect`; `t_battle`).
+52. **Strategies and equipment experience; the handlers without a hit roll**:
+    * Every strategy handler takes the caster's weapon experience (0x42128b, the largest over the targets: 3, 2 when
+      the caster is the higher level; 3 for the weather; the mod drops the EXP-bonus product and the weapon-type
+      test) and, except the weather, 聚气 / 豪气 and 暝思, each target's armour experience (0x4213a3: a red target
+      of an enemy-side strategy that changed its HP or MP gains 4, 3 when the caster is the lower, × its EXP bonus).
+      Both experiences, like the strategy's (0x420efb), need a player-controlled caster (code 7, ctx+0x4a8 from
+      0x425279); the port gave neither and tested slot < 15.
+    * 暝思 (0x423d6c) costs 50 HP (all but 1 at 50 or less) for half that in MP, up to the maximum; the port gave
+      a quarter of the maximum MP for nothing.
+    * 聚气 / 豪气 (0x423cc0) and 暝思 never call the hit roll 0x43b4b0; the port rolled the hit curve for them.
+    **Done** (`BattleActions.cast`, `_strat_weapon_gain`, `_strat_armor_gain`, `_apply_strategy`;
+    `strategy_rules.json`; `t_skills`, `t_tables`).
+    Not ported: 青龙's handler (0x424e9e) strikes 5 times (`rand` over the list, a unit at 0 HP leaves it) without a
+    hit roll, after the cast intro and its MCALL at the caster, but builds its list around the caster with area
+    code 6 (a line beyond the centre), which finds nobody; no class learns 青龙, 朱雀, 玄武 or 白虎 and no item
+    teaches them, so the port keeps its plain damage handler for them. The MCALL strategies' follow-up Xben effect
+    on the targets (0x4214bf's remap: 1, 3, 5, 7, 0x16, 0x39, 0x0a) is not played either.
 
 ### Deliberate differences (port design, keep unless asked)
 
@@ -1557,8 +1588,8 @@ Corrections found on the way:
 | 0x44e914 | 0x44e851 enemy phase start | call 0x4d0d0e(hi 0x23, lo 0): clear 0x55a500[0..34] | 怀恨攻击 (eff. 87) hit counters of player-side units reset at the enemy phase start | PORTED | battle_stage.gd `_phase_start_effects` clears slots 0..34 of Mem 0x55a500 (`BUnit.GRUDGE`). See F12. [C] |
 | 0x44edfe | 0x44ed93 player phase start loop | call 0x4d3197 (compaction) | — | N/A | [C] |
 | 0x44ee15 | 0x44ed93 player phase start | call 0x4d0d0e(0x73, 0x23): clear 0x55a500[35..114] | 怀恨攻击 counters of enemy units | PORTED | battle_stage.gd `_phase_start_effects` (slots 35..114). See F12. [C] |
-| 0x45019a | 0x450036 EXP popup (bars next to the unit) — weapon part | jmp 0x4d3d89: reads the weapon exp (0x409680) and id, and caps the *displayed* gain so exp+gain ≤ 100 (normal) / 250 (treasure, 0x40c76e) | display only | N/A | The port has no EXP popup bars (floating "经验 +N" in battle_actions.gd `gain_exp`). The real weapon exp is applied elsewhere. [C] |
-| 0x4501ed | same — armour part | jmp 0x4d3da7: the same for the armour | display only | N/A | Same as above. [C] |
+| 0x45019a | 0x450036 EXP popup (bars next to the unit) — weapon part | jmp 0x4d3d89: reads the weapon exp (0x409680) and id, and caps the *displayed* gain so exp+gain ≤ 100 (normal) / 250 (treasure, 0x40c76e) | display only | PORTED | battle_hud.gd `gauge` (the change box, §6 item 51). The real weapon exp is applied by the callers. [C] |
+| 0x4501ed | same — armour part | jmp 0x4d3da7: the same for the armour | display only | PORTED | Same as above. [C] |
 | 0x4525d4 | 0x45218f map redraw | call 0x4d1c10 (replaces ~17 bytes, now NOPs): when the cursor cell [0x4b4248] changed, print "(%2d:%2d) %s" = cursor x:y and terrain name (0x48bdb0[terrain]) in the top bar (text colour 0x12, box 0x47dbc3(0xfd,0,0x8e,0x10,2) [G: position]) | cursor coordinate + terrain readout | PORTED | battle_hud.gd `_draw_cursor_text`: "(%2d:%2d) terrain" for the hovered cell. [C] |
 | 0x452737 | 0x45218f map redraw | jmp 0x4d4222: [0x4cf608] = 0, DeleteObject both portrait bitmaps | duel portraits off at duel close | PORTED | duel_layer.gd:212 `show_portrait = [false,false]`. [C] |
 | 0x4559ba | 0x45576d terrain info popup (left click on an empty cell in the player phase) | jmp 0x4e0000: terrain id > 29 → 0 before indexing the name table 0x48bdb0 | bounds clamp | PORTED | battle_hud.gd `terrain_popup` (`t > 29 → 0`), opened by battle_input.gd `player_phase` on an empty-cell click. [C] |

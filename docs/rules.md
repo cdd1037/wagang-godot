@@ -374,9 +374,9 @@ cancelled menu undoes the move. The move UI (0x43d538) records the unit's pid in
 | 48-56 | 0x42335b(1) | buffs: 0xa8 机动 (48), 0xa2 反应 (49,50), 0xa4 士气 (51,52), 0xa0 能力 (53,54), 0xa1 防御 (55,56) |
 | 57 战备 | 0x423960 | re-act |
 | 58-60 | 0x423b2f | weather (阴雨/晴明/叆叇) |
-| 61 聚气, 63 豪气 | 0x423cc0 | |
-| 62 暝思 | 0x423d6c | |
-| 64 青龙 | 0x424e9e | 66 玄武 0x424810, 67 白虎 0x424513 |
+| 61 聚气, 63 豪气 | 0x423cc0 | no hit roll (only 0x420422) |
+| 62 暝思 | 0x423d6c | no hit roll: HP −h (h = 50, or HP − 1 at HP ≤ 50), MP + min(h/2, MaxMP − MP) |
+| 64 青龙 | 0x424e9e | 5 strikes at rand(list) (a unit at HP 0 leaves the list), no hit roll; the list is built around the caster (area 6). 66 玄武 0x424810, 67 白虎 0x424513 |
 
 ### 5.2 Strategy damage (0x43bfaa(caster, target, s, preview)) [C]
 "Damage strategy" set (0x449bac/0x449c36): ids 0-20, 22, 33-36, 38, 64, 65.
@@ -613,7 +613,7 @@ e = e * exp_mult / 100
 ```
 The attack sequence awards max(e over all targets & strikes) once (ctx+0x428), applied after the sequence (0x405c6c).
 Every target counts, hit or miss: a miss has damage 0 (CalcDamage rolls the hit itself), so it gives the no-kill e.
-### 8.2 Strategies (0x420efb; ctx+0x4a8 must be set)
+### 8.2 Strategies (0x420efb; ctx+0x4a8 must be set: the caster has code 7, player-controlled, 0x425279)
 ```
 target side enemy & damage strategy (not 22): kill → as 8.1 kill formula (×2 vs commander);
                                             no kill → La<Lt ? min((Lt-La)*4+10,100) : max(sat_sub(10,(La-Lt)/2),5)
@@ -630,7 +630,12 @@ the +1 grade bonus counter (= 5) on every level-up.) Battle experience, Regen an
 Weapon (0x40397d, attacker, per target): `(HP or MP damage ? (La > Lt ? 2 : 3) : 1) * exp_mult/100`, the largest over
 targets and strikes (ctx+0x42c) added once after the attack (0x405cc2); armor (0x403a85, each target whose unit kind is
 0, 0x43ff54; La = attacker, Lt = wearer): `(HP or MP damage ? (La < Lt ? 3 : 4) : 1) * exp_mult(wearer)/100`, added to
-each such target at every strike (0x405b7d); mod 0x4e00a5 / 0x4e01a5: if the item is already level ≥ 9 the gain is 1. Item level-up (0x4082d6(slot, gain)):
+each such target at every strike (0x405b7d); mod 0x4e00a5 / 0x4e01a5: if the item is already level ≥ 9 the gain is 1.
+Strategies: the caster's weapon (0x42128b, ctx+0x4a8 set, the largest over the targets, added after the cast at
+0x422f7c): record +0xb 0 / 1 → (Lc > Lt ? 2 : 3), 2 (weather) → 3, no EXP bonus (the mod drops the product at
+0x42139c and the weapon-type test at 0x4212ea); each target's armour (0x4213a3, added at the end of the target in
+0x4224a8): kind 0 (red) and record +0xb = 0 and ctx+0x84[i] ≠ 0 → (Lc < Lt ? 3 : 4) · exp_mult(wearer)/100, else 0.
+Item level-up (0x4082d6(slot, gain)):
 ```
 threshold = 100 (+50 if treasure (odd weapon/armor type)) (+100 more if treasure at level 9)
 max_level = treasure ? 10 : 3

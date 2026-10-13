@@ -153,6 +153,45 @@ func _unit_list_double(st: BattleStage) -> void:
 
 
 ## An effect animation plays SE 100 + its id at its first record (Xben 9: id 25 → se_m_25), once.
+## The change box (0x450984 / 0x450036): placement by 0x44fc4b, the 5 steps of a quarter rounded toward 0, the
+## player's EXP capped at 100, then gone; nothing when every change is 0.
+func _gauge(st: BattleStage) -> void:
+	for u in st.units:
+		u.clear(u.slot)
+	st.view.camera.position = Vector2.ZERO
+	var a := _unit(0, 2, 0, Vector2i(2, 2))
+	var e := _unit(35, 300, 2, Vector2i(3, 2))
+	a.person.exp = 90
+	var hx := int(st.view.view_size().x) / 96
+	_check(hx > 4, "view wide enough (%d)" % hx)
+	_check(st.hud.gauge_rect(a, null, 3) == Rect2(Vector2(3, 2) * 48, Vector2(192, 144)), "right of a unit in the left half")
+	# e is under that box: the box goes left of a (no room: x 2 < 4), then down a row at a time past e's row
+	_check(st.hud.gauge_rect(a, e, 3).position == Vector2(3, 3) * 48, "moved off the other unit: %s" % st.hud.gauge_rect(a, e, 3))
+	var far := _unit(1, 3, 0, Vector2i(hx + 2, 2))
+	_check(st.hud.gauge_rect(far, null, 2).position.x == (hx + 2 - 4) * 48, "left of a unit in the right half")
+	_check(BattleHUD._trunc4(-7) == -1 and BattleHUD._trunc4(7) == 1 and BattleHUD._trunc4(-3) == 0, "quarter toward 0")
+	Game.instant = false
+	var hp0 := a.hp
+	var done := [false]
+	var run := func():
+		await st.hud.gauge(a, e, 40, 0, 30, 0, 0, false)
+		done[0] = true
+	run.call()
+	await get_tree().process_frame
+	_check(not st.hud._gauge.is_empty() and st.hud._gauge["player"] and int(st.hud._gauge["hp"]) == hp0, "shown at the current HP")
+	while not done[0]:
+		await get_tree().process_frame
+		if not st.hud._gauge.is_empty():
+			_check(int(st.hud._gauge["exp"]) <= 100, "EXP shown at most 100 (%d)" % int(st.hud._gauge["exp"]))
+	_check(st.hud._gauge.is_empty() and a.hp == hp0, "gone after the hold; the caller applies the change")
+	var t0 := Time.get_ticks_msec()
+	await st.hud.gauge(a, null, 0, 0, 0, 0, 0, true)
+	_check(Time.get_ticks_msec() - t0 < 30 and st.hud._gauge.is_empty(), "nothing for no change")
+	Game.instant = true
+	for u in st.units:
+		u.clear(u.slot)
+
+
 func _effect_sound() -> void:
 	var ses: Array[String] = []
 	var on_se := func(n: String) -> void: ses.append(n)
@@ -260,6 +299,7 @@ func run() -> void:
 	await _turn_end(st)
 	await _effect_sound()
 	await _unit_list_double(st)
+	await _gauge(st)
 	_check(Game.item_picture(92) == Assets.tex("gfx/icons/items/large/092.png") and int(Game.item(92).get("icon")) == 94
 			and Game.item_picture(54) == Assets.tex("gfx/effects/items32/054.png"), "battle item pictures by item id (Yoyo)")
 	# AIAct resets EV[10] (0x43ad2b)

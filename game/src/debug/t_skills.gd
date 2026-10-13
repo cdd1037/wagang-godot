@@ -86,6 +86,7 @@ func run() -> void:
 	_damage_post()
 	_strategies()
 	await _strategy_casts()
+	await _strategy_equip_exp()
 	await _on_hit()
 	_terrain()
 	_person_skills()
@@ -299,6 +300,66 @@ func _strategy_casts() -> void:
 	await st.actions.cast(c, 22, e.pos)
 	_check(c.mp == mini(20 - cost + (emp - e.mp), c.max_mp()), "暗鬼 MP to the caster")
 	await _weather_casts()
+
+
+## Strategies give the caster weapon EXP (0x42128b: 3, 2 when it is the higher level; 3 for weather) and the
+## player's targets armour EXP on a change by an enemy-side strategy (0x4213a3: 4, 3 when the caster is the lower
+## level), both only from a player-controlled caster for the weapon (ctx+0x4a8 = code 7). 暝思 (0x423d6c) trades
+## 50 HP, or all but 1, for half in MP.
+func _strategy_equip_exp() -> void:
+	_clear()
+	var c := _unit(0, 2, Vector2i(5, 5), 20, 400)
+	c.person.weapon = 15                 # 白纸扇
+	c.person.weapon_lvl = 1
+	c.person.weapon_exp = 0
+	var e := _unit(35, 300, Vector2i(5, 6), 10)
+	e.person.hp_base = 9999
+	e.hp = e.max_hp()
+	e.status = BUnit.ST_CONFUSION
+	await st.actions.cast(c, 0, e.pos)
+	_check(c.person.weapon_exp == 2, "weapon EXP 2 on a lower target (%d)" % c.person.weapon_exp)
+	e.person.level = 30
+	c.mp = c.max_mp()
+	await st.actions.cast(c, 0, e.pos)
+	_check(c.person.weapon_exp == 5, "then 3 on a higher one (%d)" % c.person.weapon_exp)
+	var exp0 := c.person.exp
+	c.mode = 1
+	c.mp = c.max_mp()
+	await st.actions.cast(c, 0, e.pos)
+	_check(c.person.weapon_exp == 5 and c.person.exp == exp0, "no EXP of either kind without code 7")
+	# an enemy's strategy on a red unit with armour
+	_clear()
+	var t := _unit(0, 2, Vector2i(5, 5), 20)
+	t.person.armor = 38                  # 乌油甲
+	t.person.armor_lvl = 1
+	t.person.armor_exp = 0
+	t.person.hp_base = 9999
+	t.hp = t.max_hp()
+	t.status = BUnit.ST_CONFUSION
+	var ec := _unit(35, 300, Vector2i(5, 6), 10, 400)
+	await st.actions.cast(ec, 0, t.pos)
+	var m := st.actions.exp_mult(t)
+	_check(t.person.armor_exp == 3 * m / 100, "armour EXP 3 from a lower caster (%d)" % t.person.armor_exp)
+	ec.person.level = 30
+	ec.mp = ec.max_mp()
+	await st.actions.cast(ec, 0, t.pos)
+	_check(t.person.armor_exp == 7 * m / 100, "then 4 from a higher one (%d)" % t.person.armor_exp)
+	# 暝思
+	_clear()
+	var mz := _unit(0, 2, Vector2i(5, 5), 20)
+	mz.person.mp_base = 500
+	mz.hp = 120
+	mz.mp = 0
+	await st.actions.cast(mz, 62, mz.pos)
+	_check(mz.hp == 70 and mz.mp == 25, "暝思: 50 HP for 25 MP (%d, %d)" % [mz.hp, mz.mp])
+	mz.hp = 30
+	mz.mp = 0
+	await st.actions.cast(mz, 62, mz.pos)
+	_check(mz.hp == 1 and mz.mp == 14, "all but 1 HP for half (%d, %d)" % [mz.hp, mz.mp])
+	mz.hp = 120
+	mz.mp = mz.max_mp() - 5
+	await st.actions.cast(mz, 62, mz.pos)
+	_check(mz.hp == 70 and mz.mp == mz.max_mp(), "the MP up to the maximum, the HP all the same")
 
 
 ## The weather strategies (0x423b2f): no hit roll; the level comes from the climate's row (0x44a1f9) — 晴明 the

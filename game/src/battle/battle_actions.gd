@@ -337,9 +337,8 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 				_on_hit_effects(att, t, targets)
 			if Skills.holds("zhang_poison", att.pid) and Mem.r8(Skills.MAP_NO) <= Skills.num("zhang_poison", "map_max"):
 				t.status |= BUnit.ST_POISON      # 张善相 (0x4d568d): hit or miss
-			if mps[i] > 0:
-				t.mp = maxi(t.mp - mps[i], 0)
 			var killed := t.hp - dmgs[i] <= 0
+			var armor_exp := 0
 			if alive[i]:
 				# every target, hit or miss (0x406068..0x406160 in 0x405e03): the attacker's experience (0x40379b) and
 				# the weapon's (0x40397d) keep their largest values for the end of the attack; the armour of a red
@@ -349,7 +348,13 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 					best_exp = maxi(best_exp, _phys_exp(att, t, killed))
 					weapon_exp = maxi(weapon_exp, _weapon_gain(att, t, damaged))
 				if t.colour == 0:
-					await add_equip_exp(t.person, false, _armor_gain(t, att, damaged))
+					armor_exp = _armor_gain(t, att, damaged)
+				# the change box before the HP goes (0x405ab8), held longer on a one-target attack (ctx+0x424 = 0)
+				await st.hud.gauge(t, att, dmgs[i] if hits[i] else 0, mps[i], 0, 0, armor_exp, code == 0)
+			if mps[i] > 0:
+				t.mp = maxi(t.mp - mps[i], 0)
+			if armor_exp > 0:
+				await add_equip_exp(t.person, false, armor_exp)
 			if not hits[i]:
 				continue
 			total_damage += dmgs[i] if i == 0 else 0
@@ -379,16 +384,28 @@ func strikes(att: BUnit, def: BUnit, step := false) -> bool:
 			break
 		if not Game.instant:
 			st.hud.popup_number("连击！", att.pos, Color(1, 0.9, 0.3))
-	if att.has_effect(81) and total_damage > 0:
-		att.hp = mini(att.hp + total_damage / 2, att.max_hp())
 	for t in fallen:
 		await unit_fell(t)
-	# 0x405cad / 0x405cc2: the attacker's and the weapon's experience, once
-	if att.slot < 15 and weapon_exp > 0:
-		await add_equip_exp(att.person, true, weapon_exp)
+	# 0x405c6c (mod 0x4d7e01): the attacker's box with the 吸血 heal and the experience, held long, then the HP,
+	# the experience (SetExp, 0x405cad) and the weapon's (0x405cc2), once
+	var drain := 0
+	if att.has_effect(81) and total_damage > 0:
+		drain = mini(total_damage / 2, maxi(att.max_hp() - att.hp, 0))
+	if att.slot >= 15:
+		weapon_exp = 0
+	if att.active():
+		await st.hud.gauge(att, _last_target(targets), -drain, 0, best_exp, weapon_exp, 0, true)
+	att.hp += drain
 	if best_exp > 0:
-		await gain_exp(att, best_exp)
+		await gain_exp(att, best_exp, false)
+	if weapon_exp > 0:
+		await add_equip_exp(att.person, true, weapon_exp)
 	return true
+
+
+## The unit the combat object points at when the attack ends (ctx+1): the last target the apply loop handled.
+static func _last_target(targets: Array[BUnit]) -> BUnit:
+	return targets[targets.size() - 1] if not targets.is_empty() else null
 
 
 ## DoubleCheck (0x406181 as the mod patches it): 双雷引's second phase forces it on a first strike; no second
@@ -773,9 +790,10 @@ func _anim_strike(att: BUnit, targets: Array[BUnit], hits: Array[bool], dmgs: Ar
 					t.node.flash_color = Color.WHITE
 					t.node.flash = 0.8 if hits[k] and dmgs[k] > 0 else 0.0
 					if not shown:
-						if hits[k]:
-							st.hud.popup_number(("暴击 " if crit else "") + str(dmgs[k]), t.pos, Color(1, 0.3, 0.2) if crit else Color(1, 1, 1))
-						else:
+						# the numbers are the change box's (after the animation, 0x405ab8)
+						if hits[k] and crit:
+							st.hud.popup_number("暴击", t.pos, Color(1, 0.3, 0.2))
+						elif not hits[k]:
 							st.hud.popup_number("格挡", t.pos, Color(0.6, 0.9, 1))
 				shown = true
 			5:
@@ -937,12 +955,14 @@ func unit_defeated(u: BUnit) -> void:
 
 
 # ------------------------------------------------------------------ experience (§8)
-func gain_exp(u: BUnit, e: int) -> void:
+## `show`: the change box with the gain first (0x4498e0's call after a duel); the callers that show their own box
+## with the other changes pass false.
+func gain_exp(u: BUnit, e: int, show := true) -> void:
 	var p := u.person
 	if p.level >= 70 or e <= 0:
 		return
-	if not Game.instant:
-		st.hud.popup_number("经验 +%d" % e, u.pos, Color(0.6, 1, 0.6))
+	if show:
+		await st.hud.gauge(u, null, 0, 0, e, 0, 0, true)
 	await set_exp(p, p.exp + e)
 
 
@@ -1135,10 +1155,15 @@ func lie_mo(u: BUnit) -> bool:
 
 
 func strategy_area(u: BUnit, s: int, target: Vector2i) -> Array[Vector2i]:
+	return Shapes.area_cells(strategy_area_code(u, s), u.pos, target, view().map_w, view().map_h)
+
+
+## The area code of a cast (ctx+0x2ca): the record's, widened for 烈魔.
+func strategy_area_code(u: BUnit, s: int) -> int:
 	var a := int(Game.strategy(s).get("area", 0))
 	if lie_mo(u):
 		a = [1, 2, 3][a] if a <= 2 else 6
-	return Shapes.area_cells(a, u.pos, target, view().map_w, view().map_h)
+	return a
 
 
 ## Units affected by casting s at `target` (side filter 0 enemy, 1 ally).
@@ -1211,25 +1236,27 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 	var targets := strategy_targets(u, s, target)
 	for t in targets:
 		t.extra.erase("mp_taken")
+		t.extra.erase("hp_taken")
 	if Rules.handler(s) == "again" and not targets.is_empty():
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
 	await view().ensure_visible(target)
 	if not Game.instant:
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.CHEER, u.dir)
-		if s != 64:
-			# 0x4218d6 (every strategy but 青龙): 8 ticks, SE 8 with the caster in its casting pose, then SE 39 and the
-			# strategy's name in a timed box (0x42f699 style 2), at least 20 ticks in all
-			var t0 := Time.get_ticks_msec()
-			await wait(8 * 0.05)
-			Audio.se(8)
-			Audio.se(39)
-			await st.ui.message(str(sd.get("name", "")))
-			await wait(maxf(1.0 - (Time.get_ticks_msec() - t0) / 1000.0, 0.0))
+		# 0x4218d6, once a cast (0x4214bf; 青龙 calls it itself at 0x424f3c before its strikes): 8 ticks, SE 8 with
+		# the caster in its casting pose, then SE 39 and the strategy's name in a timed box (0x42f699 style 2), at
+		# least 20 ticks in all
+		var t0 := Time.get_ticks_msec()
+		await wait(8 * 0.05)
+		Audio.se(8)
+		Audio.se(39)
+		await st.ui.message(str(sd.get("name", "")))
+		await wait(maxf(1.0 - (Time.get_ticks_msec() - t0) / 1000.0, 0.0))
 		await _play_strategy_effect(s, target, targets)
 		if u.node:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
 	var best_exp := 0
+	var weapon_exp := 0
 	if Rules.handler(s) == "weather":
 		# 0x423b2f: no hit roll. The climate gives the level (0x44a1f9); the level there is already fails (Xben.wa
 		# 0x2d at the caster), any other is set after SE 134 and 1.5 s (0x449f91). 20 EXP either way (0x420efb).
@@ -1247,23 +1274,64 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 				await wait(1.5)
 			await st.set_weather(w)
 		best_exp = 20
+		weapon_exp = _strat_weapon_gain(u, u, s)
 		targets.clear()
+	var single := strategy_area_code(u, s) == 0       # 0x4224a8 holds each box long for area 0 (ctx+0x2ca)
 	for t in targets:
-		var e := await _apply_strategy(u, s, t)
+		weapon_exp = maxi(weapon_exp, _strat_weapon_gain(u, t, s))
+		var e := await _apply_strategy(u, s, t, single)
 		best_exp = maxi(best_exp, e)
 	if lie_mo(u) and Rules.handler(s) in REPEATED_HANDLERS:
 		# 烈魔 (0x528100 / 0x528160): the same targets once more, with new rolls
 		for t in targets:
 			if t.active():
-				var e := await _apply_strategy(u, s, t)
+				weapon_exp = maxi(weapon_exp, _strat_weapon_gain(u, t, s))
+				var e := await _apply_strategy(u, s, t, single)
 				best_exp = maxi(best_exp, e)
-	# 0x422f0d: the cost is paid after the effect; 暗鬼 (22) gives the caster the MP it took, up to its maximum
-	u.mp = Rules.sat_sub(u.mp, cost)
-	if Rules.strat_mp_damage(s) and not targets.is_empty():
-		u.mp += clampi(int(targets[0].extra.get("mp_taken", 0)), 0, maxi(u.max_mp() - u.mp, 0))
-	if u.slot < 15 and best_exp > 0:
-		await gain_exp(u, best_exp * exp_mult(u) / 100)
+	# 0x422f7c: the cost is paid after the effect; 暗鬼 (22) gives the caster the MP it took and 暗算 the HP the
+	# first target lost, each up to the maximum. The caster's box comes first (held long), then the HP and MP,
+	# the experience (SetExp) and the weapon's. Both experiences need a player-controlled caster (code 7,
+	# ctx+0x4a8 set at 0x425279; 0x420efb / 0x42128b give 0 otherwise).
+	var mp := Rules.sat_sub(u.mp, cost)
+	var hp := u.hp
+	if not targets.is_empty():
+		if Rules.strat_mp_damage(s):
+			mp += clampi(int(targets[0].extra.get("mp_taken", 0)), 0, maxi(u.max_mp() - mp, 0))
+		if Game.strategy_rule(s).get("absorb_hp", false):
+			hp += clampi(int(targets[0].extra.get("hp_taken", 0)), 0, maxi(u.max_hp() - hp, 0))
+	if u.mode != 7:
+		best_exp = 0
+		weapon_exp = 0
+	best_exp = best_exp * exp_mult(u) / 100
+	await st.hud.gauge(u, _last_target(targets), u.hp - hp, u.mp - mp, best_exp, weapon_exp, 0, true)
+	u.hp = hp
+	u.mp = mp
+	if best_exp > 0:
+		await gain_exp(u, best_exp, false)
+	if weapon_exp > 0:
+		await add_equip_exp(u.person, true, weapon_exp)
 	st.refresh_units()
+
+
+## 0x42128b: the caster's weapon experience for target t: 3, or 2 when the caster's level is the higher, for a
+## strategy on either side (record +0xb 0 / 1); 3 for one on none (weather, 2). No EXP bonus: the mod drops the
+## product (0x42139c) and the test for a weapon of type 2 (0x4212ea).
+func _strat_weapon_gain(u: BUnit, t: BUnit, s: int) -> int:
+	match int(Game.strategy(s).get("target", 0)):
+		0, 1:
+			return 2 if u.level() > t.level() else 3
+		2:
+			return 3
+	return 0
+
+
+## 0x4213a3: the armour experience of target t of a strategy (its own colour 0 only, 0x43ff54): on a strategy
+## against the enemy side (record +0xb = 0) that changed its HP or MP (ctx+0x84 ≠ 0), 4, 3 when the caster's level
+## is the lower; times the wearer's EXP bonus; else 0.
+func _strat_armor_gain(u: BUnit, t: BUnit, s: int, amount: int) -> int:
+	if t.colour != 0 or int(Game.strategy(s).get("target", 0)) != 0 or amount == 0:
+		return 0
+	return (3 if u.level() < t.level() else 4) * exp_mult(t) / 100
 
 
 func _strat_exp(u: BUnit, t: BUnit, killed: bool, damage_strat: bool) -> int:
@@ -1276,11 +1344,13 @@ func _strat_exp(u: BUnit, t: BUnit, killed: bool, damage_strat: bool) -> int:
 
 
 ## One target of a cast, by the strategy's record (Rules.handler and the fields of data/strategy_rules.json).
-func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
+## The changes go through 0x4224a8: the target's box (held long when `hold`), then the HP and MP, then its armour
+## experience (0x4213a3, ctx+0x2d8).
+func _apply_strategy(u: BUnit, s: int, t: BUnit, hold := true) -> int:
 	var r := Game.strategy_rule(s)
 	var h := Rules.handler(s)
 	if h in ["bazhen", "xuanwu"]:
-		return await _apply_random_strategy(u, s, t)
+		return await _apply_random_strategy(u, s, t, hold)
 	var damage_set: bool = Rules.strat_hp_damage(s) or Rules.strat_mp_damage(s) or r.get("assassinate", false)
 	# heals (0x42378d) have no hit roll: the amount is capped by what is missing
 	var hit := h == "heal" or Rules.chance(Rules.strat_hit(u, t, s, view().terrain_at(t.pos), st.weather()))
@@ -1300,27 +1370,27 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		return _strat_exp(u, t, false, false)
 	if damage_set:
 		var dmg := Rules.strat_damage(u, t, s, false)
+		var ae := _strat_armor_gain(u, t, s, dmg)
 		if Rules.strat_mp_damage(s):
+			await st.hud.gauge(t, u, 0, mini(dmg, t.mp), 0, 0, ae, hold)
 			t.mp = maxi(t.mp - dmg, 0)
 			t.extra["mp_taken"] = dmg
-			if not Game.instant:
-				st.hud.popup_number("策略 -%d" % dmg, t.pos, Color(0.5, 0.6, 1))
+			await _armor_exp(t, ae)
 			return _strat_exp(u, t, false, true)
 		var killed := dmg >= t.hp
-		if not Game.instant:
-			st.hud.popup_number(str(dmg), t.pos)
-			if t.node:
-				t.node.set_pose(UnitSprite.Pose.HURT, t.dir)
-				await wait(0.25)
-				t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
+		if not Game.instant and t.node:
+			t.node.set_pose(UnitSprite.Pose.HURT, t.dir)
+		await st.hud.gauge(t, u, mini(dmg, t.hp), 0, 0, 0, ae, hold)
+		if not Game.instant and t.node:
+			t.node.set_pose(UnitSprite.Pose.STAND, t.dir)
 		_apply_damage(t, dmg)
-		if r.get("absorb_hp", false):   # 暗算: absorb HP
-			u.hp = mini(u.hp + dmg, u.max_hp())
+		t.extra["hp_taken"] = dmg       # 暗算 gives the caster the first target's at the end (0x422f7c)
 		if killed:
 			await unit_fell(t)
 		else:
 			t.status |= _status_bit(r)      # 毒烟 / 瘴雾 中毒, 陷阱 / 濠壑 麻痹: only on a target that survives
 			await _strategy_bun(t, dmg)
+		await _armor_exp(t, ae)
 		return _strat_exp(u, t, killed, true)
 	t.status |= _status_bit(r)              # 伪书 / 伪令 混乱, 封印 封策
 	if r.has("cure"):
@@ -1329,21 +1399,33 @@ func _apply_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		_stat_code(t, int(c))               # the stat strategies (0x42335b) and 聚气 / 豪气 (0x423cc0)
 	match r.get("heal"):
 		"hp":
-			var h2 := Rules.heal_amount(u, t, s, false)
-			t.hp = mini(t.hp + h2, t.max_hp())
-			if not Game.instant: st.hud.popup_number("+%d" % h2, t.pos, Color(0.4, 1, 0.4))
+			var h2 := mini(Rules.heal_amount(u, t, s, false), maxi(t.max_hp() - t.hp, 0))
+			await st.hud.gauge(t, u, -h2, 0, 0, 0, 0, hold)
+			t.hp += h2
 		"mp":
-			var m := Rules.heal_amount(u, t, s, false)
-			t.mp = mini(t.mp + m, t.max_mp())
-			if not Game.instant: st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
+			var m := mini(Rules.heal_amount(u, t, s, false), maxi(t.max_mp() - t.mp, 0))
+			await st.hud.gauge(t, u, 0, -m, 0, 0, 0, hold)
+			t.mp += m
 	match h:
 		"again":                            # 战备 (0x423960)
 			t.moved = false
 			t.acted = false
-		"meditate":                         # 暝思 (0x423d6c)
-			t.mp = mini(t.mp + t.max_mp() / 4, t.max_mp())
+		"meditate":
+			# 暝思 (0x423d6c): 50 HP, or all but 1 from 50 down, for half that in MP (rounded toward 0) up to
+			# what is missing; through 0x4224a8's case 0x3e (HP ctx+0x88, MP ctx+0x84)
+			var hp_cost := 50 if t.hp > 50 else t.hp - 1
+			var gain := mini(hp_cost / 2, maxi(t.max_mp() - t.mp, 0))
+			await st.hud.gauge(t, u, hp_cost, -gain, 0, 0, 0, hold)
+			t.hp -= hp_cost
+			t.mp += gain
 	st.refresh_units()
 	return _strat_exp(u, t, false, false)
+
+
+## 0x4082d6(target, armour) at the end of a target in 0x4224a8.
+func _armor_exp(t: BUnit, ae: int) -> void:
+	if ae > 0 and t.exists():
+		await add_equip_exp(t.person, false, ae)
 
 
 ## The status a strategy's record gives ("status": confusion, poison, paralysis, seal), or 0.
@@ -1362,7 +1444,7 @@ static func _status_bit(r: Dictionary) -> int:
 ## 0x6f, 0xaf, full 兵力. 八阵's statuses only stick if the target survives the damage (0x4224a8). EXP (0x420efb):
 ## 八阵 is a damage strategy, so its kill formula applies when the stored amount is not below the target's
 ## 兵力 (a heal is stored negated and compares as a huge unsigned value); 玄武 always gives the small one.
-func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
+func _apply_random_strategy(u: BUnit, s: int, t: BUnit, hold := true) -> int:
 	var bazhen := Rules.handler(s) == "bazhen"
 	var k: int = Rules.rand(8) if bazhen else Rules.rand(7) + 1
 	var amount := 0       # damage, or −heal
@@ -1392,19 +1474,19 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit) -> int:
 		6:
 			for c in [0x31, 0x33, 0x35, 0x37]:
 				_stat_code(t, c)
+	var ae := _strat_armor_gain(u, t, s, amount)
 	if amount > 0:
 		var dmg := mini(amount, t.hp)
-		if not Game.instant:
-			st.hud.popup_number(str(dmg), t.pos)
+		await st.hud.gauge(t, u, dmg, 0, 0, 0, ae, hold)
 		_apply_damage(t, dmg)
 		if t.hp == 0:
 			await unit_fell(t)
 		else:
 			await _strategy_bun(t, dmg)
 	elif amount < 0:
+		await st.hud.gauge(t, u, amount, 0, 0, 0, ae, hold)
 		t.hp -= amount
-		if not Game.instant:
-			st.hud.popup_number("+%d" % -amount, t.pos, Color(0.4, 1, 0.4))
+	await _armor_exp(t, ae)
 	st.refresh_units()
 	return e
 
@@ -1491,9 +1573,8 @@ func eat_bun(t: BUnit) -> void:
 		return
 	var h := heal_value(BUN, t)
 	await _use_anim(t, t, BUN, 0xff)        # through the HP item handler 0x41ccdf
+	await st.hud.gauge(t, t, -h, 0, 0, 0, 0, true)
 	t.hp += h
-	if not Game.instant:
-		st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 	if not free:
 		Game.remove_item_id(BUN)
 	st.refresh_units()
@@ -1552,13 +1633,13 @@ func use_item(u: BUnit, entry: Dictionary, t: BUnit) -> bool:
 			# 0x41ccdf / 0x41ce3d: the use animation without an effect, then the heal
 			await _use_anim(u, t, iid, 0xff)
 			var h := heal_value(iid, t)
+			await st.hud.gauge(t, u, -h, 0, 0, 0, 0, true)
 			t.hp += h
-			st.hud.popup_number("+%d" % h, t.pos, Color(0.4, 1, 0.4))
 		"heal_mp":
 			await _use_anim(u, t, iid, 0xff)
 			var m := heal_value(iid, t)
+			await st.hud.gauge(t, u, 0, -m, 0, 0, 0, true)
 			t.mp += m
-			st.hud.popup_number("策略 +%d" % m, t.pos, Color(0.5, 0.7, 1))
 		"cure":
 			await _use_anim(u, t, iid, 44)          # 0x41cf61 (types 65..69): Xben 44 over the target
 			t.status &= ~int(r["mask"])

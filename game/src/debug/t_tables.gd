@@ -57,7 +57,8 @@ func _strategies() -> void:
 	for s in [3, 8, 18, 24, 26, 27, 29, 31, 34, 35, 37]: hit[s] = [4, 5]
 	for s in [4, 20, 28, 30, 36]: hit[s] = [3, 5]
 	hit[32] = [1, 2]
-	for s in [21, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 67]: hit[s] = "always"
+	# 61-63 (聚气, 暝思, 豪气): their handlers 0x423cc0 / 0x423d6c never call the roll 0x43b4b0
+	for s in [21, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 61, 62, 63, 67]: hit[s] = "always"
 	hit[9] = "leader_third"
 	# the dispatcher 0x425627
 	var handlers := {}

@@ -35,8 +35,13 @@ func _phase_start_effects(a: int, b: int) -> void:
 	for i in range(a, b):
 		var u := st.units[i]
 		if u.active() and (u.status & BUnit.ST_POISON):
+			# 0x44dff6: at least 1, at most HP − 1; the view on the unit and the change box, held long, then the HP
 			var dmg := u.max_hp() / (10 if (i >= 35 and u.pid < 210) else 5)
-			u.hp = maxi(u.hp - maxi(dmg, 1), 1)
+			dmg = mini(maxi(dmg, 1), u.hp - 1)
+			if not Game.instant:
+				await st.view.ensure_visible(u.pos)
+				await st.hud.gauge(u, null, dmg, 0, 0, 0, 0, true)
+			u.hp -= dmg
 	for i in range(a, b):
 		var u := st.units[i]
 		if u.active():
@@ -195,25 +200,29 @@ func _regen(u: BUnit) -> void:
 		heal = u.max_hp() * int(pct[t]) / 100
 	if u.has_effect(18):
 		heal += u.max_hp() / maxi(u.effect_value(18), 1)
-	heal = mini(heal, u.max_hp() - u.hp)
-	if heal > 0:
-		u.hp += heal
+	heal = maxi(mini(heal, u.max_hp() - u.hp), 0)
 	var mp := u.effect_value(19) if u.has_effect(19) else 0
 	if u.has_effect(82):
 		mp += _drain_mp(u, u.effect_value(82))
-	mp = mini(mp, u.max_mp() - u.mp)
-	if mp > 0:
-		u.mp += mp
-	if u.colour != 0:
-		return
+	mp = maxi(mini(mp, u.max_mp() - u.mp), 0)
 	var p := u.person
-	var mult := (100 + (p.equip_bonus(8) & 0xff)) & 0xff
-	var e := (p.effect_value(64) & 0xff) * mult / 100 if p.has_effect(64) else 0
-	Mem.w32(Addr.BINGDI, 0)               # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
-	var we := (p.effect_value(22) & 0xff) * mult / 100 if p.has_effect(22) else 0
-	var ae := (p.effect_value(23) & 0xff) * mult / 100 if p.has_effect(23) else 0
+	var e := 0
+	var we := 0
+	var ae := 0
+	if u.colour == 0:
+		var mult := (100 + (p.equip_bonus(8) & 0xff)) & 0xff
+		e = (p.effect_value(64) & 0xff) * mult / 100 if p.has_effect(64) else 0
+		Mem.w32(Addr.BINGDI, 0)               # 并蒂's counters start again (0x43cf75 → 0x4d1dff)
+		we = (p.effect_value(22) & 0xff) * mult / 100 if p.has_effect(22) else 0
+		ae = (p.effect_value(23) & 0xff) * mult / 100 if p.has_effect(23) else 0
+	# 0x43d04f: the view on the unit (0x45503f) and the change box, held long, before anything is added
+	if (heal != 0 or mp != 0 or e != 0 or we != 0 or ae != 0) and not Game.instant:
+		await st.view.ensure_visible(u.pos)
+		await st.hud.gauge(u, null, -heal, -mp, e, we, ae, true)
+	u.hp += heal
+	u.mp += mp
 	if e > 0:
-		await st.actions.gain_exp(u, e)
+		await st.actions.gain_exp(u, e, false)
 	if we > 0:
 		await st.actions.add_equip_exp(p, true, we)
 	if ae > 0:
