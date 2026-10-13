@@ -293,7 +293,16 @@ func _unhandled_input(ev: InputEvent) -> void:
 func _page(d: int) -> void:
 	if items.is_empty():
 		return
-	sel = clampi(sel + d * _rows, 0, items.size() - 1)
+	var to := clampi(sel + d * _rows, 0, items.size() - 1)
+	# land on an enabled row: the nearest one on in the paging direction, else back towards where it started
+	var k := to
+	while k >= 0 and k < items.size() and not _is_enabled(k):
+		k += d
+	if k < 0 or k >= items.size():
+		k = to
+		while k != sel and not _is_enabled(k):
+			k -= d
+	sel = k
 	_scroll_to(sel)
 	Audio.se(0)
 	queue_redraw()

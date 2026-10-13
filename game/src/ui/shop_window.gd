@@ -22,6 +22,10 @@ var lists: Array[DlgPanel.ListView] = []
 var last: Array[int] = [0, 0]
 var panel: PersonPanel
 var _busy := false
+
+
+func _holds() -> bool:
+	return _busy or busy
 var incoming := {}            # the warehouse-full variant (0x46f034): the item that did not fit, as row 200
 
 static var _shops: Array = []

@@ -170,16 +170,36 @@ func _on_right(key: Variant) -> bool:
 	return false
 
 
-## 0x47ade4: 武将情报 for the row; in a battle the map goes to the unit first.
+## 0x47ade4: 武将情报 for the row; in a battle the map goes to the unit first. The original refreshes its one
+## modeless 武将情报 window (0x479728), so a click that comes while the map still pans only changes which row it
+## shows: one window, for the last row clicked.
 func _show(i: int) -> void:
 	var pid := int(lv.rows[i]["data"])
 	if st == null:
 		await InfoWindow.open_party(get_parent(), pid)
 		return
+	_pending = pid
+	if _panning:
+		return
+	_panning = true
 	var u := _unit(pid)
-	if u:
+	while u:
 		await st.view.center_on(u.pos)
+		if not is_inside_tree():
+			_panning = false
+			return
+		if _pending != pid:             # another row was clicked meanwhile: go there instead
+			pid = _pending
+			u = _unit(pid)
+			continue
 		st.view.cursor_cell = u.pos
 		st.hud.set_hover(u.pos)
+		break
+	_panning = false
+	if u:
 		await InfoWindow.open_unit(get_parent(), st, u)
 	_cells()
+
+
+var _pending := -1
+var _panning := false

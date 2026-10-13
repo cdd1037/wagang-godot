@@ -109,6 +109,49 @@ func _turn_end(st: BattleStage) -> void:
 	m.queue_free()
 
 
+## 部队情报一览: two clicks on a row while the map pans to the unit give one 武将情报 window (0x47ade4 refreshes
+## the original's single window).
+func _unit_list_double(st: BattleStage) -> void:
+	var was := [Game.instant, Game.auto_input]
+	Game.instant = false
+	Game.auto_input = false
+	for u in st.units:
+		if u.slot >= 35:
+			u.clear(u.slot)
+	var far := _unit(36, 310, 2, Vector2i(st.view.map_w - 2, st.view.map_h - 2))
+	st.refresh_units()
+	await st.view.center_on(Vector2i(0, 0))
+	UnitListWindow.open(st.ui, st)
+	var w: UnitListWindow = null
+	for k in 30:
+		await get_tree().process_frame
+		for c in st.ui.find_children("*", "", true, false):
+			if c is UnitListWindow:
+				w = c
+		if w:
+			break
+	_check(w != null, "the unit list opens")
+	if w:
+		w._on_hit(["side", 2])
+		w._on_hit(["list", 0])
+		await get_tree().process_frame
+		w._on_hit(["list", 0])
+		# the windows are modal: a second one would come up when the first closes, so close each and count them all
+		var seen := {}
+		for k in 200:
+			await get_tree().process_frame
+			for c in st.ui.find_children("*", "", true, false):
+				if c is InfoWindow and not seen.has(c.get_instance_id()):
+					seen[c.get_instance_id()] = true
+					c.close()
+		_check(seen.size() == 1, "one 武将情报 window after two clicks during the pan (%d)" % seen.size())
+		w.close()
+		await get_tree().process_frame
+	far.clear(far.slot)
+	Game.instant = was[0]
+	Game.auto_input = was[1]
+
+
 ## An effect animation plays SE 100 + its id at its first record (Xben 9: id 25 → se_m_25), once.
 func _effect_sound() -> void:
 	var ses: Array[String] = []
@@ -216,6 +259,7 @@ func run() -> void:
 	await _script_flow(st)
 	await _turn_end(st)
 	await _effect_sound()
+	await _unit_list_double(st)
 	_check(Game.item_picture(92) == Assets.tex("gfx/icons/items/large/092.png") and int(Game.item(92).get("icon")) == 94
 			and Game.item_picture(54) == Assets.tex("gfx/effects/items32/054.png"), "battle item pictures by item id (Yoyo)")
 	# AIAct resets EV[10] (0x43ad2b)

@@ -554,6 +554,12 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
     **Done** (`BattleActions.unit_fell`, `BattleStage.phase_banner_text`, `_time_over`, `main.gd _after_battle_save`,
     `EffectPlayer`, `BattleActions.cast`, `use_item`, `Game.item_picture`, `BattleCommands._give_fx`; `t_battle`,
     `t_menus`, `t_rules`).
+50. **Window details**: the list views' cells and headers end in "…" when too wide (DrawTextExA DT_END_ELLIPSIS,
+    0x464d62 → 0x47130c); two clicks on a 部队情报一览 row while the map pans give one 武将情报 window, for the last
+    row (the original refreshes its single window, 0x479728); while 是 / 决定 is carried out (the 2-tick waits of
+    0x46dd05 / 0x45e87d, no dialog keyboard then) Esc and a right click do not close the window (`DlgPanel.busy`);
+    the port's menus page past greyed rows. **Done** (`DlgPanel`, `UnitListWindow`, `SortieScreen`, `ShopWindow`,
+    `ChoiceMenu`; `t_menus`, `t_battle`).
 
 ### Deliberate differences (port design, keep unless asked)
 

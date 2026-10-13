@@ -48,7 +48,75 @@ func run() -> void:
 	_icons(ui)
 	await _demo(ui)
 	await _save_questions(ui)
+	await _paging(ui)
+	await _busy_hold(ui)
+	var f := Assets.font()
+	var w := f.get_string_size("属性", HORIZONTAL_ALIGNMENT_LEFT, -1, DlgPanel.TEXT_SIZE).x
+	var cut := DlgPanel.clipped("近战系", w, DlgPanel.TEXT_SIZE)
+	_check(cut.ends_with("…") and f.get_string_size(cut, HORIZONTAL_ALIGNMENT_LEFT, -1, DlgPanel.TEXT_SIZE).x <= w
+			and DlgPanel.clipped("近战", 999, DlgPanel.TEXT_SIZE) == "近战", "list cells end in … when too wide: %s" % cut)
 	print("t_menus: PASS" if _ok else "t_menus: FAILED")
+
+
+## A window carrying out an answer (busy) ignores Esc, so 是 / 决定 cannot be undone in its short wait.
+func _busy_hold(ui: GameUI) -> void:
+	var w := DlgPanel.new()
+	w.dlu = Vector2(100, 60)
+	var state := {"closed": false}
+	var run := func() -> void:
+		await DlgPanel.run(ui, w)
+		state["closed"] = true
+	run.call()
+	await get_tree().process_frame
+	w.busy = true
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	w._unhandled_input(esc)
+	await get_tree().process_frame
+	_check(not state["closed"], "Esc does not close a busy window")
+	w.busy = false
+	w._unhandled_input(esc)
+	for k in 3:
+		await get_tree().process_frame
+	_check(state["closed"], "Esc closes it once it is free")
+
+
+## ChoiceMenu: Page Down / Up land on an enabled row (a greyed one would take no Enter).
+func _paging(ui: GameUI) -> void:
+	var was := Game.auto_input
+	Game.auto_input = false
+	var labels := []
+	var en := []
+	for i in 60:
+		labels.append("row %d" % i)
+		en.append(i % 3 == 0)
+	var res := {"r": null}
+	var run := func() -> void:
+		res["r"] = await ui.menu.choose(labels, Vector2(-1, -1), true, "", en)
+	run.call()
+	await get_tree().process_frame
+	var ok := true
+	for k in 6:
+		ui.menu._page(1)
+		ok = ok and ui.menu._is_enabled(ui.menu.sel)
+	for k in 6:
+		ui.menu._page(-1)
+		ok = ok and ui.menu._is_enabled(ui.menu.sel)
+	_check(ok, "paging lands on enabled rows")
+	ui.menu._finish(-1)
+	await get_tree().process_frame
+	en.clear()                  # in place: the lambda holds this array
+	en.append(true)
+	for i in 59:
+		en.append(false)
+	run.call()
+	await get_tree().process_frame
+	ui.menu._page(1)
+	_check(ui.menu.sel == 0, "nothing enabled below: the selection stays (%d)" % ui.menu.sel)
+	ui.menu._finish(-1)
+	await get_tree().process_frame
+	Game.auto_input = was
 
 
 func _msg_box(ui: GameUI) -> MsgBox:

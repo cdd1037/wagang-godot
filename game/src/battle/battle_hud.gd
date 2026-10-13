@@ -383,6 +383,8 @@ func _draw_terrain_box() -> void:
 
 func _draw_info(vs: Vector2) -> void:
 	var u := hover_unit
+	if u != null and (not u.exists() or u.person == null):
+		u = null                  # the hovered unit left its slot (a script cleared it)
 	var terr := stage.view.terrain_at(hover_cell)
 	var tname := Game.terrain_name(terr)
 	var cam := stage.view.camera.position

@@ -223,10 +223,12 @@ func _on_hit(key: Variant) -> void:
 			_sort(sort_key)
 		"ok":
 			if _can_go():
+				busy = true            # 0x45e87d: 2 ticks, then SE 5 and the end; Esc cannot undo it meanwhile
 				await get_tree().create_timer(0.1).timeout
 				Audio.se(5)
 				for i in slots:
 					_result.append(cands[i])
+				busy = false
 				close()
 		"cancel":
 			_result.clear()

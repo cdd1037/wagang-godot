@@ -128,15 +128,29 @@ func _baseline(rect: Rect2, size: int) -> float:
 	return rect.position.y + (rect.size.y + f.get_ascent(size) - f.get_descent(size)) / 2.0
 
 
-## One line of text vertically centred in rect.
-func text(rect: Rect2, s: String, align := HORIZONTAL_ALIGNMENT_LEFT, color := UIStyle.TEXT_COLOR, size := TEXT_SIZE) -> void:
+## One line of text vertically centred in rect. With `ellipsis` a string wider than rect ends in "…" (the list views'
+## cells, DrawTextExA with DT_END_ELLIPSIS: 0x464d62 → 0x47130c, formats 0x8024 / 0x8025 / 0x8026).
+func text(rect: Rect2, s: String, align := HORIZONTAL_ALIGNMENT_LEFT, color := UIStyle.TEXT_COLOR, size := TEXT_SIZE,
+		ellipsis := false) -> void:
 	var f := Assets.font()
 	var p := Vector2(rect.position.x, _baseline(rect, size))
 	var w := rect.size.x
+	if ellipsis:
+		s = clipped(s, w, size)
 	if align == HORIZONTAL_ALIGNMENT_LEFT:
 		w = maxf(w, f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
 	draw_string(f, p + Vector2(1, 1), s, align, w, size, UIStyle.SHADOW)
 	draw_string(f, p, s, align, w, size, color)
+
+
+## `s` as it fits in `w` pixels: whole, or cut with "…" at its end (DT_END_ELLIPSIS).
+static func clipped(s: String, w: float, size: int) -> String:
+	var f := Assets.font()
+	if f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= w:
+		return s
+	while s.length() > 0 and f.get_string_size(s + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > w:
+		s = s.substr(0, s.length() - 1)
+	return s + "…"
 
 
 ## Wrapped text from the top of rect; the font shrinks (down to 10 px) until it fits.
@@ -301,9 +315,18 @@ func _long_press(gen: int, at: Vector2) -> void:
 
 ## A right click on `key`: the window closes unless _on_right handles it (which may first open another window).
 func _right_click(key: Variant) -> void:
-	if not await _on_right(key):
+	if not await _on_right(key) and not _holds():
 		close()
 	queue_redraw()
+
+
+## True while an answer is being carried out (the original's short waits after 是 / 决定 pump messages, but no dialog
+## keyboard turns Esc into 取消 then): Esc, 返回 and a right click do not close the window meanwhile.
+var busy := false
+
+
+func _holds() -> bool:
+	return busy
 
 
 ## The pointer moved onto `key` (null: off every hit).
@@ -355,7 +378,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if not ev.is_pressed():
 		return
 	if ev.is_action_pressed("ui_cancel"):
-		close()
+		if not _holds():
+			close()
 	elif _on_key(ev):
 		queue_redraw()
 
@@ -391,7 +415,7 @@ func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) ->
 	for ci in lv.columns.size() if lv.header else 0:
 		var c: Array = lv.columns[ci]
 		var cr := Rect2(xs[ci] + 3, head.position.y, minf(xs[ci + 1], rect.end.x - sb) - xs[ci] - 6, rh)
-		text(cr, str(c[0]), int(c[2]) if c.size() > 2 else HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE)
+		text(cr, str(c[0]), int(c[2]) if c.size() > 2 else HORIZONTAL_ALIGNMENT_LEFT, CAPTION, SMALL_SIZE, true)
 		if lv.sortable:
 			var hr := Rect2(xs[ci], head.position.y, xs[ci + 1] - xs[ci], rh)
 			if hovered([key, -100 - ci]):
@@ -417,7 +441,7 @@ func list_view(rect: Rect2, lv: ListView, key: String, rh := 0.0, size := 13) ->
 			var cr := Rect2(x0, rr.position.y, minf(xs[ci + 1], rr.end.x) - x0 - 3, rh)
 			var col: Color = colors[ci] if ci < colors.size() and colors[ci] != null else base
 			var al: int = int(lv.columns[ci][2]) if (lv.columns[ci] as Array).size() > 2 else HORIZONTAL_ALIGNMENT_LEFT
-			text(cr, str(cells[ci]), al, col, size)
+			text(cr, str(cells[ci]), al, col, size, true)
 		hit(rr, [key, k])
 	if sb > 0:
 		button(Rect2(rect.end.x - sb, head.end.y, sb, rh * 2), "▲", [key, -1], lv.top > 0)
