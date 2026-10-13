@@ -298,6 +298,32 @@ func _strategy_casts() -> void:
 	var emp := e.mp
 	await st.actions.cast(c, 22, e.pos)
 	_check(c.mp == mini(20 - cost + (emp - e.mp), c.max_mp()), "暗鬼 MP to the caster")
+	await _weather_casts()
+
+
+## The weather strategies (0x423b2f): no hit roll; the level comes from the climate's row (0x44a1f9) — 晴明 the
+## first 晴, 叆叇 the first 阴, 阴雨 the last 雨 / 暴雨 / 雪 — and the level there already changes nothing; 20 EXP.
+func _weather_casts() -> void:
+	_clear()
+	var c := _unit(0, 2, Vector2i(5, 5), 30, 400)
+	c.status = 0
+	var keep := [st.climate, st.weather_level]
+	for row in [[0, 60, 3, 1], [0, 58, 5, 3], [0, 59, 0, 0], [1, 60, 4, 1], [2, 60, 1, 1], [3, 58, 5, 4],
+			[4, 58, 5, 4], [4, 60, 1, 1]]:
+		st.climate = row[0]
+		st.weather_level = 2
+		c.mp = c.max_mp()
+		var exp0 := c.person.exp
+		await st.actions.cast(c, row[1], c.pos)
+		_check(st.weather_level == row[2] and st.weather() == row[3], "climate %d, strategy %d: level %d, weather %d (%d / %d)"
+				% [row[0], row[1], row[2], row[3], st.weather_level, st.weather()])
+		_check(c.person.exp == exp0 + 20 * st.actions.exp_mult(c) / 100 or c.person.exp < exp0, "20 EXP for strategy %d" % row[1])
+	st.climate = 0
+	st.weather_level = 0
+	await st.actions.cast(c, 59, c.pos)
+	_check(st.weather_level == 0, "晴明 under 晴: nothing changes")
+	st.climate = keep[0]
+	st.weather_level = keep[1]
 
 
 # ------------------------------------------------------------------ on-hit skills (B1 F6/F7/F8)

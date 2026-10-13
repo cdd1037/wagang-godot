@@ -1219,8 +1219,23 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 			u.node.set_pose(UnitSprite.Pose.STAND, u.dir)
 	var best_exp := 0
 	if s in [58, 59, 60]:
-		st.weather_level = [4, 0, 2][s - 58] if st.climate != 4 else st.weather_level
+		# 0x423b2f: no hit roll. The climate gives the level (0x44a1f9); the level there is already fails (Xben.wa
+		# 0x2d at the caster), any other is set after SE 134 and 1.5 s (0x449f91). 20 EXP either way (0x420efb).
+		var w := st.weather_strategy_level(s)
+		if w == st.weather_level:
+			if not Game.autoplay:
+				var e := EffectPlayer.create("xben", 0x2d)
+				if e:
+					e.position = view().cell_center(u.pos)
+					view().fx_layer.add_child(e)
+					await e.done
+		else:
+			if not Game.autoplay:
+				Audio.se_m(34)
+				await wait(1.5)
+			await st.set_weather(w)
 		best_exp = 20
+		targets.clear()
 	for t in targets:
 		var e := await _apply_strategy(u, s, t)
 		best_exp = maxi(best_exp, e)

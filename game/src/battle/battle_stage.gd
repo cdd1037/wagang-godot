@@ -69,7 +69,8 @@ var terrain_changes: Array = []
 var _occ: Dictionary = {}    # cell → unit, see unit_at
 var _occ_gen := -1
 var _resumed := false        # loaded from a save made during the player phase: its start already happened
-const WEATHER_TABLE := [[0, 0, 0, 1, 2, 3], [0, 0, 0, 0, 1, 2], [0, 1, 2, 2, 3, 3], [0, 0, 1, 1, 4, 4], [0, 1, 4, 4, 4, 4]]
+## The weather of each climate's six levels (0x48e100, read from memory; rules.md "Weather"): 0 晴 1 阴 2 雨 3 暴雨 4 雪.
+const WEATHER_ROWS := 0x48e100
 const WEATHER_NAMES := ["晴", "阴", "雨", "暴雨", "雪"]
 
 
@@ -206,7 +207,7 @@ func battle_loop() -> void:
 		Mem.w8(0x4b3d0a, turn - 1)   # ctx+2 (0x44e851) holds turn − 1; ctx+1 is the battle-over flag
 		if await Game.hooks.round_end(self):
 			break
-		_update_weather_random()
+		await set_weather(6)
 	view.input_enabled = false
 	view.show_cursor = false
 	view.clear_highlights()
@@ -433,18 +434,47 @@ func remove_dead() -> void:
 
 # ------------------------------------------------------------------ weather
 func weather() -> int:
-	return WEATHER_TABLE[climate][clampi(weather_level, 0, 5)]
+	return Mem.r8(WEATHER_ROWS + climate * 6 + clampi(weather_level, 0, 5))
 
 
-func _update_weather_random() -> void:
-	var c := weather_level + 1
+## 0x449f91: the weather level becomes `w` when it is below 6, else takes a random step (c = level + 1 moves one
+## towards rand(8), which is drawn either way; 0 wraps to level 5, 7 to level 0). When the weather shown changes,
+## its picture (Xben.wa 0x34 + weather) plays in the middle of the screen.
+func set_weather(w: int) -> void:
 	var r := Rules.rand(8)
-	if c > r:
-		c -= 1
-	elif c < r:
-		c += 1
-	weather_level = 5 if c == 0 else (0 if c == 7 else c - 1)
+	var shown := weather()
+	if w < 6:
+		weather_level = w
+	else:
+		var c := weather_level + 1
+		if c > r:
+			c -= 1
+		elif c < r:
+			c += 1
+		weather_level = 5 if c == 0 else (0 if c == 7 else c - 1)
 	hud.queue_redraw()
+	if weather() != shown and not Game.autoplay:
+		var e := EffectPlayer.create("xben", 0x34 + weather())
+		if e:
+			e.position = ui.vsize() / 2
+			ui.add_child(e)
+			await e.done
+
+
+## 0x44a1f9: the level a weather strategy sets: 晴明 (59) the climate's first level that is 晴, 叆叇 (60) its first
+## that is 阴, 阴雨 (58) its last that is 雨, 暴雨 or 雪 (6 when there is none: set_weather then steps at random).
+func weather_strategy_level(s: int) -> int:
+	var row := WEATHER_ROWS + climate * 6
+	if s != 58:
+		var want := 0 if s == 59 else 1
+		for b in 6:
+			if Mem.r8(row + b) == want:
+				return b
+		return 6
+	for b in range(5, -1, -1):
+		if Mem.r8(row + b) in [2, 3, 4]:
+			return b
+	return 0
 
 
 # ------------------------------------------------------------------ battle-time tests

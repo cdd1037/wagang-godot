@@ -205,7 +205,7 @@ CalcDamage(att_unit, def_person, real, mode):
   A = Atk(att) * tA / 10        # Atk = 0x4d98eb: BU::Atk (effect 54 能力校准: max(atk,spirit));
                                 #   classes 46/47: +15% per adjacent same-family ally
   D = Def(def) * tD / 10        # 0x4d98a2: BU::Def; classes 39/46: +15% per adjacent same-family ally
-  if real and not can_attack(att, def): return 0
+  if real and not HitRoll(att, def): return 0   # 0x43b4b0(kind 1), the hit roll (not a range test)
   if has_effect(att, 85 固定伤害): dmg = effect_value(att, 85)
   else:
       dmg = level(att) + 35
@@ -755,8 +755,12 @@ Weather (0x44a1d4): shown weather = table 0x48e100[climate*6 + level], weather i
 climate 0: 0 0 0 1 2 3     climate 1: 0 0 0 0 1 2     climate 2: 0 1 2 2 3 3
 climate 3: 0 0 1 1 4 4     climate 4: 0 1 4 4 4 4
 ```
-Update 0x449f91(w): `if w < 6: level = w` (weather strategies 58-60 via 0x423c30) else random walk:
-`c = level+1; r = rand(8); if c > r: c -= 1 elif c < r: c += 1; level = (c==0) ? 5 : (c==7) ? 0 : c-1`.
+Update 0x449f91(w): r = rand(8) (drawn either way); `if w < 6: level = w` (weather strategies 58-60 via 0x423c30)
+else random walk: `c = level+1; if c > r: c -= 1 elif c < r: c += 1; level = (c==0) ? 5 : (c==7) ? 0 : c-1`.
+Weather strategies (0x423b2f): no hit roll. The level (0x44a1f9): 晴明 (59) the climate's first level whose weather is
+晴, 叆叇 (60) the first that is 阴, 阴雨 (58) the last that is 雨 / 暴雨 / 雪 (none: 6, i.e. a random step; every
+shipped row has them). If that is the level already, the strategy fails (Xben.wa 0x2d at the caster, nothing
+changes); else SE 134 (0x86, se_m_34), 30 ticks, then 0x449f91(level). The EXP is 20 either way (0x420efb).
 Random update is called at the start of every round except the first (0x44efd9, while ctx+1 == 0). If the shown
 weather changed, the weather panel (Xthree.wa image 0x34+weather) is animated.
 
@@ -1206,7 +1210,13 @@ and clears [0x55ac50] when there is no counter (0x433610).
 * 凤舞九天: area code 2 at full damage (0x4d93af); 横推八马倒: area code 10 (§4.5).
 * 盖马三锤 (0x4d83fe): 3 × 0x4d2f1e(att, a random unit of the other group on the 8 cells around att), then
   0x4d8632: every unit of the other side (by colour) with |dx| + |dy| ≤ 4 of att gets 怯 | 穷 unless effect 57 (a
-  15-entry list that the original overruns when more are around).
+  15-entry list that the original overruns when more are around). The list of the 8 cells is taken once, from the
+  occupancy grid (0x435884), which keeps a unit at HP 0 until the command ends, so a later blow can fall on a unit
+  an earlier one felled; 0x433540 strikes it anyway (no alive test), WeaponExp is taken per target (0x406065), and
+  0x40379b counts a hit on it as a kill (damage 0 ≥ HP 0). The port skips such a strike (no hit roll, no attack
+  EXP) but gives the weapon EXP as the original does; what the original's apply step (mod 0x4d72e0, register
+  arguments Ghidra loses) does with the unit is not analysed, so this is left as it is. The same holds for 横扫 and
+  威震八荒's target lists.
 * 双雷引 / 抽屉枪: §4.2 (hit −26 in HitRate's effect-55 branch while [0x55ac54] == 1), §4.4 (DoubleCheck).
 
 ### 12.2 Person getters (0x407120..0x40720d, mod 0x4db4c5.. / 0x4db5fd..; port `Person.stat`)
