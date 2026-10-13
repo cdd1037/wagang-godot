@@ -592,8 +592,10 @@ not ported.
     Not ported: 青龙's handler (0x424e9e) strikes 5 times (`rand` over the list, a unit at 0 HP leaves it) without a
     hit roll, after the cast intro and its MCALL at the caster, but builds its list around the caster with area
     code 6 (a line beyond the centre), which finds nobody; no class learns 青龙, 朱雀, 玄武 or 白虎 and no item
-    teaches them, so the port keeps its plain damage handler for them. The MCALL strategies' follow-up Xben effect
-    on the targets (0x4214bf's remap: 1, 3, 5, 7, 0x16, 0x39, 0x0a) is not played either.
+    teaches them, so the port keeps its plain damage handler for them. After an MCALL animation 0x4214bf plays the
+    strategy's Xben effect on the targets (炼狱 1, 海啸 3, 龙挂 5, 地裂 7, 青龙 0x16, 朱雀 0x39, 白虎 0x0a): **done**
+    (`BattleActions.MCALL_FOLLOW`). Not ported: 八阵's (0x421ce5), the outcome's effect on each target, since the
+    port rolls the outcomes after the animation.
 53. **Story walks on the scene's grid** (op 0x32 → 0x429159): Buha.wa's grid for the RPG scene (gfx.md §5.1) and
     a distance field from the target (0x429266) that stops when it reaches the walker; the walk goes downhill from
     there (0x42869c / 0x42836e), the last direction first. Blocked cells are walked around; a target the field

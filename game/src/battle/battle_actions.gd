@@ -1520,6 +1520,12 @@ func _buff(t: BUnit, i: int, up: bool) -> void:
 		st.hud.popup_number(names[i] + ("↑" if up else "↓"), t.pos, Color(1, 0.9, 0.4) if up else Color(0.7, 0.6, 1))
 
 
+## The Xben effect 0x4214bf plays on the targets after an MCALL strategy's animation: 炼狱 1, 海啸 3, 龙挂 5,
+## 地裂 7, 青龙 0x16, 朱雀 0x39, 白虎 10; 玄武 none; 八阵 (0x421ce5) plays each target's outcome effect, which the
+## port does not (it rolls the outcomes after the animation).
+const MCALL_FOLLOW := {3: 1, 8: 3, 13: 5, 18: 7, 64: 0x16, 65: 0x39, 67: 10}
+
+
 func _play_strategy_effect(s: int, target: Vector2i, targets: Array[BUnit]) -> void:
 	var tbl: Array = EffectPlayer.index().get("strategy_effect_table", {}).get("values", [])
 	if s < 0 or s >= tbl.size():
@@ -1528,14 +1534,17 @@ func _play_strategy_effect(s: int, target: Vector2i, targets: Array[BUnit]) -> v
 	if v == 255:
 		return
 	if v >= 100:
-		# MCALL animations are centred on the target point (0x402cb5), like the small effects
+		# MCALL animations are centred on the target point (0x402cb5), like the small effects; then 0x4214bf plays
+		# the strategy's Xben effect on the targets (its remap of the MCALL strategies)
 		var e := EffectPlayer.create("mcall", v - 100)
 		if e:
 			e.position = view().cell_center(target)
 			e.z_index = 10
 			view().fx_layer.add_child(e)
 			await e.done
-		return
+		v = int(MCALL_FOLLOW.get(s, 255))
+		if v == 255:
+			return
 	var cells: Array[Vector2i] = []
 	for t in targets:
 		cells.append(t.pos)
