@@ -2,6 +2,9 @@ class_name GameUI
 extends CanvasLayer
 ## Top-level UI: dialog, menus, popups, banners, captions, fades, cutscene video.
 
+## Every popup and message box text (checks listen to it).
+signal popup_shown(text: String)
+
 ## Touch: holding a finger this long (s) acts as a right click.
 const LONG_PRESS := 0.5
 
@@ -105,6 +108,7 @@ func set_black(on: bool) -> void:
 
 # ------------------------------------------------------------------ popup (click to close)
 func popup(text: String, auto_close := 0.0) -> void:
+	popup_shown.emit(text)
 	if Game.instant:
 		if OS.get_environment("WG_TRACE_TEXT") != "":
 			print("  [popup] ", text)

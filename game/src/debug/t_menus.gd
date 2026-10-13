@@ -47,7 +47,105 @@ func run() -> void:
 	await _windows(ui)
 	_icons(ui)
 	await _demo(ui)
+	await _save_questions(ui)
 	print("t_menus: PASS" if _ok else "t_menus: FAILED")
+
+
+func _msg_box(ui: GameUI) -> MsgBox:
+	for k in 30:
+		await get_tree().process_frame
+		for c in ui.find_children("*", "", true, false):
+			if c is MsgBox and c.visible:
+				return c
+	return null
+
+
+## 保存 / 读取 (0x41b16a, 0x41ad06): the slot's 是/否 question first, "保存完毕。" after a save; 回到标题 (0x474ba7) asks
+## "结束「瓦岗山异闻录」么？". Saves go to a folder of this check's own, never the player's slots.
+func _save_questions(ui: GameUI) -> void:
+	var was := [Game.auto_input, Game.instant, Game.save_dir]
+	Game.auto_input = false
+	Game.instant = false
+	Game.save_dir = "user://test/menus_q/"
+	DirAccess.make_dir_recursive_absolute(Game.save_dir)
+	for i in 3:
+		Game.delete_save(i)
+	var main: Node = load("res://src/main.gd").new()      # outside the tree: only its save and load menus run
+	main.set("ui", ui)
+	Mem.w32(Addr.SAVE_ALLOWED, 1)
+	var state := {"done": false}
+	var run_save := func() -> void:
+		await main.save_menu()
+		state["done"] = true
+	run_save.call()
+	await get_tree().process_frame
+	ui.menu._finish(2)
+	var q := await _msg_box(ui)
+	_check(q != null and q.title == "保存" and Array(q.lines) == ["进度No. 3: 未使用保存进度，", "可以保存吗？"],
+			"save question %s %s" % [q.title if q else "-", q.lines if q else []])
+	if q:
+		q._on_hit(["btn", 0])           # 否
+	for k in 10:
+		await get_tree().process_frame
+	_check(state["done"] and Game.save_info(2).is_empty(), "否 saves nothing")
+	state["done"] = false
+	run_save.call()
+	await get_tree().process_frame
+	ui.menu._finish(2)
+	q = await _msg_box(ui)
+	if q:
+		q._on_hit(["btn", 1])           # 是
+	var okb := await _msg_box(ui)
+	_check(okb != null and Array(okb.lines) == ["保存完毕。"], "保存完毕 box %s" % [okb.lines if okb else []])
+	if okb:
+		okb._on_hit(["btn", 1])
+	for k in 10:
+		await get_tree().process_frame
+	_check(state["done"] and not Game.save_info(2).is_empty(), "是 saves")
+	# 读取: the question, 否 loads nothing
+	var res := {"r": null}
+	var run_load := func() -> void:
+		res["r"] = await main.load_menu()
+	run_load.call()
+	await get_tree().process_frame
+	ui.menu._finish(2)
+	q = await _msg_box(ui)
+	_check(q != null and q.title == "读取" and q.lines.size() == 2 and q.lines[0].begins_with("进度No. 3: ")
+			and q.lines[1] == "可以读取吗？", "load question %s" % [q.lines if q else []])
+	if q:
+		q._on_hit(["btn", 0])
+	for k in 10:
+		await get_tree().process_frame
+	_check(res["r"] == false, "否 loads nothing")
+	# 回到标题 asks first
+	var titles := {"n": 0}
+	var gs := GDScript.new()
+	gs.source_code = "extends Node\nvar ui\nvar stage\nvar titles = 0\nfunc to_title():\n\ttitles += 1\n"
+	gs.reload()
+	var m2 := Node.new()
+	m2.set_script(gs)
+	m2.set("ui", ui)
+	var old_main = Game.main
+	Game.main = m2
+	add_child(m2)
+	SystemMenu.open(ui)
+	await get_tree().process_frame
+	ui.menu._finish(SystemMenu.labels(false).find("回到标题"))
+	q = await _msg_box(ui)
+	_check(q != null and Array(q.lines) == ["结束「瓦岗山异闻录」么？"], "quit question %s" % [q.lines if q else []])
+	if q:
+		q._on_hit(["btn", 0])
+	for k in 10:
+		await get_tree().process_frame
+	_check(m2.get("titles") == 0, "否 stays")
+	Game.main = old_main
+	m2.queue_free()
+	for i in 3:
+		Game.delete_save(i)
+	main.free()
+	Game.auto_input = was[0]
+	Game.instant = was[1]
+	Game.save_dir = was[2]
 
 
 ## WG_DEMO (Game.auto_input without Game.instant): the boxes that wait for the player answer themselves, as under

@@ -506,12 +506,30 @@ Differences the review of 2026-10-14 found by reading the decompile; each is por
 46. **Range visiting order**: the AI's ties, its fallback target and 引导攻击's next target follow 0x436586's order
     (up, right, down, left first), with the origin first for own-side searches; a unit on terrain it cannot stand on
     does not move (0x438308). **Done** (`shapes.json` from `conv_data.py`, `Shapes.range_seq`, `t_rules`).
+47. **Questions and refusals of the original's UI**:
+    * 保存 / 读取 ask "进度No.%2d: %s，\n可以保存吗？" / "…可以读取吗？" (0x41b16a, 0x41ad06; 是/否 boxes captioned 保存 /
+      读取), a save ends with "保存完毕。" (0x41b4d9); the mod's autosave skips both only around its own call (0x4d4f80).
+      结束游戏 asks "结束「瓦岗山异闻录」么？" (0x474ba7).
+    * Strategies are cast as soon as the target is picked (0x42335b: picker, 0x420422, cast); the port's
+      "执行（成功率 N%）/ 取消" question had no original.
+    * The picker 0x45533d: nobody of the wanted side in range → "范围内没有敌军部队。" / "范围内没有我军部队。" and SE 1;
+      outside the range SE 2 + "不在范围之内。"; the wrong side SE 2 + "不能攻击我军部队。" / "这是敌军部队。"; a cancel SE 1.
+      Used by 攻击, 绝招, 围攻, 交给, items and the strategy handlers that pick a unit.
+    * The move pick (0x43d671): SE 2 + "因为有其他部队，所以不能移动。" or "不是移动范围。", and it stays open. A unit
+      that is not commanded now shows its ranges, then a click gives SE 2 + "这是非受控部队" (any unit without code
+      7 or with flag 0x80; "这是敌军部队。" needs a slot ≥ 115 since the mod), "已经行动完毕。", "正处于混乱状态。" or
+      "正处于迷失状态。", a cancel SE 1.
+    **Done** (`main.gd`, `SystemMenu`, `BattleInput`; `t_menus`, `t_commands`). The original keeps 100 save slots
+    ("No. 0" … "No.99", 0x41a518); the port keeps 10.
 
 ### Deliberate differences (port design, keep unless asked)
 
 * **Autosave:** the original saves silently into slots 0..4 in rotation after every player phase; the port keeps
   its own autosave file instead. → B5 row 0x44e1c9.
 * **Story videos:** 001.wmv and later cannot be skipped in the original (B2 §R). The port lets every video be skipped.
+* **Move pick:** a click on another unit that can be commanded now takes that unit up; the original answers it as
+  an occupied cell. With touch controls a tap outside the highlighted cells cancels a pick or a range view
+  instead of bringing the original's refusal message.
 * **Windows:** the port uses modal windows, one list for the menu bar and text buttons in the top bar for the
   toolbar. A right click on an empty battle cell opens that list (the original asks to end the phase; the list's
   first item does). 战斗时，窗口自动最大化 is shown but has nothing to size.

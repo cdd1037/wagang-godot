@@ -320,8 +320,16 @@ func _slot_labels() -> Array:
 		if info.is_empty():
 			out.append("%2d：——空——" % (i + 1))
 		else:
-			out.append("%2d：%s  %s" % [i + 1, str(info.get("chapter_title", "")), str(info.get("time", "")).substr(0, 16)])
+			out.append("%2d：%s" % [i + 1, _slot_text(i)])
 	return out
+
+
+## What slot i holds, for its row and for the questions (an empty one is "未使用保存进度", 0x48b528).
+func _slot_text(i: int) -> String:
+	var info := Game.save_info(i)
+	if info.is_empty():
+		return "未使用保存进度"
+	return "%s  %s" % [str(info.get("chapter_title", "")), str(info.get("time", "")).substr(0, 16)]
 
 
 func save_menu() -> void:
@@ -332,11 +340,14 @@ func save_menu() -> void:
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "存储进度")
 	if i < 0:
 		return
+	# 0x41b16a: the 是/否 question (0x474b0f, caption 保存), then "保存完毕。" (0x41b4d9 → 0x474b78)
+	if not await MsgBox.yes_no(ui, "进度No.%2d: %s，\n可以保存吗？" % [i + 1, _slot_text(i)], "保存"):
+		return
 	var extra := {}
 	if stage and stage.has_method("save_state"):
 		extra = stage.save_state()
 	if Game.save_game(i, extra):
-		await ui.popup("进度已保存。", 1.0)
+		await MsgBox.ok(ui, "保存完毕。", "瓦岗山异闻录")
 	else:
 		await ui.popup("进度保存失败。", 1.2)
 
@@ -344,6 +355,9 @@ func save_menu() -> void:
 func load_menu() -> bool:
 	var i := await ui.menu.choose(_slot_labels(), Vector2(-1, -1), true, "读取进度")
 	if i < 0 or Game.save_info(i).is_empty():
+		return false
+	# 0x41ad06: the 是/否 question (caption 读取) before the load
+	if not await MsgBox.yes_no(ui, "进度No.%2d: %s，\n可以读取吗？" % [i + 1, _slot_text(i)], "读取"):
 		return false
 	return await _load_slot(i)
 

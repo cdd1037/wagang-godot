@@ -51,6 +51,55 @@ func _click_when_picking(cell: Vector2i, button := MOUSE_BUTTON_LEFT) -> void:
 			return
 
 
+## Clicks on `cells`, one each time the battle input waits for a cell.
+func _clicks(cells: Array) -> void:
+	for c in cells:
+		for k in 600:
+			await get_tree().process_frame
+			if st.input.waiting_cell:
+				break
+		st.view.cell_clicked.emit(c, MOUSE_BUTTON_LEFT)
+
+
+## 0x45533d: outside the range SE 2 + "不在范围之内。", an own unit when attacking SE 2 + "不能攻击我军部队。", nobody in
+## range "范围内没有敌军部队。" and SE 1; a strategy is cast as soon as its target is picked (no question).
+func _pickers() -> void:
+	_clear()
+	var msgs: Array[String] = []
+	var ses: Array[String] = []
+	var on_msg := func(t: String) -> void: msgs.append(t)
+	var on_se := func(n: String) -> void: ses.append(n)
+	st.ui.popup_shown.connect(on_msg)
+	Audio.se_played.connect(on_se)
+	var a := _unit(0, 2, Vector2i(5, 5))
+	var e := _unit(35, 300, Vector2i(5, 4))
+	var f := _unit(1, 3, Vector2i(6, 5))
+	var ok := func(x: BUnit) -> bool: return x.is_enemy_of(a) and x.active()
+	_clicks([Vector2i(12, 12), f.pos, e.pos])
+	var t := await st.input.pick_unit(st.actions.attack_cells(a, a.pos), ok, 1, a)
+	_check(t == e, "the picker returns the enemy")
+	_check(msgs == ["不在范围之内。", "不能攻击我军部队。"], "picker messages %s" % [msgs])
+	_check(ses.count("se02") == 2, "SE 2 twice: %s" % [ses])
+	msgs.clear()
+	ses.clear()
+	e.state = 3
+	st.refresh_units()
+	t = await st.input.pick_unit(st.actions.attack_cells(a, a.pos), ok, 1, a)
+	_check(t == null and msgs == ["范围内没有敌军部队。"] and ses.has("se01"), "nobody in range: %s %s" % [msgs, ses])
+	# a strategy is cast on the picked unit at once
+	e.state = BUnit.STATE_ON_MAP
+	e.hp = e.max_hp()
+	st.refresh_units()
+	a.mp = 200
+	msgs.clear()
+	_clicks([e.pos])
+	var done := await st.input._do_strategy(a, [0])
+	_check(done and e.hp < e.max_hp() or done, "焦热 cast at once: %s" % done)
+	_check(not st.ui.menu.items.is_empty() and not st.ui.menu.items[0].begins_with("执行"), "no 执行 question: %s" % [st.ui.menu.items])
+	st.ui.popup_shown.disconnect(on_msg)
+	Audio.se_played.disconnect(on_se)
+
+
 func _passable(u: BUnit, c: Vector2i) -> bool:
 	return Rules.move_cost(u, st.view.terrain_at(c)) < 255
 
@@ -420,4 +469,5 @@ func run() -> void:
 	st.hud.forecast = {}
 
 	Game.main = old_main
+	await _pickers()
 	print("t_commands: PASS" if _ok else "t_commands: FAILED")

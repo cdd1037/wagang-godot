@@ -1,6 +1,9 @@
 extends Node
 ## BGM (original CD-audio tracks, replaced by numbered MP3s) and sound effects.
 
+## Every sound effect asked for (checks listen to it).
+signal se_played(name: String)
+
 var bgm_player: AudioStreamPlayer
 var _se_players: Array[AudioStreamPlayer] = []
 var current_track := -1
@@ -65,6 +68,7 @@ func stop_se() -> void:
 
 ## name like "se00", "se_m_12", "se_e_03". Nothing plays while 听音效 is off (0x474777).
 func play_se(name: String) -> void:
+	se_played.emit(name)
 	if not Settings.on(Settings.SE):
 		return
 	var s := Assets.audio("audio/se/%s.wav" % name.to_lower())

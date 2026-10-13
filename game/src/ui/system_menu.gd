@@ -58,6 +58,8 @@ static func open(ui: GameUI, st: BattleStage = null, battle_command := Callable(
 		"version":
 			await MsgBox.version(ui)
 		"title":
-			main.to_title()
+			# 结束游戏 (item 112 → WM_CLOSE → 0x474ba7): "结束「瓦岗山异闻录」么？", and only 是 leaves
+			if await MsgBox.yes_no(main.ui, "结束「瓦岗山异闻录」么？", "结束「瓦岗山异闻录」"):
+				main.to_title()
 		var id:
 			await battle_command.call(id)

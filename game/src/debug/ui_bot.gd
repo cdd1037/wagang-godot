@@ -676,8 +676,6 @@ func _battle_choice(_st: BattleStage, m: ChoiceMenu) -> int:
 				return i
 		_plan["stage"] = "after"
 		return -1
-	if items.size() == 2 and items[0].begins_with("执行"):
-		return 0
 	return -2
 
 

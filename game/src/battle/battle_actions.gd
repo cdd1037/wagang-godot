@@ -87,7 +87,7 @@ func in_zoc(u: BUnit, c: Vector2i) -> bool:
 
 
 ## {cell: remaining_mp} reachable by u; `parents` gets the path tree.
-func reachable(u: BUnit, parents: Dictionary = {}) -> Dictionary:
+func reachable(u: BUnit, parents: Dictionary = {}, occupied := false) -> Dictionary:
 	var w := view().map_w
 	var h := view().map_h
 	if u.status & BUnit.ST_PARALYSIS:
@@ -104,6 +104,8 @@ func reachable(u: BUnit, parents: Dictionary = {}) -> Dictionary:
 	var stop := func(c: Vector2i) -> bool:
 		return in_zoc(u, c)
 	var r := Grid.reachable(u.pos, u.move_points(), w, h, cost, blocked, stop, parents)
+	if occupied:
+		return r                 # the whole flood, cells held by other units included (0x438308's move map)
 	# cannot end the move on a cell occupied by another unit
 	var out := {}
 	for c in r:
