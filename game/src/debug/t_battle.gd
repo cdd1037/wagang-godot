@@ -199,6 +199,33 @@ func _gauge(st: BattleStage) -> void:
 	_check(st.hud.weather_frame == (f0 + 1) & 3, "weather pane: one frame per 0.5 s")
 	_check(st.hud.weather_rect(Vector2(640, 480)) == Rect2(640 - 222, 6, 216, 50), "at the top right")
 	st.hud.visible = vis
+	await _bazhen_fx(st)
+
+
+## 八阵 (0x4214bf → 0x421ce5): after its MCALL, each outcome's Xben effect in the order of the codes, on all the
+## targets that drew it at once; the outcomes are drawn before the animation.
+func _bazhen_fx(st: BattleStage) -> void:
+	for u in st.units:
+		u.clear(u.slot)
+	var ts: Array[BUnit] = [_unit(1, 2, 0, Vector2i(5, 5)), _unit(2, 3, 0, Vector2i(6, 5)), _unit(3, 4, 0, Vector2i(5, 6))]
+	ts[0].extra["random_roll"] = {"k": 6, "amount": 0}
+	ts[1].extra["random_roll"] = {"k": 1, "amount": 0}
+	ts[2].extra["random_roll"] = {"k": 6, "amount": 0}
+	var seen := []
+	var watch := func(n: Node) -> void:
+		if n is EffectPlayer:
+			seen.append([(n as EffectPlayer).file, (n as EffectPlayer).number, st.view.cell_at(n.position)])
+	st.view.fx_layer.child_entered_tree.connect(watch)
+	Game.instant = false
+	await st.actions._play_strategy_effect(38, ts[0].pos, ts)
+	Game.instant = true
+	st.view.fx_layer.child_entered_tree.disconnect(watch)
+	_check(seen.size() == 4 and seen[0][0] == "mcall" and seen[1] == ["xben", 0x19, ts[1].pos]
+			and seen[2][1] == 0x11 and seen[3][1] == 0x11, "八阵: MCALL, then 混乱's effect, then the 0xaf one on both: %s" % [seen])
+	var r: Dictionary = ts[1].extra["random_roll"]
+	_check(r["k"] == 1, "the drawn outcome is kept for the apply step")
+	for u in st.units:
+		u.clear(u.slot)
 
 
 func _effect_sound() -> void:

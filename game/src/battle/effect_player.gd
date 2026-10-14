@@ -6,6 +6,8 @@ extends Node2D
 
 const BLEND := preload("res://src/battle/effect_blend.gdshader")
 
+var file := ""                  # "xben" / "mcall"
+var number := -1                # the animation's number in its file
 var frames: Array = []
 var images: Array[Texture2D] = []
 var alphas: Array[Texture2D] = []
@@ -40,6 +42,8 @@ static func create(kind: String, id: int) -> EffectPlayer:
 	if a.is_empty() or (a.get("records", []) as Array).is_empty():
 		return null
 	var e := EffectPlayer.new()
+	e.file = kind
+	e.number = id
 	e.delay = maxf(float(a.get("delay_ms", 50)) / 1000.0, 0.02)
 	e.frames = a.get("records", [])
 	e.sound = 100 + (int(a.get("id", 0)) & 0xff)

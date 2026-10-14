@@ -589,13 +589,20 @@ not ported.
     * 聚气 / 豪气 (0x423cc0) and 暝思 never call the hit roll 0x43b4b0; the port rolled the hit curve for them.
     **Done** (`BattleActions.cast`, `_strat_weapon_gain`, `_strat_armor_gain`, `_apply_strategy`;
     `strategy_rules.json`; `t_skills`, `t_tables`).
-    Not ported: 青龙's handler (0x424e9e) strikes 5 times (`rand` over the list, a unit at 0 HP leaves it) without a
-    hit roll, after the cast intro and its MCALL at the caster, but builds its list around the caster with area
-    code 6 (a line beyond the centre), which finds nobody; no class learns 青龙, 朱雀, 玄武 or 白虎 and no item
-    teaches them, so the port keeps its plain damage handler for them. After an MCALL animation 0x4214bf plays the
-    strategy's Xben effect on the targets (炼狱 1, 海啸 3, 龙挂 5, 地裂 7, 青龙 0x16, 朱雀 0x39, 白虎 0x0a): **done**
-    (`BattleActions.MCALL_FOLLOW`). Not ported: 八阵's (0x421ce5), the outcome's effect on each target, since the
-    port rolls the outcomes after the animation.
+    After an MCALL animation 0x4214bf plays the strategy's Xben effect on the targets (炼狱 1, 海啸 3, 龙挂 5, 地裂
+    7, 青龙 0x16, 朱雀 0x39, 白虎 0x0a); for 八阵 0x421ce5 plays each outcome's effect (8, 0x19, 0x1a, 0x1b, 0x17,
+    0x21, 0x11, 0x0a in the order of the codes of table 0x486708) on all the targets that drew it, the outcomes being
+    drawn before the animation (0x423edc; 玄武 0x424810 likewise). **Done** (`BattleActions.MCALL_FOLLOW`,
+    `BAZHEN_FX`, `_roll_random`; `t_battle`).
+    Not ported, because the original's is broken: 青龙's handler (0x424e9e) is meant to strike 5 times at random
+    (`rand` over its list, a unit at 0 HP leaving it) without a hit roll, after the cast intro and its MCALL at the
+    caster. But it builds the list around the caster (ctx+0xc = the caster, 0x425349 → 0x43652e → 0x435d6c) with
+    area code 6, a line beyond the centre in the direction from the caster, which from the caster's own cell is
+    that cell only, so the list is empty. `rand(0)` is 0 (0x47fb13 and the mod's 0x4d966f), so it then takes the
+    list's terminator 0xff as the target: "unit 255" lies past the 115-unit table (0x4b2c50 + 255 · 0x24), and the
+    strikes (or, when that word reads 0, a walk through stack bytes) act on whatever memory is there. No real unit is
+    struck. No class learns 青龙, 朱雀, 玄武 or 白虎 and no item teaches them, so none of this can happen in play; the
+    port keeps its plain damage handler for 青龙.
 53. **Story walks on the scene's grid** (op 0x32 → 0x429159): Buha.wa's grid for the RPG scene (gfx.md §5.1) and
     a distance field from the target (0x429266) that stops when it reaches the walker; the walk goes downhill from
     there (0x42869c / 0x42836e), the last direction first. Blocked cells are walked around; a target the field

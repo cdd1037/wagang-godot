@@ -376,7 +376,7 @@ cancelled menu undoes the move. The move UI (0x43d538) records the unit's pid in
 | 58-60 | 0x423b2f | weather (阴雨/晴明/叆叇) |
 | 61 聚气, 63 豪气 | 0x423cc0 | no hit roll (only 0x420422) |
 | 62 暝思 | 0x423d6c | no hit roll: HP −h (h = 50, or HP − 1 at HP ≤ 50), MP + min(h/2, MaxMP − MP) |
-| 64 青龙 | 0x424e9e | 5 strikes at rand(list) (a unit at HP 0 leaves the list), no hit roll; the list is built around the caster (area 6). 66 玄武 0x424810, 67 白虎 0x424513 |
+| 64 青龙 | 0x424e9e | meant as 5 strikes at rand(list) (a unit at HP 0 leaves the list), no hit roll; the list is built around the caster with area 6 and comes out empty, so it strikes the terminator slot 0xff (mod_patches §6 item 52). 66 玄武 0x424810, 67 白虎 0x424513 |
 
 ### 5.2 Strategy damage (0x43bfaa(caster, target, s, preview)) [C]
 "Damage strategy" set (0x449bac/0x449c36): ids 0-20, 22, 33-36, 38, 64, 65.

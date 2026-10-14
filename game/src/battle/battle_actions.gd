@@ -1239,6 +1239,10 @@ func cast(u: BUnit, s: int, target: Vector2i) -> void:
 		t.extra.erase("hp_taken")
 	if Rules.handler(s) == "again" and not targets.is_empty():
 		Mem.w8(Rules.ZHANBEI_USED + u.slot, 1)     # 0x423960: once per turn (0x41fec9)
+	if Rules.handler(s) in ["bazhen", "xuanwu"]:
+		# the handlers draw every target's outcome first (0x423edc / 0x424810), then animate (0x4214bf)
+		for t in targets:
+			t.extra["random_roll"] = _roll_random(u, s, t)
 	await view().ensure_visible(target)
 	if not Game.instant:
 		if u.node:
@@ -1446,16 +1450,12 @@ static func _status_bit(r: Dictionary) -> int:
 ## 兵力 (a heal is stored negated and compares as a huge unsigned value); 玄武 always gives the small one.
 func _apply_random_strategy(u: BUnit, s: int, t: BUnit, hold := true) -> int:
 	var bazhen := Rules.handler(s) == "bazhen"
-	var k: int = Rules.rand(8) if bazhen else Rules.rand(7) + 1
-	var amount := 0       # damage, or −heal
-	match k:
-		0, 4:
-			if bazhen:
-				var hs := s if k == 0 else 33
-				if Rules.chance(Rules.strat_hit(u, t, hs, view().terrain_at(t.pos), st.weather())):
-					amount = Rules.strat_damage(u, t, hs, false)
-		7:
-			amount = -(t.max_hp() - t.hp)
+	var roll: Dictionary = t.extra.get("random_roll", {})
+	t.extra.erase("random_roll")
+	if roll.is_empty():
+		roll = _roll_random(u, s, t)
+	var k: int = roll["k"]
+	var amount: int = roll["amount"]
 	var stored := amount if amount >= 0 else 0x100000000 + amount
 	var e := _strat_exp(u, t, bazhen and stored >= t.hp, bazhen)
 	var survives := amount < t.hp
@@ -1491,6 +1491,24 @@ func _apply_random_strategy(u: BUnit, s: int, t: BUnit, hold := true) -> int:
 	return e
 
 
+## The outcome of a 八阵 / 玄武 target, drawn in the handler before the animation (0x423edc / 0x424810): k in
+## 八阵's numbering (玄武's rand(7) + 1) and the amount: StratDamage for 八阵's 0 (as 八阵) and 4 (as 毒烟) with its
+## hit roll, −(MaxHP − HP) for 7 (0x43c548), else 0.
+func _roll_random(u: BUnit, s: int, t: BUnit) -> Dictionary:
+	var bazhen := Rules.handler(s) == "bazhen"
+	var k: int = Rules.rand(8) if bazhen else Rules.rand(7) + 1
+	var amount := 0       # damage, or −heal
+	match k:
+		0, 4:
+			if bazhen:
+				var hs := s if k == 0 else 33
+				if Rules.chance(Rules.strat_hit(u, t, hs, view().terrain_at(t.pos), st.weather())):
+					amount = Rules.strat_damage(u, t, hs, false)
+		7:
+			amount = -(t.max_hp() - t.hp)
+	return {"k": k, "amount": amount}
+
+
 ## Stat change codes of 0x420cb2: 0x17 爆发↓ 0x19 士气↓ 0x1b 攻击↓ (精神 for caster families, 0x43ffed)
 ## 0x1d 防御↓; 0x30 移动↑ 0x31 爆发↑ 0x33 士气↑ 0x37 防御↑; 0x35 (mod 0x4d8985): classes 24-26 and 50 raise
 ## both 攻击 and 精神, others 精神 if a caster family, else 攻击.
@@ -1521,9 +1539,11 @@ func _buff(t: BUnit, i: int, up: bool) -> void:
 
 
 ## The Xben effect 0x4214bf plays on the targets after an MCALL strategy's animation: 炼狱 1, 海啸 3, 龙挂 5,
-## 地裂 7, 青龙 0x16, 朱雀 0x39, 白虎 10; 玄武 none; 八阵 (0x421ce5) plays each target's outcome effect, which the
-## port does not (it rolls the outcomes after the animation).
+## 地裂 7, 青龙 0x16, 朱雀 0x39, 白虎 10; 玄武 none; 八阵 its outcomes' (BAZHEN_FX).
 const MCALL_FOLLOW := {3: 1, 8: 3, 13: 5, 18: 7, 64: 0x16, 65: 0x39, 67: 10}
+## 0x421ce5: 八阵's outcomes in the order of their codes (table 0x486708: 0x40 damage, 0x71 混乱, 0x72 麻痹, 0x74
+## 封, 0x70 毒烟, 0x6f down, 0xaf up, 0x80 兵力), each outcome's Xben effect played at once on all its targets.
+const BAZHEN_FX := [8, 0x19, 0x1a, 0x1b, 0x17, 0x21, 0x11, 10]
 
 
 func _play_strategy_effect(s: int, target: Vector2i, targets: Array[BUnit]) -> void:
@@ -1542,9 +1562,23 @@ func _play_strategy_effect(s: int, target: Vector2i, targets: Array[BUnit]) -> v
 			e.z_index = 10
 			view().fx_layer.add_child(e)
 			await e.done
+		if Rules.handler(s) == "bazhen":
+			for k in BAZHEN_FX.size():
+				var on: Array[BUnit] = []
+				for t in targets:
+					if int(t.extra.get("random_roll", {}).get("k", -1)) == k:
+						on.append(t)
+				if not on.is_empty():
+					await _xben_on(BAZHEN_FX[k], on, target)
+			return
 		v = int(MCALL_FOLLOW.get(s, 255))
 		if v == 255:
 			return
+	await _xben_on(v, targets, target)
+
+
+## Xben effect v on every target at once (on `target` when there is none), until it ends.
+func _xben_on(v: int, targets: Array[BUnit], target: Vector2i) -> void:
 	var cells: Array[Vector2i] = []
 	for t in targets:
 		cells.append(t.pos)
