@@ -350,6 +350,9 @@ func join_party(pid: int, mode := 1, arg := 0xff) -> void:
 		if p.cls <= 38:
 			var tier := 2 if p.level >= 40 else (1 if p.level >= 20 else 0)
 			p.cls = (p.cls / 3) * 3 + tier
+	# JoinArmy (0x40c4f4..0x40c519) equips both slots after levelling and choosing the class.
+	p.default_equip(0)
+	p.default_equip(1)
 	Mem.w8(p.base + 0x2a, 0)
 
 

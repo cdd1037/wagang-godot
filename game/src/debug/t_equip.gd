@@ -11,6 +11,17 @@ func run() -> void:
 	var ok := true
 	Game.new_game_state()
 	var p: Person = Game.person(0)
+	# R_00 recruits Guan Yi before assigning his story weapon; joining must also provide armour.
+	Game.join_party(0, 0, 2)
+	ok = _check(p.weapon == 3 and p.armor == 38 and p.weapon_lvl == 1 and p.armor_lvl == 1,
+			"new-game join equips weapon and armour") and ok
+	# Mode 1 also equips a newly recruited character; repeated joins must preserve story equipment.
+	Game.join_party(1, 1, 0)
+	var cheng: Person = Game.person(1)
+	ok = _check(cheng.weapon == 9 and cheng.armor == 38, "mode 1 join equips both slots") and ok
+	cheng.equip_code(0, 27, 1)
+	Game.join_party(1, 1, 0)
+	ok = _check(cheng.weapon == 25, "repeated join preserves the story axe") and ok
 	# code ≥ 2: weapon code − 2, armour code + 0x24 (R_00: person 0 gets weapon code 25 = item 23)
 	p.equip_code(0, 25, 0)
 	ok = _check(p.weapon == 23 or not p.can_equip(23), "weapon code 25 → %d" % p.weapon) and ok
